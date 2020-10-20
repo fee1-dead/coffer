@@ -1,3 +1,5 @@
+#![feature(seek_convenience)]
+
 use num_enum::TryFromPrimitive;
 
 pub mod constants;
@@ -6,12 +8,7 @@ pub mod decoder;
 pub mod error;
 
 #[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+mod tests;
 
 pub struct JClass {
     pub minor_version: u16,
