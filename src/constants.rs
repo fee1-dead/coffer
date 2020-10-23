@@ -1,5 +1,4 @@
-#[macro_use]
-extern crate bitflags;
+
 
 pub const JVM_MAGIC: u32 = 0xCAFEBABE;
 
