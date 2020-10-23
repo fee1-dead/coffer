@@ -31,5 +31,5 @@ fn test_parse_class<P>(path: P) where P: AsRef<Path> {
     let mut file = File::open(path).expect("Open file");
     let mut decoder = Decoder::new(&mut file);
     let jclass = JClassIdx::try_from(&mut decoder).expect(&*format!("Parsing Class {}", path.to_str().unwrap_or("INVALID_PATH")));
-    println!("JClass {:?}", jclass);
+    println!("JClass {:#?}", jclass);
 }
