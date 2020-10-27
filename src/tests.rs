@@ -4,6 +4,8 @@ use crate::decoder::Decoder;
 use crate::index::JClassIdx;
 use std::convert::TryFrom;
 
+mod mutf8;
+
 #[test]
 fn it_works() {
     assert_eq!(2 + 2, 4);

@@ -1,3 +1,5 @@
+#![feature(assoc_char_funcs)]
+
 #[macro_use]
 extern crate bitflags;
 
@@ -10,6 +12,7 @@ pub mod error;
 
 #[cfg(test)]
 mod tests;
+mod mod_utf8;
 
 pub struct JClass {
     pub minor_version: u16,
@@ -53,12 +56,13 @@ pub enum JEntryTag {
     Package = 20,
 }
 
-
+#[derive(Debug)]
 pub struct JConstantEntry {
     tag: JEntryTag,
     ext_data: Vec<u8>,
 }
 
+#[derive(Debug)]
 pub struct JField {
     access: u16,
     name: u16,
@@ -66,6 +70,7 @@ pub struct JField {
     attributes: Vec<JAttribute>,
 }
 
+#[derive(Debug)]
 pub struct JMethod {
     access: u16,
     name: u16,
@@ -73,6 +78,7 @@ pub struct JMethod {
     attributes: Vec<JAttribute>,
 }
 
+#[derive(Debug)]
 pub struct JAttribute {
     attribute_name: u16,
     ext_data: Vec<u8>,

@@ -9,6 +9,8 @@ pub enum Error {
     #[error("Reached End Of File")]
     EOF,
     #[error("unrecognized {0}: {1}")]
-    Unrecognized(&'static str, String)
+    Unrecognized(&'static str, String),
+    #[error(transparent)]
+    MUTF(#[from] crate::mod_utf8::MUTFError)
 }
 pub type Result<T> = std::result::Result<T, Error>;

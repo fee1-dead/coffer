@@ -1,6 +1,5 @@
-use std::io::{Read, Seek, SeekFrom};
 use crate::error::{Error, Result};
-
+use std::io::{Read, Seek, SeekFrom};
 
 /// Decoder for Big Endian Values. Does not support little endian.
 ///
@@ -22,7 +21,7 @@ use crate::error::{Error, Result};
 /// ```
 pub struct Decoder<'a, T: Read + Seek> {
     inner: &'a mut T,
-    pub(crate) idx: u64
+    pub(crate) idx: u64,
 }
 
 macro_rules! read_fn {
@@ -36,20 +35,30 @@ macro_rules! read_fn {
                 Ok(<$type>::from_be_bytes(buf))
             }
         }
-    }
+    };
 }
 
 impl<T: Read + Seek> Decoder<'_, T> {
     pub fn new(read: &mut T) -> Decoder<T> {
         Decoder {
             inner: read,
-            idx: 0
+            idx: 0,
         }
     }
 
     pub fn jump(&mut self, off: i64) -> Result<()> {
         self.seek(SeekFrom::Current(off))?;
         Ok(())
+    }
+    pub fn utf(&mut self) -> Result<String> {
+        let length = self.u32()? as usize;
+        let mut slice = vec![0u8; length];
+        let length_read = self.inner.read(&mut slice)?;
+        if length_read < length {
+            Err(Error::EOF)
+        } else {
+            Ok(crate::mod_utf8::modified_utf8_to_string(&slice)?)
+        }
     }
     pub fn u8(&mut self) -> Result<u8> {
         Ok(self.inner.bytes().next().ok_or(Error::EOF)??)
@@ -59,7 +68,6 @@ impl<T: Read + Seek> Decoder<'_, T> {
     read_fn!(u32, u32, 4);
     read_fn!(u16, u16, 2);
 }
-
 
 impl<T: Read + Seek> Seek for Decoder<'_, T> {
     fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
