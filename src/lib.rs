@@ -1,5 +1,3 @@
-#![feature(seek_convenience)]
-
 #[macro_use]
 extern crate bitflags;
 

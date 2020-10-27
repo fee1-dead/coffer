@@ -52,7 +52,7 @@ impl<T: Read + Seek> TryFrom<&mut Decoder<'_, T>> for JClassIdx {
                 9 | 10 | 11 | 12 => 4,
                 _ => return Err(Error::Unrecognized("constant entry tag", format!("{} at index {}", tag, i)))
             };
-            value.seek(SeekFrom::Current(jump));
+            value.seek(SeekFrom::Current(jump))?;
             constant_pool.push(value.idx);
             if is_wide {
                 constant_pool.push(0);
@@ -61,12 +61,14 @@ impl<T: Read + Seek> TryFrom<&mut Decoder<'_, T>> for JClassIdx {
         }
         value.seek(SeekFrom::Current(6))?;
         let itfs = value.u16()?;
-        value.seek(SeekFrom::Current(itfs as i64 * 2));
+        value.seek(SeekFrom::Current(itfs as i64 * 2))?;
 
         let fields = fields_or_methods(value)?;
         let methods = fields_or_methods(value)?;
         let attrs = attrs(value)?;
-        let len = value.stream_len()?;
+        let old_pos = value.idx;
+        let len = value.seek(SeekFrom::End(0))?;
+        value.seek(SeekFrom::Start(old_pos))?;
         let idx = value.idx;
         if idx != len {
             return Err(Error::ExtraBytes(len - idx))
