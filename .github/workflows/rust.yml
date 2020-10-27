@@ -19,8 +19,8 @@ jobs:
       with:
         java-version: 1.8
     - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
+      with:
+        toolchain: nightly
     - uses: actions-rs/cargo@v1
-        with:
-          command: test
+      with:
+        command: test
