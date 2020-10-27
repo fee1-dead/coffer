@@ -1,3 +1,19 @@
+/*
+    This file is part of Coffer.
+
+    Coffer is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Coffer is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
+*/
 use crate::decoder::Decoder;
 use std::io::{Read, Seek, SeekFrom};
 use std::convert::TryFrom;
@@ -41,13 +57,18 @@ impl<T: Read + Seek> TryFrom<&mut Decoder<'_, T>> for JClassIdx {
 
     fn try_from(value: &mut Decoder<'_, T>) -> Result<Self, Self::Error> {
         value.seek(SeekFrom::Current(8))?;
-        let constant_pool_size = value.u16()?;
+        let constant_pool_size = value.u16()? - 1;
         let mut constant_pool: Vec<u64> = Vec::with_capacity(constant_pool_size as usize);
-        for mut i in 0..constant_pool_size - 1 {
+        let mut i = 0;
+        while i < constant_pool_size {
             let tag = value.u8()?;
-            let is_wide = false;
+            let mut is_wide = false;
             let jump = match tag {
                 1 => value.u16()? as i64,
+                5 | 6 => {
+                    is_wide = true;
+                    8
+                }
                 7 | 8 => 2,
                 9 | 10 | 11 | 12 => 4,
                 _ => return Err(Error::Unrecognized("constant entry tag", format!("{} at index {}", tag, i)))
@@ -56,8 +77,9 @@ impl<T: Read + Seek> TryFrom<&mut Decoder<'_, T>> for JClassIdx {
             constant_pool.push(value.idx);
             if is_wide {
                 constant_pool.push(0);
-                i = i + 1;
+                i += 1;
             }
+            i += 1;
         }
         value.seek(SeekFrom::Current(6))?;
         let itfs = value.u16()?;
