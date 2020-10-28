@@ -14,10 +14,10 @@
     You should have received a copy of the GNU General Public License
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
-use crate::decoder::Decoder;
+use crate::jcoder::{Decoder, JDecoder};
 use std::io::{Read, Seek, SeekFrom};
 use std::convert::TryFrom;
-use crate::error::Error;
+use crate::error::{Error, Result};
 
 #[derive(Debug)]
 pub struct JClassIdx {
@@ -31,31 +31,29 @@ pub struct JClassIdx {
     pub methods: Vec<Vec<u64>>,
     pub attrs: Vec<u64>
 }
-fn attrs<T: Read + Seek>(value: &mut Decoder<T>) -> Result<Vec<u64>, Error> {
-    let attribute_count = value.u16()?;
-    let mut vec_inner: Vec<u64> = Vec::with_capacity(attribute_count as usize);
-    for _ in 0..attribute_count {
-        value.seek(SeekFrom::Current(2))?;
-        let length = value.u32()?;
-        value.seek(SeekFrom::Current(length as i64))?;
-        vec_inner.push(value.idx);
-    }
-    Ok(vec_inner)
-}
-fn fields_or_methods<T: Read + Seek>(value: &mut Decoder<T>) -> Result<Vec<Vec<u64>>, Error> {
-    let count = value.u16()?;
-    let mut vec_outer: Vec<Vec<u64>> = Vec::with_capacity(count as usize);
-    for _ in 0..count {
-        value.seek(SeekFrom::Current(6))?;
-        let vec_inner = attrs(value)?;
-        vec_outer.push(vec_inner)
-    }
-    Ok(vec_outer)
-}
-impl<T: Read + Seek> TryFrom<&mut Decoder<T>> for JClassIdx {
-    type Error = crate::error::Error;
-
-    fn try_from(value: &mut Decoder<T>) -> Result<Self, Self::Error> {
+impl JClassIdx {
+    fn try_from<T:Read + Seek>(value: &mut T) -> Result<JClassIdx> {
+        fn attrs<T: Read + Seek>(value: &mut T) -> Result<Vec<u64>> {
+            let attribute_count = value.u16()?;
+            let mut vec_inner: Vec<u64> = Vec::with_capacity(attribute_count as usize);
+            for _ in 0..attribute_count {
+                value.seek(SeekFrom::Current(2))?;
+                let length = value.u32()?;
+                value.seek(SeekFrom::Current(length as i64))?;
+                vec_inner.push(value.stream_position()?);
+            }
+            Ok(vec_inner)
+        }
+        fn fields_or_methods<T: Read + Seek>(value: &mut T) -> Result<Vec<Vec<u64>>> {
+            let count = value.u16()?;
+            let mut vec_outer: Vec<Vec<u64>> = Vec::with_capacity(count as usize);
+            for _ in 0..count {
+                value.seek(SeekFrom::Current(6))?;
+                let vec_inner = attrs(value)?;
+                vec_outer.push(vec_inner)
+            }
+            Ok(vec_outer)
+        }
         value.seek(SeekFrom::Current(8))?;
         let constant_pool_size = value.u16()? - 1;
         let mut constant_pool: Vec<u64> = Vec::with_capacity(constant_pool_size as usize);
@@ -74,7 +72,7 @@ impl<T: Read + Seek> TryFrom<&mut Decoder<T>> for JClassIdx {
                 _ => return Err(Error::Unrecognized("constant entry tag", format!("{} at index {}", tag, i)))
             };
             value.seek(SeekFrom::Current(jump))?;
-            constant_pool.push(value.idx);
+            constant_pool.push(value.stream_position()?);
             if is_wide {
                 constant_pool.push(0);
                 i += 1;
@@ -88,10 +86,8 @@ impl<T: Read + Seek> TryFrom<&mut Decoder<T>> for JClassIdx {
         let fields = fields_or_methods(value)?;
         let methods = fields_or_methods(value)?;
         let attrs = attrs(value)?;
-        let old_pos = value.idx;
-        let len = value.seek(SeekFrom::End(0))?;
-        value.seek(SeekFrom::Start(old_pos))?;
-        let idx = value.idx;
+        let len = value.stream_len()?;
+        let idx = value.stream_position()?;
         if idx != len {
             return Err(Error::ExtraBytes(len - idx))
         }
@@ -104,4 +100,6 @@ impl<T: Read + Seek> TryFrom<&mut Decoder<T>> for JClassIdx {
         })
     }
 }
+
+
 

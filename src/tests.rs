@@ -16,7 +16,7 @@
 */
 use std::path::Path;
 use std::fs::File;
-use crate::decoder::Decoder;
+use crate::jcoder::Decoder;
 use crate::index::JClassIdx;
 use std::convert::TryFrom;
 

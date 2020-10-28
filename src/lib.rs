@@ -15,6 +15,7 @@
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
 #![feature(assoc_char_funcs)]
+#![feature(seek_convenience)]
 
 #[macro_use]
 extern crate bitflags;
@@ -23,7 +24,7 @@ use num_enum::TryFromPrimitive;
 
 pub mod constants;
 pub mod index;
-pub mod decoder;
+pub mod jcoder;
 pub mod error;
 
 #[cfg(test)]
