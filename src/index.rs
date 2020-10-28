@@ -31,7 +31,7 @@ pub struct JClassIdx {
     pub methods: Vec<Vec<u64>>,
     pub attrs: Vec<u64>
 }
-fn attrs<T: Read + Seek>(value: &mut Decoder<'_, T>) -> Result<Vec<u64>, Error> {
+fn attrs<T: Read + Seek>(value: &mut Decoder<T>) -> Result<Vec<u64>, Error> {
     let attribute_count = value.u16()?;
     let mut vec_inner: Vec<u64> = Vec::with_capacity(attribute_count as usize);
     for _ in 0..attribute_count {
@@ -42,7 +42,7 @@ fn attrs<T: Read + Seek>(value: &mut Decoder<'_, T>) -> Result<Vec<u64>, Error> 
     }
     Ok(vec_inner)
 }
-fn fields_or_methods<T: Read + Seek>(value: &mut Decoder<'_, T>) -> Result<Vec<Vec<u64>>, Error> {
+fn fields_or_methods<T: Read + Seek>(value: &mut Decoder<T>) -> Result<Vec<Vec<u64>>, Error> {
     let count = value.u16()?;
     let mut vec_outer: Vec<Vec<u64>> = Vec::with_capacity(count as usize);
     for _ in 0..count {
@@ -52,10 +52,10 @@ fn fields_or_methods<T: Read + Seek>(value: &mut Decoder<'_, T>) -> Result<Vec<V
     }
     Ok(vec_outer)
 }
-impl<T: Read + Seek> TryFrom<&mut Decoder<'_, T>> for JClassIdx {
+impl<T: Read + Seek> TryFrom<&mut Decoder<T>> for JClassIdx {
     type Error = crate::error::Error;
 
-    fn try_from(value: &mut Decoder<'_, T>) -> Result<Self, Self::Error> {
+    fn try_from(value: &mut Decoder<T>) -> Result<Self, Self::Error> {
         value.seek(SeekFrom::Current(8))?;
         let constant_pool_size = value.u16()? - 1;
         let mut constant_pool: Vec<u64> = Vec::with_capacity(constant_pool_size as usize);

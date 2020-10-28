@@ -35,8 +35,8 @@ use std::io::{Read, Seek, SeekFrom};
 /// assert_eq!((&mut decoder).u64().unwrap(), 0x7080201020902412u64);
 /// assert_eq!((&mut decoder).u128().unwrap(), 0x101112131415161718191A1B1C1D1E1Fu128)
 /// ```
-pub struct Decoder<'a, T: Read + Seek> {
-    inner: &'a mut T,
+pub struct Decoder<T: Read + Seek> {
+    inner: T,
     pub(crate) idx: u64,
 }
 
@@ -54,8 +54,8 @@ macro_rules! read_fn {
     };
 }
 
-impl<T: Read + Seek> Decoder<'_, T> {
-    pub fn new(read: &mut T) -> Decoder<T> {
+impl<T: Read + Seek> Decoder<T> {
+    pub fn new(read: T) -> Decoder<T> {
         Decoder {
             inner: read,
             idx: 0,
@@ -77,15 +77,25 @@ impl<T: Read + Seek> Decoder<'_, T> {
         }
     }
     pub fn u8(&mut self) -> Result<u8> {
-        Ok(self.inner.bytes().next().ok_or(Error::EOF)??)
+        let mut buf = [0u8; 1];
+        let bytes = self.inner.read(&mut buf)?;
+        if bytes != 1 {
+            Err(Error::EOF)
+        } else {
+            Ok(buf[0])
+        }
     }
     read_fn!(u128, u128, 16);
     read_fn!(u64, u64, 8);
     read_fn!(u32, u32, 4);
     read_fn!(u16, u16, 2);
+
+    pub fn into_inner(self) -> T {
+        self.inner
+    }
 }
 
-impl<T: Read + Seek> Seek for Decoder<'_, T> {
+impl<T: Read + Seek> Seek for Decoder<T> {
     fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
         let result = self.inner.seek(pos)?;
         self.idx = result;
@@ -93,14 +103,9 @@ impl<T: Read + Seek> Seek for Decoder<'_, T> {
     }
 }
 
-impl<T: Read + Seek> AsMut<T> for Decoder<'_, T> {
-    fn as_mut(&mut self) -> &mut T {
-        self.inner
-    }
-}
 
-impl<'a, T: Read + Seek> From<&'a mut T> for Decoder<'a, T> {
-    fn from(read: &'a mut T) -> Self {
+impl<T: Read + Seek> From<T> for Decoder<T> {
+    fn from(read: T) -> Self {
         Decoder::new(read)
     }
 }
