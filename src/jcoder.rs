@@ -51,20 +51,13 @@ macro_rules! read_fn {
         }
     };
 }
-
+macro_rules! read_fn_all {
+    ($($type:ty, $fnName: ident, $bytesize:literal),*) => ($( read_fn! { $type, $fnName, $bytesize } )*);
+}
 pub trait JDecoder: Read {
-    read_fn!(u128, u128, 16);
-    read_fn!(u64, u64, 8);
-    read_fn!(u32, u32, 4);
-    read_fn!(u16, u16, 2);
-    read_fn!(u8, u8, 1);
-    read_fn!(f32, f32, 4);
-    read_fn!(f64, f64, 8);
-    read_fn!(i8, i8, 1);
-    read_fn!(i32, i32, 4);
-    read_fn!(i64, i64, 8);
-    fn utf(&mut self) -> Result<String> {
+    read_fn_all! { u128, u128, 16, u64, u64, 8, u32, u32, 4, u16, u16, 2, u8, u8, 1, f32, f32, 4, f64, f64, 8, i8, i8, 1, i32, i32, 4, i64, i64, 8 }
 
+    fn utf(&mut self) -> Result<String> {
         let length = self.u32()? as usize;
         let mut slice = vec![0u8; length];
         let length_read = self.read(&mut slice)?;
@@ -89,19 +82,15 @@ macro_rules! write_fn {
     };
 }
 
+macro_rules! write_fn_all {
+    ($($type:ty, $fnName: ident, $bytesize:literal),*) => ($( write_fn! { $type, $fnName, $bytesize } )*);
+}
+
 impl<T> JDecoder for T where T: Read {}
 
 pub trait JEncoder: Write {
-    write_fn!(u128, u128, 16);
-    write_fn!(u64, u64, 8);
-    write_fn!(u32, u32, 4);
-    write_fn!(u16, u16, 2);
-    write_fn!(u8, u8, 1);
-    write_fn!(f32, f32, 4);
-    write_fn!(f64, f64, 8);
-    write_fn!(i8, i8, 1);
-    write_fn!(i32, i32, 4);
-    write_fn!(i64, i64, 8);
+    write_fn_all! { u128, u128, 16, u64, u64, 8, u32, u32, 4, u16, u16, 2, u8, u8, 1, f32, f32, 4, f64, f64, 8, i8, i8, 1, i32, i32, 4, i64, i64, 8 }
+
     fn utf(&mut self, str: &str) -> Result<String> {
         let slice = crate::mod_utf8::string_to_modified_utf8(str)?;
         let length = slice.len();
