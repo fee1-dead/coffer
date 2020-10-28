@@ -14,7 +14,7 @@
     You should have received a copy of the GNU General Public License
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
-use crate::jcoder::{Decoder, JDecoder};
+use crate::jcoder::JDecoder;
 use std::io::{Read, Seek, SeekFrom};
 use std::convert::TryFrom;
 use crate::error::{Error, Result};
@@ -32,7 +32,7 @@ pub struct JClassIdx {
     pub attrs: Vec<u64>
 }
 impl JClassIdx {
-    pub(crate) fn try_from<T:Read + Seek>(value: &mut T) -> Result<JClassIdx> {
+    pub fn try_from<T:Read + Seek>(value: &mut T) -> Result<JClassIdx> {
         fn attrs<T: Read + Seek>(value: &mut T) -> Result<Vec<u64>> {
             let attribute_count = value.u16()?;
             let mut vec_inner: Vec<u64> = Vec::with_capacity(attribute_count as usize);

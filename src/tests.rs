@@ -16,7 +16,6 @@
 */
 use std::path::Path;
 use std::fs::File;
-use crate::jcoder::Decoder;
 use crate::index::JClassIdx;
 use std::io::BufReader;
 

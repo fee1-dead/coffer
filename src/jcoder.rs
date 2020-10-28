@@ -17,6 +17,25 @@
 use crate::error::{Error, Result};
 use std::io::{Read, Seek, SeekFrom, Write};
 
+
+
+macro_rules! read_fn {
+    ($type:ty, $fnName: ident, $bytesize:literal) => {
+        fn $fnName(&mut self) -> Result<$type> {
+            let mut buf = [0u8; $bytesize];
+            let bytes = self.read(&mut buf)?;
+            if bytes != $bytesize {
+                Err(Error::EOF)
+            } else {
+                Ok(<$type>::from_be_bytes(buf))
+            }
+        }
+    };
+}
+macro_rules! read_fn_all {
+    ($($type:ty, $fnName: ident, $bytesize:literal),*) => ($( read_fn! { $type, $fnName, $bytesize } )*);
+}
+
 /// Decoder for Big Endian Values. Does not support little endian.
 ///
 /// ```
@@ -34,26 +53,6 @@ use std::io::{Read, Seek, SeekFrom, Write};
 /// assert_eq!((&mut cursor).u64().unwrap(), 0x7080201020902412u64);
 /// assert_eq!((&mut cursor).u128().unwrap(), 0x101112131415161718191A1B1C1D1E1Fu128)
 /// ```
-pub struct Decoder<T: Read + Seek> {
-    inner: T,
-    pub(crate) idx: u64,
-}
-macro_rules! read_fn {
-    ($type:ty, $fnName: ident, $bytesize:literal) => {
-        fn $fnName(&mut self) -> Result<$type> {
-            let mut buf = [0u8; $bytesize];
-            let bytes = self.read(&mut buf)?;
-            if bytes != $bytesize {
-                Err(Error::EOF)
-            } else {
-                Ok(<$type>::from_be_bytes(buf))
-            }
-        }
-    };
-}
-macro_rules! read_fn_all {
-    ($($type:ty, $fnName: ident, $bytesize:literal),*) => ($( read_fn! { $type, $fnName, $bytesize } )*);
-}
 pub trait JDecoder: Read {
     read_fn_all! { u128, u128, 16, u64, u64, 8, u32, u32, 4, u16, u16, 2, u8, u8, 1, f32, f32, 4, f64, f64, 8, i8, i8, 1, i32, i32, 4, i64, i64, 8 }
 
