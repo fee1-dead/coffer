@@ -67,8 +67,8 @@ impl JClassIdx {
                     is_wide = true;
                     8
                 }
-                7 | 8 => 2,
-                9 | 10 | 11 | 12 => 4,
+                7 | 8 | 16 | 19 | 20 => 2,
+                3 | 4 | 9 | 10 | 11 | 12 | 15 | 17 | 18 => 4,
                 _ => return Err(Error::Unrecognized("constant entry tag", format!("{} at index {}", tag, i)))
             };
             value.seek(SeekFrom::Current(jump))?;
