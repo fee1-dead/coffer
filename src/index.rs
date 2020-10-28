@@ -32,7 +32,7 @@ pub struct JClassIdx {
     pub attrs: Vec<u64>
 }
 impl JClassIdx {
-    fn try_from<T:Read + Seek>(value: &mut T) -> Result<JClassIdx> {
+    pub(crate) fn try_from<T:Read + Seek>(value: &mut T) -> Result<JClassIdx> {
         fn attrs<T: Read + Seek>(value: &mut T) -> Result<Vec<u64>> {
             let attribute_count = value.u16()?;
             let mut vec_inner: Vec<u64> = Vec::with_capacity(attribute_count as usize);

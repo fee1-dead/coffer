@@ -18,7 +18,7 @@ use std::path::Path;
 use std::fs::File;
 use crate::jcoder::Decoder;
 use crate::index::JClassIdx;
-use std::convert::TryFrom;
+use std::io::BufReader;
 
 mod mutf8;
 
@@ -46,8 +46,8 @@ fn test_folder<P>(path: P) where P: AsRef<Path> {
 
 fn test_parse_class<P>(path: P) where P: AsRef<Path> {
     let path = path.as_ref();
-    let mut file = File::open(path).expect("Open file");
-    let mut decoder = Decoder::new(&mut file);
-    let jclass = JClassIdx::try_from(&mut decoder).expect(&*format!("Parsing Class {}", path.to_str().unwrap_or("INVALID_PATH")));
+    let file = File::open(path).expect("Open file");
+    let mut buf = BufReader::new(file);
+    let jclass = JClassIdx::try_from(&mut buf).expect(&*format!("Parsing Class {}", path.to_str().unwrap_or("INVALID_PATH")));
     println!("JClass {:#?}", jclass);
 }
