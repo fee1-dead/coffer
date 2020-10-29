@@ -26,9 +26,11 @@ pub struct JClassIdx {
     pub constant_pool: Vec<u64>,
     pub itfs: u16,
     /// Contains the offset information of the attributes that the fields holds. the last `u64` of a field is the end of the field.
-    pub fields: Vec<Vec<u64>>,
+    /// The first `u64` is the start of the field.
+    pub fields: Vec<(u64, Vec<u64>)>,
     /// Contains the offset information of the attributes that the methods holds. the last `u64` of a method is the end of the method.
-    pub methods: Vec<Vec<u64>>,
+    /// The first `u64` is the start of the method.
+    pub methods: Vec<(u64, Vec<u64>)>,
     pub attrs: Vec<u64>
 }
 impl JClassIdx {
@@ -44,13 +46,14 @@ impl JClassIdx {
             }
             Ok(vec_inner)
         }
-        fn fields_or_methods<T: Read + Seek>(value: &mut T) -> Result<Vec<Vec<u64>>> {
+        fn fields_or_methods<T: Read + Seek>(value: &mut T) -> Result<Vec<(u64, Vec<u64>)>> {
             let count = value.u16()?;
-            let mut vec_outer: Vec<Vec<u64>> = Vec::with_capacity(count as usize);
+            let mut vec_outer: Vec<(u64, Vec<u64>)> = Vec::with_capacity(count as usize);
             for _ in 0..count {
+                let start = value.stream_position()?;
                 value.seek(SeekFrom::Current(6))?;
                 let vec_inner = attrs(value)?;
-                vec_outer.push(vec_inner)
+                vec_outer.push((start, vec_inner))
             }
             Ok(vec_outer)
         }
