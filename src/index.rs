@@ -35,18 +35,18 @@ pub struct JClassIdx {
 impl JClassIdx {
     pub fn try_from<T:Read + Seek>(value: &mut T) -> Result<JClassIdx> {
         fn attrs<T: Read + Seek>(value: &mut T) -> Result<Vec<u64>> {
-            let attribute_count = value.u16()?;
+            let attribute_count = value.read_u16()?;
             let mut vec_inner: Vec<u64> = Vec::with_capacity(attribute_count as usize);
             for _ in 0..attribute_count {
                 value.seek(SeekFrom::Current(2))?;
-                let length = value.u32()?;
+                let length = value.read_u32()?;
                 value.seek(SeekFrom::Current(length as i64))?;
                 vec_inner.push(value.stream_position()?);
             }
             Ok(vec_inner)
         }
         fn fields_or_methods<T: Read + Seek>(value: &mut T) -> Result<Vec<(u64, Vec<u64>)>> {
-            let count = value.u16()?;
+            let count = value.read_u16()?;
             let mut vec_outer: Vec<(u64, Vec<u64>)> = Vec::with_capacity(count as usize);
             for _ in 0..count {
                 let start = value.stream_position()?;
@@ -57,14 +57,14 @@ impl JClassIdx {
             Ok(vec_outer)
         }
         value.seek(SeekFrom::Current(8))?;
-        let constant_pool_size = value.u16()? - 1;
+        let constant_pool_size = value.read_u16()? - 1;
         let mut constant_pool: Vec<u64> = Vec::with_capacity(constant_pool_size as usize);
         let mut i = 0;
         while i < constant_pool_size {
-            let tag = value.u8()?;
+            let tag = value.read_u8()?;
             let mut is_wide = false;
             let jump = match tag {
-                1 => value.u16()? as i64,
+                1 => value.read_u16()? as i64,
                 5 | 6 => {
                     is_wide = true;
                     8
@@ -82,7 +82,7 @@ impl JClassIdx {
             i += 1;
         }
         value.seek(SeekFrom::Current(6))?;
-        let itfs = value.u16()?;
+        let itfs = value.read_u16()?;
         value.seek(SeekFrom::Current(itfs as i64 * 2))?;
 
         let fields = fields_or_methods(value)?;
