@@ -104,3 +104,5 @@ pub trait JEncoder: Write {
         }
     }
 }
+
+impl<T> JEncoder for T where T: Write {}
