@@ -16,7 +16,6 @@
 */
 use crate::jcoder::JDecoder;
 use std::io::{Read, Seek, SeekFrom};
-use std::convert::TryFrom;
 use crate::error::{Error, Result};
 
 #[derive(Debug)]

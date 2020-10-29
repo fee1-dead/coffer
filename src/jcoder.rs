@@ -15,7 +15,7 @@
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
 use crate::error::{Error, Result};
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Read, Write};
 
 
 
