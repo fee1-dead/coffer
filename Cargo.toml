@@ -11,6 +11,7 @@ num = "0.3.0"
 num_enum = "0.5.1"
 thiserror = "1.0"
 bitflags = "1.0"
+delegate = "0.4.3"
 
 [features]
 jvm1_1 = []

@@ -16,6 +16,7 @@
 */
 #![feature(assoc_char_funcs)]
 #![feature(seek_convenience)]
+#![feature(arbitrary_enum_discriminant)]
 
 #[macro_use]
 extern crate bitflags;
@@ -26,10 +27,13 @@ pub mod constants;
 pub mod index;
 pub mod jcoder;
 pub mod error;
+pub mod insn;
+pub mod mod_utf8;
 
 #[cfg(test)]
 mod tests;
-mod mod_utf8;
+
+
 
 pub struct JClass {
     pub minor_version: u16,
