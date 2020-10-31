@@ -29,3 +29,14 @@ jvm12 = []
 jvm13 = []
 jvm14 = []
 jvm15 = []
+
+[dev-dependencies]
+criterion = "0.3"
+curl = "0.4"
+zip = "0.5"
+rand = "0.7"
+rand_pcg = "0.2"
+
+[[bench]]
+name = "insn"
+harness = false
