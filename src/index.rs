@@ -20,15 +20,15 @@ use crate::error::{Error, Result};
 
 #[derive(Debug)]
 pub struct JClassIdx {
-    /// Contains the offset of the end of each entry. For example: `constant_pool[0]` will contain the end of the first entry, also the start of the second entry.
+    /// Contains the offset of the end of each entry. For example: `constant_pool[0]` will be the end of the first entry, also the start of the second entry.
     /// Since double takes up two entries, if a double was the first entry, then `constant_pool[1]` would be equal to `0`.
     pub constant_pool: Vec<u64>,
     pub itfs: u16,
     /// Contains the offset information of the attributes that the fields holds. the last `u64` of a field is the end of the field.
-    /// The first `u64` is the start of the field.
+    /// The `u64` on the left is the start of the field.
     pub fields: Vec<(u64, Vec<u64>)>,
     /// Contains the offset information of the attributes that the methods holds. the last `u64` of a method is the end of the method.
-    /// The first `u64` is the start of the method.
+    /// The `u64` on the left is the start of the method.
     pub methods: Vec<(u64, Vec<u64>)>,
     pub attrs: Vec<u64>
 }
