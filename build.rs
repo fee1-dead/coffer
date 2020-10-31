@@ -5,7 +5,7 @@ use std::path::Path;
 
 const JAVA_SRC_DIR:  &'static str = "java";
 const OUT_DIR: &'static str = "out";
-fn main() {
+fn main() {/*
     println!("cargo:rustc-env=JAVA_OUTPUT_DIR={}", OUT_DIR);
     println!("cargo:rerun-if-changed={}", OUT_DIR);
     let out_path = Path::new(OUT_DIR);
@@ -23,5 +23,6 @@ fn main() {
     }
     for mut x in processes {
         assert!(x.wait().unwrap().success());
-    }
+    }*/
+    // Buildscript currently disabled
 }
