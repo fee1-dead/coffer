@@ -30,6 +30,7 @@ jobs:
       run: cargo +nightly bench | tee output.txt
     - uses: rhysd/github-action-benchmark@v1
       with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
         name: Rust Benchmark
         tool: 'cargo'
         output-file-path: ./output.txt
