@@ -20,11 +20,7 @@ use crate::index::JClassIdx;
 use std::io::BufReader;
 
 mod mutf8;
-
-#[test]
-fn it_works() {
-    assert_eq!(2 + 2, 4);
-}
+mod insn;
 
 #[test]
 fn test_parse_class_index() {
@@ -48,5 +44,4 @@ fn test_parse_class<P>(path: P) where P: AsRef<Path> {
     let file = File::open(path).expect("Open file");
     let mut buf = BufReader::new(file);
     let jclass = JClassIdx::try_from(&mut buf).expect(&*format!("Parsing Class {}", path.to_str().unwrap_or("INVALID_PATH")));
-    println!("JClass {:#?}", jclass);
 }
