@@ -28,16 +28,15 @@ jobs:
         command: test
     - name: Run Benchmark
       run: cargo +nightly bench | tee output.txt
-    - name: Store benchmark result
-        uses: rhysd/github-action-benchmark@v1
-        with:
-          name: Rust Benchmark
-          tool: 'cargo'
-          output-file-path: ./output.txt
-          alert-threshold: '200%'
-          comment-on-alert: true
-          alert-comment-cc-users: '@fee1-dead'
-    - name: Deploy
+    - uses: rhysd/github-action-benchmark@v1
+      with:
+        name: Rust Benchmark
+        tool: 'cargo'
+        output-file-path: ./output.txt
+        alert-threshold: '200%'
+        comment-on-alert: true
+        alert-comment-cc-users: '@fee1-dead'
+    - name: Deploy Benchmark Results
       uses: peaceiris/actions-gh-pages@v3
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
