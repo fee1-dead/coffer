@@ -18,6 +18,8 @@ jobs:
       uses: actions/setup-java@v1.4.3
       with:
         java-version: 1.8
+    - name: Install GNU Plot for benchmark
+      run: sudo apt-get install gnuplot
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: nightly
@@ -28,7 +30,7 @@ jobs:
         command: test
     - name: Run Benchmark
       run: cargo +nightly bench | tee output.txt
-    - uses: rhysd/github-action-benchmark@v1
+    - uses: fee1-dead/github-action-benchmark@v1
       with:
         name: Rust Benchmark
         tool: 'cargo'
