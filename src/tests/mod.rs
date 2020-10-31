@@ -43,5 +43,5 @@ fn test_parse_class<P>(path: P) where P: AsRef<Path> {
     let path = path.as_ref();
     let file = File::open(path).expect("Open file");
     let mut buf = BufReader::new(file);
-    let jclass = JClassIdx::try_from(&mut buf).expect(&*format!("Parsing Class {}", path.to_str().unwrap_or("INVALID_PATH")));
+    let _jclass = JClassIdx::try_from(&mut buf).expect(&*format!("Parsing Class {}", path.to_str().unwrap_or("INVALID_PATH")));
 }

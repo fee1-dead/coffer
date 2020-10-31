@@ -1,13 +1,13 @@
-use criterion::{Criterion, criterion_group, criterion_main, black_box, BatchSize, BenchmarkId, Throughput};
+use criterion::{Criterion, criterion_group, criterion_main, BatchSize, BenchmarkId, Throughput};
 use coffer::constants::insn::*;
-use std::io::{Cursor, Seek, SeekFrom, BufReader, Read};
+use std::io::{Cursor, Read};
 use coffer::insn::InstructionRead;
-use std::fs::{read_dir, File};
+
 use coffer::index::JClassIdx;
 use std::thread::spawn;
 use zip::ZipArchive;
-use rand::{Rng, thread_rng};
-use rand::distributions::{Uniform, Standard};
+use rand::{Rng};
+use rand::distributions::{Uniform};
 use rand_pcg::Pcg64;
 
 
@@ -36,7 +36,7 @@ fn bench_jidx(c: &mut Criterion) -> coffer::error::Result<()> {
         "https://repo1.maven.org/maven2/org/apache/spark/spark-core_2.11/2.4.7/spark-core_2.11-2.4.7.jar",
         "https://repo1.maven.org/maven2/com/google/zxing/core/3.4.1/core-3.4.1.jar"
     ];
-    use std;
+    
     let mut count = 31;
     let classes: Vec<(String, Vec<u8>)> = urls.iter().map(|&url| {
         let thing = spawn(move || {
@@ -58,8 +58,17 @@ fn bench_jidx(c: &mut Criterion) -> coffer::error::Result<()> {
         let rng: Pcg64 = rand::SeedableRng::seed_from_u64(1230984 + count);
         count *= 31;
         let uni = Uniform::new(0, len);
-        let mut iter = rng.sample_iter(uni);
-        (0..len).map(move |i| zip.by_index(i).unwrap()).filter(|zipfile| zipfile.name().ends_with(".class")).collect::<Vec<(String, Vec<u8>)>>()
+        let _iter = rng.sample_iter(uni);
+        (0..len).filter_map(move |i| {
+            let mut zipfile = zip.by_index(i).unwrap();
+            if zipfile.is_file() && zipfile.name().ends_with(".class") {
+                let mut vec = vec![];
+                zipfile.read_to_end(&mut vec);
+                Some((zipfile.name().to_string(), vec))
+            } else {
+                None
+            }
+    }).collect::<Vec<(String, Vec<u8>)>>()
     }).collect();
     println!("{} classes", classes.len());
     let mut group = c.benchmark_group("bench_jidx");
