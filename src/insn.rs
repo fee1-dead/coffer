@@ -256,8 +256,8 @@ pub trait InstructionRead: Read + Sized {
     /// # use coffer::constants::insn::*;
     /// let mut slice = [ARETURN, LDC, 1];
     /// # let mut cursor = Cursor::new(slice);
-    /// assert_eq!((&mut cursor).read_insn().unwrap(), Instruction::AReturn);
-    /// assert_eq!((&mut cursor).read_insn().unwrap(), Instruction::LDC(1));
+    /// assert_eq!((&mut cursor).read_insn(|_|()).unwrap(), Instruction::AReturn);
+    /// assert_eq!((&mut cursor).read_insn(|_|()).unwrap(), Instruction::LDC(1));
     /// ```
     fn read_insn<F>(&mut self, mut pad_func: F) -> Result<Instruction, Error> where F: FnMut(&mut Self) {
         fn transmute_slice<T>(opcode: u8, mut fun: T) -> Result<Instruction, Error> where T: FnMut(Cursor<&mut [u8]>) -> Result<(), Error> {
