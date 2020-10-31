@@ -38,7 +38,7 @@ fn bench_jidx(c: &mut Criterion) -> coffer::error::Result<()> {
     ];
     use std;
     let mut count = 31;
-    let classes: Vec<(String, Vec<u8>)> = urls.iter().map(|&url|  {
+    let classes: Vec<(String, Vec<u8>)> = urls.iter().map(|&url| {
         let thing = spawn(move || {
             let mut easy = curl::easy::Easy::new();
             let mut dst = vec![];
@@ -59,23 +59,14 @@ fn bench_jidx(c: &mut Criterion) -> coffer::error::Result<()> {
         count *= 31;
         let uni = Uniform::new(0, len);
         let mut iter = rng.sample_iter(uni);
-        (0..10).map(move |_| {
-            loop {
-                let mut entry = zip.by_index(iter.next().unwrap()).unwrap();
-                if entry.is_file() && entry.name().ends_with(".class") && !entry.name().contains('$') /* Avoid Nested Classes */ {
-                    let mut vec = vec![];
-                    entry.read_to_end(&mut vec);
-                    break (entry.name().to_string(), vec);
-                }
-            }
-        }).collect::<Vec<(String, Vec<u8>)>>()
+        (0..len).map(move |i| zip.by_index(i).unwrap()).filter(|zipfile| zipfile.name().ends_with(".class")).collect::<Vec<(String, Vec<u8>)>>()
     }).collect();
-
+    println!("{} classes", classes.len());
     let mut group = c.benchmark_group("bench_jidx");
     for (name, bytes) in classes {
         group.throughput(Throughput::Bytes(bytes.len() as u64));
         group.bench_with_input(BenchmarkId::from_parameter(name), &bytes, |c, buf| {
-            c.iter_batched(|| Cursor::new(buf), |mut c | JClassIdx::try_from(&mut c), BatchSize::SmallInput)
+            c.iter_batched(|| Cursor::new(buf), |mut c| JClassIdx::try_from(&mut c), BatchSize::SmallInput)
         });
     }
     /*for d in read_dir("out")? {
