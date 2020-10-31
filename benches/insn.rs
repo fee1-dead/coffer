@@ -9,6 +9,7 @@ use zip::ZipArchive;
 use rand::{Rng};
 use rand::distributions::{Uniform};
 use rand_pcg::Pcg64;
+use std::collections::HashSet;
 
 
 fn bench_op(c: &mut Criterion) {
@@ -36,8 +37,7 @@ fn bench_jidx(c: &mut Criterion) -> coffer::error::Result<()> {
         "https://repo1.maven.org/maven2/org/apache/spark/spark-core_2.11/2.4.7/spark-core_2.11-2.4.7.jar",
         "https://repo1.maven.org/maven2/com/google/zxing/core/3.4.1/core-3.4.1.jar"
     ];
-    
-    let mut count = 31;
+    let mut sizes = HashSet::new();
     let classes: Vec<(String, Vec<u8>)> = urls.iter().map(|&url| {
         let thing = spawn(move || {
             let mut easy = curl::easy::Easy::new();
@@ -53,22 +53,21 @@ fn bench_jidx(c: &mut Criterion) -> coffer::error::Result<()> {
             dst
         });
         ZipArchive::new(Cursor::new(thing.join().unwrap())).unwrap()
-    }).flat_map(|mut zip| {
+    }).flat_map(move |mut zip| {
         let len = zip.len();
-        let rng: Pcg64 = rand::SeedableRng::seed_from_u64(1230984 + count);
-        count *= 31;
-        let uni = Uniform::new(0, len);
-        let _iter = rng.sample_iter(uni);
-        (0..len).filter_map(move |i| {
+        let mut vec_classes = vec![];
+        for i in 0..len {
             let mut zipfile = zip.by_index(i).unwrap();
-            if zipfile.is_file() && zipfile.name().ends_with(".class") {
+            let name = zipfile.name().to_owned();
+            let size = zipfile.size() / 500;
+            if zipfile.is_file() && name.ends_with(".class") && !name.contains("$") && !sizes.contains(&size) {
+                sizes.insert(size);
                 let mut vec = vec![];
-                zipfile.read_to_end(&mut vec);
-                Some((zipfile.name().to_string(), vec))
-            } else {
-                None
+                zipfile.read_to_end(&mut vec).unwrap();
+                vec_classes.push((zipfile.name().to_string(), vec))
             }
-    }).collect::<Vec<(String, Vec<u8>)>>()
+        }
+        vec_classes
     }).collect();
     println!("{} classes", classes.len());
     let mut group = c.benchmark_group("bench_jidx");
