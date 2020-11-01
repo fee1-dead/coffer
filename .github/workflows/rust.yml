@@ -19,9 +19,7 @@ jobs:
       with:
         java-version: 1.8
     - name: Run Tests
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
+      run: cargo +nightly test
 
   bench:
     runs-on: ubuntu-latest
@@ -33,9 +31,8 @@ jobs:
       with:
         toolchain: nightly
         override: true
-
     - name: Run Benchmark
-        run: cargo +nightly bench | tee output.txt
+      run: cargo +nightly bench
     - name: Deploy Benchmark Results
       uses: peaceiris/actions-gh-pages@v3
       with:
