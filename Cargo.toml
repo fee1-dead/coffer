@@ -1,7 +1,7 @@
 [package]
 name = "coffer"
 version = "0.1.0"
-authors = ["Enterman <43851243+Enteerman@users.noreply.github.com>"]
+authors = ["Deadbeef"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -34,8 +34,8 @@ jvm15 = []
 criterion = "0.3"
 curl = "0.4"
 zip = "0.5"
-rand = "0.7"
-rand_pcg = "0.2"
+class_sample = { git = "https://github.com/fee1-dead/class-sample-rs", branch = "master" }
+
 
 [[bench]]
 name = "insn"

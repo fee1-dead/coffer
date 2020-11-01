@@ -6,10 +6,8 @@ use coffer::insn::InstructionRead;
 use coffer::index::JClassIdx;
 use std::thread::spawn;
 use zip::ZipArchive;
-use rand::{Rng};
-use rand::distributions::{Uniform};
-use rand_pcg::Pcg64;
 use std::collections::HashSet;
+
 
 
 fn bench_op(c: &mut Criterion) {
@@ -41,38 +39,7 @@ fn bench_jidx(c: &mut Criterion) -> coffer::error::Result<()> {
         "https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-compiler/1.4.20-M1/kotlin-compiler-1.4.20-M1.jar",
         "https://repo1.maven.org/maven2/org/scala-lang/scala-compiler/2.13.3/scala-compiler-2.13.3.jar"
     ];
-    let mut sizes = HashSet::new();
-    let classes: Vec<(String, Vec<u8>)> = urls.iter().map(|&url| {
-        let thing = spawn(move || {
-            let mut easy = curl::easy::Easy::new();
-            let mut dst = vec![];
-            easy.url(url).unwrap();
-            let mut transfer = easy.transfer();
-            transfer.write_function(|data| {
-                dst.extend_from_slice(data);
-                Ok(data.len())
-            }).unwrap();
-            transfer.perform().unwrap();
-            drop(transfer);
-            dst
-        });
-        ZipArchive::new(Cursor::new(thing.join().unwrap())).unwrap()
-    }).flat_map(move |mut zip| {
-        let len = zip.len();
-        let mut vec_classes = vec![];
-        for i in 0..len {
-            let mut zipfile = zip.by_index(i).unwrap();
-            let name = zipfile.name().to_owned();
-            let size = zipfile.size() / 500;
-            if zipfile.is_file() && name.ends_with(".class") && !name.contains("$") && !sizes.contains(&size) {
-                sizes.insert(size);
-                let mut vec = vec![];
-                zipfile.read_to_end(&mut vec).unwrap();
-                vec_classes.push((zipfile.name().to_string(), vec))
-            }
-        }
-        vec_classes
-    }).collect();
+    let classes: Vec<(String, Vec<u8>)> = class_sample::get_sample_name_bytes(100);
     println!("{} classes", classes.len());
     let mut group = c.benchmark_group("bench_jidx");
     for (name, bytes) in classes {
