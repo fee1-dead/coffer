@@ -42,7 +42,7 @@ pub struct JClass {
     pub access: u16,
     pub this_class: u16,
     pub super_class: u16,
-    pub interfaces: u16,
+    pub interfaces: Vec<u16>,
     pub fields: Vec<JField>,
     pub methods: Vec<JMethod>,
     pub attributes: Vec<JAttribute>,

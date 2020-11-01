@@ -18,6 +18,19 @@ use crate::jcoder::JDecoder;
 use std::io::{Read, Seek, SeekFrom};
 use crate::error::{Error, Result};
 
+/// Structure containing the offsets from the start of the file.
+///
+/// This implementation is error-prone and fast due to its skipping nature.
+///
+/// Nothing is read from the reader other than critical information (e.g. constant pool entry tag, number of methods/fields)
+///
+/// Performance: It usually takes several microseconds to parse the entire file. SysCalls not counted.
+///
+/// On rare cases it can be up to about 0.25 milliseconds, and less than 0.5 microseconds.
+///
+/// What can affect the performance: number of fields/methods/constant entries/attibutes
+///
+/// What does NOT affect the performance: Attibute length (e.g. code size)
 #[derive(Debug)]
 pub struct JClassIdx {
     /// Contains the offset of the end of each entry. For example: `constant_pool[0]` will be the end of the first entry, also the start of the second entry.
@@ -30,10 +43,11 @@ pub struct JClassIdx {
     /// Contains the offset information of the attributes that the methods holds. the last `u64` of a method is the end of the method.
     /// The `u64` on the left is the start of the method.
     pub methods: Vec<(u64, Vec<u64>)>,
-    pub attrs: Vec<u64>
+    pub attrs: Vec<u64>,
 }
+
 impl JClassIdx {
-    pub fn try_from<T:Read + Seek>(value: &mut T) -> Result<JClassIdx> {
+    pub fn try_from<T: Read + Seek>(value: &mut T) -> Result<JClassIdx> {
         fn attrs<T: Read + Seek>(value: &mut T) -> Result<Vec<u64>> {
             let attribute_count = value.read_u16()?;
             let mut vec_inner: Vec<u64> = Vec::with_capacity(attribute_count as usize);
@@ -91,14 +105,14 @@ impl JClassIdx {
         let len = value.stream_len()?;
         let idx = value.stream_position()?;
         if idx != len {
-            return Err(Error::ExtraBytes(len - idx))
+            return Err(Error::ExtraBytes(len - idx));
         }
         Ok(JClassIdx {
             constant_pool,
             itfs,
             fields,
             methods,
-            attrs
+            attrs,
         })
     }
 }

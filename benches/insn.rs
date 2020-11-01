@@ -27,19 +27,8 @@ fn bench_op(c: &mut Criterion) {
     });
 }
 
-fn bench_jidx(c: &mut Criterion) -> coffer::error::Result<()> {
-    // See NOTICE
-    let urls = [
-        "https://repo1.maven.org/maven2/com/google/guava/guava/30.0-jre/guava-30.0-jre.jar",
-        "https://repo1.maven.org/maven2/com/squareup/okhttp3/okhttp/4.10.0-RC1/okhttp-4.10.0-RC1.jar",
-        "https://repo1.maven.org/maven2/org/apache/spark/spark-core_2.11/2.4.7/spark-core_2.11-2.4.7.jar",
-        "https://repo1.maven.org/maven2/com/google/zxing/core/3.4.1/core-3.4.1.jar",
-        "https://repo1.maven.org/maven2/com/google/inject/guice/5.0.0-BETA-1/guice-5.0.0-BETA-1.jar",
-        "https://repo1.maven.org/maven2/junit/junit/4.13.1/junit-4.13.1.jar",
-        "https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-compiler/1.4.20-M1/kotlin-compiler-1.4.20-M1.jar",
-        "https://repo1.maven.org/maven2/org/scala-lang/scala-compiler/2.13.3/scala-compiler-2.13.3.jar"
-    ];
-    let classes: Vec<(String, Vec<u8>)> = class_sample::get_sample_name_bytes(100);
+fn bench_jidx(c: &mut Criterion) {
+    let classes: Vec<(String, Vec<u8>)> = class_sample::get_sample_name_bytes(1024 * 10);
     println!("{} classes", classes.len());
     let mut group = c.benchmark_group("bench_jidx");
     for (name, bytes) in classes {
@@ -70,8 +59,6 @@ fn bench_jidx(c: &mut Criterion) -> coffer::error::Result<()> {
             }
         }
     }*/
-
-    Ok(())
 }
 
 criterion_group!(benches, bench_op, bench_jidx);
