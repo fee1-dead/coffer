@@ -28,8 +28,7 @@ fn test_parse_class_index() {
     }
 }
 
-
-fn test_parse_class(name: String, bytes: Vec<u8>){
+fn test_parse_class(name: String, bytes: Vec<u8>) {
     let mut cursor = Cursor::new(bytes);
     let _jclass = JClassIdx::try_from(&mut cursor).expect(&*format!("Parsing Class {}", name));
 }

@@ -17,8 +17,6 @@
 use crate::error::{Error, Result};
 use std::io::{Read, Write};
 
-
-
 macro_rules! read_fn {
     ($type:ty, $fnName: ident, $bytesize:literal) => {
         fn $fnName(&mut self) -> Result<$type> {
@@ -93,7 +91,6 @@ pub trait JEncoder: Write {
                     f32, write_f32, 4, f64, write_f64, 8, i8, write_i8, 1, i16, write_i16, 2, i32, write_i32, 4, i64, write_i64, 8 }
 
     fn utf(&mut self, str: &str) -> Result<String> {
-
         let slice = crate::mod_utf8::string_to_modified_utf8(str)?;
         let length = slice.len();
         let length_written = self.write(&slice)?;

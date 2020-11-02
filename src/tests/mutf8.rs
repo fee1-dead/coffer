@@ -23,7 +23,6 @@ fn test_to_modified_utf8_supplementary() {
     // 11101101 10100000 10111101 11101101 10111000 10000000
     // 1101_100000_111101
     assert_eq!(string_to_modified_utf8(emoji).unwrap(), vec![0b11101101, 0b10100000, 0b10111101, 0b11101101, 0b10111000, 0b10000000]);
-    
 }
 
 #[test]

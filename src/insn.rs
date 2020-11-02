@@ -214,9 +214,11 @@ pub enum Instruction {
 }
 
 const SIZE: usize = std::mem::size_of::<Instruction>();
+
 pub trait JSwitchPadder {
     fn pad(&mut self) -> Result<(), std::io::Error>;
 }
+
 /// A Reader for instructions inside a method.
 ///
 /// Each reader must be initialized with `start_idx` at the start of a method definition in a java class.
@@ -224,14 +226,15 @@ pub trait JSwitchPadder {
 /// You should use a BufReader for files, etc. A Cursor for readers that don't implement Seek.
 pub struct InstructionReader<T> {
     start_idx: u64,
-    inner: T
+    inner: T,
 }
+
 impl<T: Seek> InstructionReader<T> {
     pub fn new(mut value: T) -> std::io::Result<Self> {
         let pos = value.stream_position()?;
         Ok(InstructionReader {
             start_idx: pos,
-            inner: value
+            inner: value,
         })
     }
 }
@@ -246,11 +249,12 @@ impl<T: Seek> JSwitchPadder for InstructionReader<T> {
 
 impl<T: Seek + Read> InstructionReader<T> {
     pub fn read_insn(&mut self) -> Result<Instruction, Error> {
-        InstructionRead::read_insn(self,JSwitchPadder::pad)
+        InstructionRead::read_insn(self, JSwitchPadder::pad)
     }
 }
 
 use delegate::delegate;
+
 // noinspection RsTraitImplementation
 impl<T: Read> Read for InstructionReader<T> {
     delegate! {
@@ -367,7 +371,7 @@ pub trait InstructionRead: Read + Sized {
                 TableSwitch(default, low, high, vec)
             }
             _ => {
-                return Err(Error::Unrecognized("opcode", op.to_string()))
+                return Err(Error::Unrecognized("opcode", op.to_string()));
             }
         })
     }

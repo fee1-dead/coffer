@@ -33,8 +33,6 @@ pub mod mod_utf8;
 #[cfg(test)]
 mod tests;
 
-
-
 pub struct JClass {
     pub minor_version: u16,
     pub major_version: u16,
