@@ -215,7 +215,7 @@ pub enum Instruction {
 
 const SIZE: usize = std::mem::size_of::<Instruction>();
 pub trait JSwitchPadder {
-    fn pad();
+    fn pad(&mut self) -> Result<(), std::io::Error>;
 }
 /// A Reader for instructions inside a method.
 ///
@@ -236,6 +236,14 @@ impl<T: Seek> InstructionReader<T> {
     }
 }
 
+impl<T: Seek> JSwitchPadder for InstructionReader<T> {
+    fn pad(&mut self) -> Result<(), std::io::Error> {
+        let diff = self.stream_position()? - self.start_idx;
+        self.seek(SeekFrom::Current(((4 - (diff % 4)) & 3) as i64))?;
+        Ok(())
+    }
+}
+
 use delegate::delegate;
 // noinspection RsTraitImplementation
 impl<T: Read> Read for InstructionReader<T> {
@@ -243,6 +251,17 @@ impl<T: Read> Read for InstructionReader<T> {
         to self.inner {
             fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error>;
             fn read_to_end(&mut self, buf: &mut Vec<u8>) -> Result<usize, std::io::Error>;
+        }
+    }
+}
+
+// noinspection RsTraitImplementation
+impl<T: Seek> Seek for InstructionReader<T> {
+    delegate! {
+        to self.inner {
+            fn seek(&mut self, pos: SeekFrom) -> Result<u64>;
+            fn stream_len(&mut self) -> Result<u64>;
+            fn stream_position(&mut self) -> Result<u64>;
         }
     }
 }

@@ -18,9 +18,9 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum MUTFError {
-    #[error("Malformed Input: Partial character as end")]
+    #[error("Malformed Input: Partial character at end")]
     PartialCharacterAtEnd,
-    #[error("Malformed Input around byte {0}")]
+    #[error("Malformed Input around byte: {0}")]
     AroundByte(usize),
     #[error(transparent)]
     UTF8Error(#[from] std::str::Utf8Error),
@@ -54,7 +54,8 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MUTFError> {
                 )
             }
             14 => {
-                'surrougate: loop {
+                'surrougate: loop { // Reason: Rust characters differ from java, in java a character is 2 bytes, and in rust it is 4.
+                    // This means that rust is able to represent an emoji as two characters, whereas java will need two `char`s
                     if c == 0b1110_1101 {
                         count += 6;
                         if count > len {
