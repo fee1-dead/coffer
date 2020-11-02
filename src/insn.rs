@@ -222,7 +222,7 @@ pub trait JSwitchPadder {
 /// Each reader must be initialized with `start_idx` at the start of a method definition in a java class.
 ///
 /// You should use a BufReader for files, etc. A Cursor for readers that don't implement Seek.
-struct InstructionReader<T> {
+pub struct InstructionReader<T> {
     start_idx: u64,
     inner: T
 }
@@ -241,6 +241,12 @@ impl<T: Seek> JSwitchPadder for InstructionReader<T> {
         let diff = self.stream_position()? - self.start_idx;
         self.seek(SeekFrom::Current(((4 - (diff % 4)) & 3) as i64))?;
         Ok(())
+    }
+}
+
+impl<T: Seek + Read> InstructionReader<T> {
+    pub fn read_insn(&mut self) -> Result<Instruction, Error> {
+        InstructionRead::read_insn(self,JSwitchPadder::pad)
     }
 }
 
@@ -275,10 +281,10 @@ pub trait InstructionRead: Read + Sized {
     /// # use coffer::constants::insn::*;
     /// let mut slice = [ARETURN, LDC, 1];
     /// # let mut cursor = Cursor::new(slice);
-    /// assert_eq!((&mut cursor).read_insn(|_|()).unwrap(), Instruction::AReturn);
-    /// assert_eq!((&mut cursor).read_insn(|_|()).unwrap(), Instruction::LDC(1));
+    /// assert_eq!((&mut cursor).read_insn(|_|(Ok(()))).unwrap(), Instruction::AReturn);
+    /// assert_eq!((&mut cursor).read_insn(|_|(Ok(()))).unwrap(), Instruction::LDC(1));
     /// ```
-    fn read_insn<F>(&mut self, mut pad_func: F) -> Result<Instruction, Error> where F: FnMut(&mut Self) {
+    fn read_insn<F>(&mut self, mut pad_func: F) -> Result<Instruction, Error> where F: FnMut(&mut Self) -> Result<(), std::io::Error> {
         fn transmute_slice<T>(opcode: u8, mut fun: T) -> Result<Instruction, Error> where T: FnMut(Cursor<&mut [u8]>) -> Result<(), Error> {
             let mut slice = [0u8; SIZE];
             slice[0] = opcode;
@@ -337,7 +343,7 @@ pub trait InstructionRead: Read + Sized {
                 })?
             }
             LOOKUPSWITCH => {
-                pad_func(self);
+                pad_func(self)?;
                 let default = self.read_i32()?;
                 let npairs = self.read_i32()?;
                 let mut vec = Vec::with_capacity(npairs as usize);
@@ -349,7 +355,7 @@ pub trait InstructionRead: Read + Sized {
                 LookupSwitch(default, vec)
             }
             TABLESWITCH => {
-                pad_func(self);
+                pad_func(self)?;
                 let default = self.read_i32()?;
                 let low = self.read_i32()?;
                 let high = self.read_i32()?;

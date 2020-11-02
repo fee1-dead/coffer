@@ -15,7 +15,7 @@ fn bench_op(c: &mut Criterion) {
     c.bench_function("parse_tableswitch", |b| {
         b.iter_batched(|| {
             Cursor::new(buf)
-        }, |mut c| c.read_insn(|_| {}), BatchSize::SmallInput)
+        }, |mut c| c.read_insn(|_| {Ok(())}), BatchSize::SmallInput)
     });
 
     let buf = [ATHROW];
@@ -23,7 +23,7 @@ fn bench_op(c: &mut Criterion) {
     c.bench_function("parse_no_ext_bytes", |b| {
         b.iter_batched(|| {
             Cursor::new(buf)
-        }, |mut c| c.read_insn(|_| {}), BatchSize::SmallInput)
+        }, |mut c| c.read_insn(|_| {Ok(())}), BatchSize::SmallInput)
     });
 }
 
