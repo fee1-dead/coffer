@@ -259,9 +259,9 @@ impl<T: Read> Read for InstructionReader<T> {
 impl<T: Seek> Seek for InstructionReader<T> {
     delegate! {
         to self.inner {
-            fn seek(&mut self, pos: SeekFrom) -> Result<u64>;
-            fn stream_len(&mut self) -> Result<u64>;
-            fn stream_position(&mut self) -> Result<u64>;
+            fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64>;
+            fn stream_len(&mut self) -> std::io::Result<u64>;
+            fn stream_position(&mut self) -> std::io::Result<u64>;
         }
     }
 }
