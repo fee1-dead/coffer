@@ -14,34 +14,22 @@
     You should have received a copy of the GNU General Public License
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
-use std::path::Path;
-use std::fs::File;
 use crate::index::JClassIdx;
-use std::io::BufReader;
+use std::io::Cursor;
 
 mod mutf8;
 mod insn;
 
 #[test]
 fn test_parse_class_index() {
-    //let out_dir: &'static str = env!("JAVA_OUTPUT_DIR");
-    //test_folder(out_dir);
-}
-
-fn test_folder<P>(path: P) where P: AsRef<Path> {
-    for dir_entry in path.as_ref().read_dir().expect("out directory") {
-        let path = dir_entry.expect(&*format!("dir entry under path {}", path.as_ref().to_str().unwrap_or("INVALID_PATH"))).path();
-        if path.is_dir() {
-            test_folder(path);
-        } else if path.extension() == Some("class".as_ref()) {
-            test_parse_class(path);
-        }
+    let samples = class_sample::get_sample_name_bytes(100);
+    for (name, bytes) in samples {
+        test_parse_class(name, bytes)
     }
 }
 
-fn test_parse_class<P>(path: P) where P: AsRef<Path> {
-    let path = path.as_ref();
-    let file = File::open(path).expect("Open file");
-    let mut buf = BufReader::new(file);
-    let _jclass = JClassIdx::try_from(&mut buf).expect(&*format!("Parsing Class {}", path.to_str().unwrap_or("INVALID_PATH")));
+
+fn test_parse_class(name: String, bytes: Vec<u8>){
+    let mut cursor = Cursor::new(bytes);
+    let _jclass = JClassIdx::try_from(&mut cursor).expect(&*format!("Parsing Class {}", name));
 }
