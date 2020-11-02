@@ -27,7 +27,7 @@ jobs:
 
   bench:
     runs-on: ubuntu-latest
-    if: "! contains(github.event.head_commit.message, 'no_bench')"
+    if: "(contains(github.event.head_commit.message, '(bench)')) || github.event_name == 'pull_request'"
     steps:
     - uses: actions/checkout@v2
     - name: Install GNU Plot for benchmark
