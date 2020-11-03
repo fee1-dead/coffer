@@ -335,10 +335,8 @@ pub trait InstructionRead: Read + Sized {
             }
             WIDE => {
                 transmute_slice(op, |mut c| {
-                    let op = self.read_u8()?;
-                    let operand = self.read_u16()?;
-                    c.write_u8(op)?;
-                    c.write(&operand.to_ne_bytes())?;
+                    c.write(&[self.read_u8()?])?;
+                    c.write(&self.read_u16()?.to_ne_bytes())?;
                     if op == IINC {
                         c.write(&[1, 0])?; // Option::Some tag with alignment padding
                         c.write(&self.read_i16()?.to_ne_bytes())?;
