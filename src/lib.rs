@@ -29,6 +29,7 @@ pub mod jcoder;
 pub mod error;
 pub mod insn;
 pub mod mod_utf8;
+pub mod constant_pool;
 
 #[cfg(test)]
 mod tests;
@@ -102,4 +103,3 @@ pub struct JAttribute {
     attribute_name: u16,
     ext_data: Vec<u8>,
 }
-
