@@ -111,6 +111,7 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MUTFError> {
             _ => return Err(MUTFError::AroundByte(count)),
         }
     }
+    str.shrink_to_fit();
     Ok(str)
 }
 
