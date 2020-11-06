@@ -1,5 +1,59 @@
+use std::io::Read;
+use crate::error::{Error, Result};
+use crate::byteswapper::ByteSwap;
+use crate::jcoder::JDecoder;
+
+const CONST_ENT_SIZE: usize = std::mem::size_of::<ConstantEntry>();
+
+#[allow(dead_code)]
+#[inline]
+fn constant_entry_transmute<F>(tag: u8, func: F) -> Result<ConstantEntry> where F: FnOnce(&mut [u8; CONST_ENT_SIZE]) -> std::io::Result<()>{
+    let mut slice = [0u8; CONST_ENT_SIZE];
+    slice[0] = tag;
+    func(&mut slice)?;
+    Ok( unsafe { std::mem::transmute(slice) } )
+}
+
+macro_rules! transmute_entry {
+
+    ($self:ident, $tag:ident, $($buf_size:literal, $range_from:literal..$range_to:literal),+) => {
+        crate::constant_pool::constant_entry_transmute($tag, |slice| {
+            $(
+                let mut buf = [0; $buf_size];
+                $self.read_exact(&mut buf)?;
+                buf.be_to_ne();
+                slice[$range_from..$range_to].copy_from_slice(&buf);
+            )+
+            Ok(())
+        })?
+    };
+
+}
+
+trait ConstantEntryRead: Read + Sized {
+    fn read_constant_entry(&mut self) -> Result<ConstantEntry> {
+        let tag = self.read_u8()?;
+        Ok(match tag {
+            1 => {
+                let utflen = self.read_u16()?;
+                let mut buf = Vec::with_capacity(utflen as usize);
+                self.read_exact(&mut buf)?;
+                let string = crate::mod_utf8::modified_utf8_to_string(&buf)?;
+                ConstantEntry::UTF8(string)
+            }
+            3 | 4 => transmute_entry!(self, tag, 4, 4..8),
+            5 | 6 => transmute_entry!(self, tag, 8, 8..16),
+            7 | 8 | 16 | 19 | 20 => transmute_entry!(self, tag, 2, 2..4),
+            9 | 10..=12 | 17 | 18 => transmute_entry!(self, tag, 2, 2..4, 2, 4..6),
+            15 => transmute_entry!(self, tag, 1, 1..2, 2, 2..4),
+            _ => return Err(Error::Unrecognized("Constant Entry Tag", tag.to_string()))
+        })
+    }
+}
+impl<T: Read + Sized> ConstantEntryRead for T {}
+
 #[repr(u8)]
-enum ConstantEntry {
+pub enum ConstantEntry {
     UTF8(String) = 1,
     Integer(i32) = 3,
     Float(f32),

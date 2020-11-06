@@ -33,6 +33,7 @@ pub mod constant_pool;
 
 #[cfg(test)]
 mod tests;
+pub(crate) mod byteswapper;
 
 pub struct JClass {
     pub minor_version: u16,

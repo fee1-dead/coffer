@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use std::io::{Read, Cursor, Write, Seek, SeekFrom};
-use crate::jcoder::{JDecoder, JEncoder};
+use crate::jcoder::JDecoder;
 use crate::error::Error;
 use crate::insn::Instruction::{LookupSwitch, TableSwitch};
 
