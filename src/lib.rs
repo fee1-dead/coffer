@@ -21,8 +21,6 @@
 #[macro_use]
 extern crate bitflags;
 
-use num_enum::TryFromPrimitive;
-
 pub mod constants;
 pub mod index;
 pub mod jcoder;
