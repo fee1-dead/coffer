@@ -26,7 +26,7 @@ use crate::error::{Error, Result};
 ///
 /// Performance: It usually takes several microseconds to parse the entire file. SysCalls not counted.
 ///
-/// On rare cases it can be up to about 0.25 milliseconds, and less than 0.5 microseconds.
+/// On rare cases it can be up to about 0.25 milliseconds, others less than 0.5 microseconds.
 ///
 /// What can affect the performance: number of fields/methods/constant entries/attibutes
 ///

@@ -5,17 +5,16 @@ use crate::jcoder::JDecoder;
 
 const CONST_ENT_SIZE: usize = std::mem::size_of::<ConstantEntry>();
 
-#[allow(dead_code)]
+#[allow(dead_code)] // used in macro
 #[inline]
-fn constant_entry_transmute<F>(tag: u8, func: F) -> Result<ConstantEntry> where F: FnOnce(&mut [u8; CONST_ENT_SIZE]) -> std::io::Result<()>{
+fn constant_entry_transmute<F>(tag: u8, func: F) -> Result<ConstantEntry> where F: FnOnce(&mut [u8; CONST_ENT_SIZE]) -> std::io::Result<()> {
     let mut slice = [0u8; CONST_ENT_SIZE];
     slice[0] = tag;
     func(&mut slice)?;
-    Ok( unsafe { std::mem::transmute(slice) } )
+    Ok(unsafe { std::mem::transmute(slice) })
 }
 
 macro_rules! transmute_entry {
-
     ($self:ident, $tag:ident, $($buf_size:literal, $range_from:literal..$range_to:literal),+) => {
         crate::constant_pool::constant_entry_transmute($tag, |slice| {
             $(
@@ -27,7 +26,6 @@ macro_rules! transmute_entry {
             Ok(())
         })?
     };
-
 }
 
 trait ConstantEntryRead: Read + Sized {
@@ -50,6 +48,7 @@ trait ConstantEntryRead: Read + Sized {
         })
     }
 }
+
 impl<T: Read + Sized> ConstantEntryRead for T {}
 
 #[repr(u8)]
@@ -70,5 +69,5 @@ pub enum ConstantEntry {
     Dynamic(u16, u16),
     InvokeDynamic(u16, u16),
     Module(u16),
-    Package(u16)
+    Package(u16),
 }
