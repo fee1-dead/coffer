@@ -14,7 +14,6 @@
     You should have received a copy of the GNU General Public License
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
-#![feature(assoc_char_funcs)]
 #![feature(seek_convenience)]
 #![feature(arbitrary_enum_discriminant)]
 

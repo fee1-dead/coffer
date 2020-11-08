@@ -15,6 +15,7 @@
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
 use thiserror::Error;
+use std::convert::TryFrom;
 
 #[derive(Debug, Error)]
 pub enum MUTFError {
@@ -25,6 +26,7 @@ pub enum MUTFError {
     #[error(transparent)]
     UTF8Error(#[from] std::str::Utf8Error),
 }
+
 pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MUTFError> {
     let mut count: usize = 0;
 
@@ -49,7 +51,7 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MUTFError> {
                     return Err(MUTFError::AroundByte(count));
                 }
                 str.push(
-                    char::from_u32(((c & 0x1F) << 6) | (c2 & 0x3F))
+                    char::try_from(((c & 0x1F) << 6) | (c2 & 0x3F)).ok()
                         .ok_or(MUTFError::AroundByte(count))?
                 )
             }
@@ -80,12 +82,12 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MUTFError> {
                         let c3 = c3 as u32;
                         let c5 = c5 as u32;
                         let c6 = c6 as u32;
-                        str.push(char::from_u32(
+                        str.push(char::try_from(
                             (((c2 & 0b1111) + 1) << 16)
                                 | ((c3 & 0b111111) << 10)
                                 | ((c5 & 0b1111) << 6)
                                 | (c6 & 0b111111),
-                        ).ok_or(MUTFError::AroundByte(count))?);
+                        ).ok().ok_or(MUTFError::AroundByte(count))?);
                         continue 'outer;
                     }
                     break;
@@ -101,10 +103,11 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MUTFError> {
                 if (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80 {
                     return Err(MUTFError::AroundByte(count));
                 }
-                let c2 = c2 as u32; let c3 = c3 as u32;
+                let c2 = c2 as u32;
+                let c3 = c3 as u32;
 
                 str.push(
-                    char::from_u32(((c & 0xF) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F))
+                    char::try_from(((c & 0xF) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F)).ok()
                         .ok_or(MUTFError::AroundByte(count))?
                 )
             }

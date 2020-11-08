@@ -6,6 +6,5 @@ Licensed under GPL v3 or later, a copy of the GNU General Public License can be 
 
 This library uses unstable features and its structures are subject to change at anytime:
  
- - [`assoc_char_funcs`](https://github.com/rust-lang/rust/issues/71763)
  - [`seek_convenience`](https://github.com/rust-lang/rust/issues/59359)
  - [`arbitrary_enum_discriminant`](https://github.com/rust-lang/rust/issues/60553)
