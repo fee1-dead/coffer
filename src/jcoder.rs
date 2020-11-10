@@ -94,7 +94,7 @@ pub trait JEncoder: Write {
     fn write_utf(&mut self, str: &str) -> Result<()> {
         let slice = crate::mod_utf8::string_to_modified_utf8(str)?;
         let length = slice.len();
-        self.write_u16(u16::try_from(length).map_err(|| Error::ArithmeticOverflow)?)?;
+        self.write_u16(u16::try_from(length).map_err(|_| Error::ArithmeticOverflow)?)?;
         let length_written = self.write(&slice)?;
         if length_written < length {
             Err(Error::EOF)
