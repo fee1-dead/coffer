@@ -28,6 +28,8 @@ pub enum Error {
     Unrecognized(&'static str, String),
     #[error(transparent)]
     MUTF(#[from] crate::mod_utf8::MUTFError),
+    #[error("Conversion overflows")]
+    ArithmeticOverflow
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
