@@ -56,7 +56,7 @@ pub trait JDecoder: Read {
     read_fn_all! { u128, read_u128, 16, u64, read_u64, 8, u32, read_u32, 4, u16, read_u16, 2, u8, read_u8, 1,
                     f32, read_f32, 4, f64, read_f64, 8, i8, read_i8, 1, i16, read_i16, 2, i32, read_i32, 4, i64, read_i64, 8 }
 
-    fn read_utf(&mut self) -> Result<String> {
+    fn read_mutf(&mut self) -> Result<String> {
         let length = self.read_u16()? as usize;
         let mut slice = vec![0u8; length];
         let length_read = self.read(&mut slice)?;
@@ -91,8 +91,8 @@ pub trait JEncoder: Write {
     write_fn_all! { u128, write_u128, 16, u64, write_u64, 8, u32, write_u32, 4, u16, write_u16, 2, u8, write_u8, 1,
                     f32, write_f32, 4, f64, write_f64, 8, i8, write_i8, 1, i16, write_i16, 2, i32, write_i32, 4, i64, write_i64, 8 }
 
-    fn write_utf(&mut self, str: &str) -> Result<()> {
-        let slice = crate::mod_utf8::string_to_modified_utf8(str)?;
+    fn write_mutf(&mut self, str: &str) -> Result<()> {
+        let slice = crate::mod_utf8::string_to_modified_utf8(str);
         let length = slice.len();
         self.write_u16(u16::try_from(length).map_err(|_| Error::ArithmeticOverflow)?)?;
         let length_written = self.write(&slice)?;

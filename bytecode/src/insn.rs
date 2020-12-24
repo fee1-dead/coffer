@@ -14,13 +14,17 @@
     You should have received a copy of the GNU Lesser General Public License
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
-#![allow(dead_code)]
+
+//! Basic Instruction Reading.
+//!
+//! Does not depend on the context (constant pool/symbol table),
+//! therefore hard to understand and requires boilerplate,
+//! but is the easiest to implement.
 
 use std::io::{Read, Cursor, Write, Seek, SeekFrom};
 use crate::jcoder::JDecoder;
 use crate::error::Error;
 use crate::insn::Instruction::{LookupSwitch, TableSwitch};
-
 
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq)]
@@ -120,7 +124,7 @@ pub enum Instruction {
     Dup2 = 0x5C,
     Dup2x1 = 0x5D,
     Dup2x2 = 0x5E,
-    SWAP = 0x5F,
+    Swap = 0x5F,
     IAdd = 0x60,
     LAdd = 0x61,
     FAdd = 0x62,

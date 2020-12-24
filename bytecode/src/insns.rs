@@ -14,24 +14,19 @@
     You should have received a copy of the GNU Lesser General Public License
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
-use std::sync::Arc;
-use std::rc::Rc;
-use std::collections::{VecDeque, LinkedList, BTreeMap};
-use std::ptr::NonNull;
-use std::marker::PhantomData;
-use std::mem;
+use std::borrow::Cow;
 
-pub type ClassRef = Box<String>;
+type MUTFString<'a> = Cow<'a, [u8]>;
 
-#[derive(Clone, Eq, PartialEq)]
-pub enum Constant {
+#[derive(Clone, PartialEq)]
+pub enum Constant<'a> {
     I32(i32),
     F32(f32),
     I64(i64),
     F64(f64),
-    String(Box<String>),
-    Class(Box<String>),
-    MethodType(Box<String>),
+    String(MUTFString<'a>),
+    Class(MUTFString<'a>),
+    MethodType(MUTFString<'a>),
     Null
 }
 pub enum StackValueType {
@@ -123,9 +118,9 @@ pub enum MonitorOperation {
 /// Note that while each valid instruction corresponds to one and only one enum variant,
 /// a value may correspond to multiple possibilities of actual operation used in bytecode.
 /// Normally, it should choose the option that takes the lowest space.
-pub enum Instruction {
+pub enum Instruction<'a> {
     /// Push a constant value to the current stack.
-    Push(Constant),
+    Push(Constant<'a>),
     /// Duplicate one or two stack values and insert them one or more values down.
     ///
     /// `Duplicate(One, None)` is equivalent to `DUP`
@@ -147,5 +142,5 @@ pub enum Instruction {
     Conversion(NumberType, NumberType),
     ConvertInt(BitType),
     Field(GetOrPut, MemberType),
-    InvokeExact(Constant),
+    InvokeExact(Constant<'a>),
 }

@@ -14,6 +14,8 @@
     You should have received a copy of the GNU Lesser General Public License
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
+
+#[doc(hidden, reason = "implementation details")]
 pub(crate) trait ByteSwap {
     #[inline]
     fn be_to_ne(&mut self) {

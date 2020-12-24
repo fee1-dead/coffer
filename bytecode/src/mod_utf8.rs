@@ -118,7 +118,7 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MUTFError> {
     Ok(str)
 }
 
-pub fn string_to_modified_utf8(str: &str) -> Result<Vec<u8>, MUTFError> {
+pub fn string_to_modified_utf8(str: &str) -> Vec<u8> {
     let mut utflen: usize = 0;
     for c in str.chars() {
         utflen += match c as u32 {
@@ -131,11 +131,13 @@ pub fn string_to_modified_utf8(str: &str) -> Result<Vec<u8>, MUTFError> {
     let mut vec = Vec::with_capacity(utflen);
     for c in str.chars() {
         let c = c as u32;
+
+        #[allow(clippy::unusual_byte_groupings)]
         match c {
-            0x1..=0b1111111 => {
+            0b1..=0b1111111 => {
                 vec.push(c as u8);
             }
-            0x0 | 0b100_00000..=0b11111_111111 => {
+            0b0 | 0b100_00000..=0b11111_111111 => {
                 // 110xxxxx 10xxxxxx
                 vec.push(((c >> 6) as u8 & 0b011111) | 0b110_00000);
                 vec.push(((c >> 0) as u8 & 0b111111) | 0b10_000000);
@@ -157,5 +159,5 @@ pub fn string_to_modified_utf8(str: &str) -> Result<Vec<u8>, MUTFError> {
             }
         }
     }
-    Ok(vec)
+    vec
 }
