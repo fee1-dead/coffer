@@ -25,6 +25,7 @@ use std::io::{Read, Cursor, Write, Seek, SeekFrom};
 use crate::jcoder::JDecoder;
 use crate::error::Error;
 use crate::insn::Instruction::{LookupSwitch, TableSwitch};
+use crate::byteswapper::ByteSwap;
 
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq)]
@@ -328,7 +329,7 @@ pub trait InstructionRead: Read + Sized {
             }
             LDC | ILOAD..=ALOAD | ISTORE..=ASTORE | RET | NEWARRAY | BIPUSH => {
                 transmute_slice(op, |mut c| {
-                    c.write(&[self.read_u8()?])?;
+                    c.write_all(&[self.read_u8()?])?;
                     Ok(())
                 })?
             }
@@ -339,9 +340,9 @@ pub trait InstructionRead: Read + Sized {
                     if op != IINC { // IINC does not need alignment, others are 16bit values so they will need the padding
                         c.seek(SeekFrom::Current(1))?;
                     }
-                    c.write(&self.read_u16()?.to_ne_bytes())?;
+                    c.write_all(&self.read_u16()?.to_ne_bytes())?;
                     if op == INVOKEINTERFACE || op == MULTIANEWARRAY {
-                        c.write(&[self.read_u8()?])?;
+                        c.write_all(&[self.read_u8()?])?;
                     }
                     Ok(())
                 })?
@@ -349,17 +350,17 @@ pub trait InstructionRead: Read + Sized {
             GOTO_W | JSR_W => {
                 transmute_slice(op, |mut c| {
                     c.seek(SeekFrom::Current(3))?; // alignment padding
-                    c.write(&self.read_u32()?.to_ne_bytes())?;
+                    c.write_all(&self.read_u32()?.to_ne_bytes())?;
                     Ok(())
                 })?
             }
             WIDE => {
                 transmute_slice(op, |mut c| {
-                    c.write(&[self.read_u8()?])?;
-                    c.write(&self.read_u16()?.to_ne_bytes())?;
+                    c.write_all(&[self.read_u8()?])?;
+                    c.write_all(&self.read_u16()?.to_ne_bytes())?;
                     if op == IINC {
-                        c.write(&[1, 0])?; // Option::Some tag with alignment padding
-                        c.write(&self.read_i16()?.to_ne_bytes())?;
+                        c.write_all(&[1, 0])?; // Option::Some tag with alignment padding
+                        c.write_all(&self.read_i16()?.to_ne_bytes())?;
                     }
                     Ok(())
                 })?
