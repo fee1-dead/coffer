@@ -18,13 +18,12 @@ use std::io::Read;
 use crate::error::{Error, Result};
 use crate::byteswapper::ByteSwap;
 use crate::jcoder::JDecoder;
-use std::borrow::Cow;
 
 const CONST_ENT_SIZE: usize = std::mem::size_of::<ConstantEntry>();
 
 #[allow(dead_code)] // used in macro
 #[inline]
-fn constant_entry_transmute<'a, F>(tag: u8, func: F) -> Result<ConstantEntry<'a>> where F: FnOnce(&mut [u8; CONST_ENT_SIZE]) -> std::io::Result<()> {
+fn constant_entry_transmute<F>(tag: u8, func: F) -> Result<ConstantEntry> where F: FnOnce(&mut [u8; CONST_ENT_SIZE]) -> std::io::Result<()> {
     let mut slice = [0u8; CONST_ENT_SIZE];
     slice[0] = tag;
     func(&mut slice)?;
@@ -53,7 +52,8 @@ trait ConstantEntryRead: Read + Sized {
                 let utflen = self.read_u16()?;
                 let mut buf = Vec::with_capacity(utflen as usize);
                 self.read_exact(&mut buf)?;
-                ConstantEntry::UTF8(crate::mod_utf8::modified_utf8_to_string(&buf)?)
+                let string = crate::mod_utf8::modified_utf8_to_string(&buf)?;
+                ConstantEntry::UTF8(string)
             }
             3 | 4 => transmute_entry!(self, tag, 4, 4..8),
             5 | 6 => transmute_entry!(self, tag, 8, 8..16),
@@ -68,8 +68,8 @@ trait ConstantEntryRead: Read + Sized {
 impl<T: Read + Sized> ConstantEntryRead for T {}
 
 #[repr(u8)]
-pub enum ConstantEntry<'a> {
-    UTF8(Cow<'a, [u8]>) = 1,
+pub enum ConstantEntry {
+    UTF8(String) = 1,
     Integer(i32) = 3,
     Float(f32),
     Long(i64),

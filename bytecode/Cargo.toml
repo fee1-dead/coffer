@@ -1,5 +1,5 @@
 [package]
-name = "coffer-bytecode"
+name = "coffer"
 version = "0.1.0"
 authors = ["Deadbeef"]
 edition = "2018"
