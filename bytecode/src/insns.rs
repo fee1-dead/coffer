@@ -149,19 +149,3 @@ pub enum Instruction {
     Field(GetOrPut, MemberType),
     InvokeExact(Constant),
 }
-enum InsnListMod {
-    Remove,
-    RemoveMany(usize),
-    Insert(Instruction),
-    InsertMany(Vec<Instruction>),
-    Replace(usize, Instruction),
-    ReplaceMany(usize, Vec<Instruction>)
-}
-struct InstructionListModifier(BTreeMap<usize, InsnListMod>);
-impl InstructionListModifier {
-    fn apply(&self, list: &mut InstructionList) {
-
-    }
-}
-#[repr(transparent)]
-pub struct InstructionList(Vec<Instruction>);
