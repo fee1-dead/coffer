@@ -25,7 +25,6 @@ use std::io::{Read, Cursor, Write, Seek, SeekFrom};
 use crate::jcoder::JDecoder;
 use crate::error::Error;
 use crate::insn::Instruction::{LookupSwitch, TableSwitch};
-use crate::byteswapper::ByteSwap;
 
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq)]
@@ -228,8 +227,8 @@ pub enum Instruction {
     MonitorExit = 0xC3,
     Wide(u8, u16, Option<u16>) = 0xC4,
     MultiANewArray(u16, u8) = 0xC5,
-    IfNull(u16) = 0xC6,
-    IfNonNull(u16) = 0xC7,
+    IfNull(i16) = 0xC6,
+    IfNonNull(i16) = 0xC7,
     GotoW(u32) = 0xC8,
     JsrW(u32) = 0xC9,
 }
@@ -299,6 +298,9 @@ impl<T: Seek> Seek for InstructionReader<T> {
 
 pub trait InstructionRead: Read + Sized {
     /// Uses transmute to construct enums with no fields
+    ///
+    /// pad_func is a function where when called, will read a 0-3 byte padding that will align the current position to a multiple of 4 from the starting position of the instructions.
+    ///
     /// ```
     /// # use std::io::Cursor;
     /// # use crate::coffer::insn::InstructionRead;
@@ -341,8 +343,18 @@ pub trait InstructionRead: Read + Sized {
                         c.seek(SeekFrom::Current(1))?;
                     }
                     c.write_all(&self.read_u16()?.to_ne_bytes())?;
-                    if op == INVOKEINTERFACE || op == MULTIANEWARRAY {
-                        c.write_all(&[self.read_u8()?])?;
+                    match op {
+                        INVOKEINTERFACE => {
+                            c.write_all(&[self.read_u8()?])?;
+                            self.read_u8()?;
+                        }
+                        MULTIANEWARRAY => {
+                            c.write_all(&[self.read_u8()?])?;
+                        }
+                        INVOKEDYNAMIC => {
+                            self.read_u16()?;
+                        }
+                        _ => {}
                     }
                     Ok(())
                 })?
@@ -396,4 +408,68 @@ pub trait InstructionRead: Read + Sized {
     }
 }
 
-impl<T: Read + Sized + Seek> InstructionRead for T {}
+impl<T: Read + Sized> InstructionRead for T {}
+
+pub trait InstructionWrite: Write + Sized {
+    fn write_insn<F>(&mut self, insn: &Instruction, mut pad_func: F) -> Result<(), std::io::Error> where F: FnMut(&mut Self) -> Result<(), std::io::Error> {
+        use crate::insn::Instruction::*;
+        self.write_all(&[unsafe { *(self as *const Self as *const u8) }])?;
+        match insn {
+            Bipush(b) => {
+                self.write_all(&[*b as u8])?;
+            }
+            LDC(b) | ILoad(b) | LLoad(b) | FLoad(b) | DLoad(b) | ALoad(b) | IStore(b) | LStore(b) | FStore(b) | DStore(b) | AStore(b) | Ret(b) | NewArray(b) => {
+                self.write_all(&[*b])?;
+            }
+            Sipush(s) | IfEq(s) | IfNe(s) | IfLt(s) | IfGe(s) | IfGt(s) | IfLe(s) | IfICmpEq(s) | IfICmpNe(s) | IfICmpLt(s) | IfICmpGe(s) | IfICmpGt(s) | IfICmpLe(s) | IfACmpEq(s) | IfACmpNe(s) | Goto(s) | Jsr(s) | IfNull(s) | IfNonNull(s) => {
+                self.write_all(&s.to_be_bytes())?;
+            }
+            LDCW(s) | LDC2W(s) | GetStatic(s) | PutStatic(s) | GetField(s) | PutField(s) | InvokeVirtual(s) | InvokeSpecial(s) | InvokeStatic(s) | InvokeDynamic(s) | New(s) | ANewArray(s) | CheckCast(s) | InstanceOf(s) => {
+                self.write_all(&s.to_be_bytes())?;
+                if let InvokeDynamic(_) = insn {
+                    self.write_all(&[0, 0])?;
+                }
+            }
+            MultiANewArray(s, b) | InvokeInterface(s, b) => {
+                self.write_all(&s.to_be_bytes())?;
+                self.write_all(&[*b])?;
+                if let InvokeInterface(..) = insn {
+                    self.write_all(&[0])?;
+                }
+            }
+            Wide(op, arg, arg2) => {
+                self.write_all(&[*op])?;
+                self.write_all(&arg.to_be_bytes())?;
+                if let Some(s) = arg2 {
+                    self.write_all(&s.to_be_bytes())?;
+                }
+            }
+            IInc(b1, b2) => {
+                self.write_all(&[*b1, *b2 as u8])?;
+            }
+            GotoW(i) | JsrW(i) => {
+                self.write_all(&i.to_be_bytes())?;
+            }
+            TableSwitch(dflt, low, high, offsets) => {
+                pad_func(self)?;
+                self.write_all(&dflt.to_be_bytes())?;
+                self.write_all(&low.to_be_bytes())?;
+                self.write_all(&high.to_be_bytes())?;
+                for off in offsets {
+                    self.write_all(&off.to_be_bytes())?;
+                }
+            }
+            LookupSwitch(dflt, pairs) => {
+                pad_func(self)?;
+                self.write_all(&dflt.to_be_bytes())?;
+                self.write_all(&(pairs.len() as u32).to_be_bytes())?;
+                for (i, off) in pairs {
+                    self.write_all(&i.to_be_bytes())?;
+                    self.write_all(&off.to_be_bytes())?;
+                }
+            }
+            Nop | AConstNull | IConstM1 | IConst0 | IConst1 | IConst2 | IConst3 | IConst4 | IConst5 | LConst0 | LConst1 | FConst0 | FConst1 | FConst2 | DConst0 | DConst1 | ILoad0 | ILoad1 | ILoad2 | ILoad3 | LLoad0 | LLoad1 | LLoad2 | LLoad3 | FLoad0 | FLoad1 | FLoad2 | FLoad3 | DLoad0 | DLoad1 | DLoad2 | DLoad3 | ALoad0 | ALoad1 | ALoad2 | ALoad3 | IALoad | LALoad | FALoad | DALoad | AALoad | BALoad | CALoad | SALoad | IStore0 | IStore1 | IStore2 | IStore3 | LStore0 | LStore1 | LStore2 | LStore3 | FStore0 | FStore1 | FStore2 | FStore3 | DStore0 | DStore1 | DStore2 | DStore3 | AStore0 | AStore1 | AStore2 | AStore3 | IAStore | LAStore | FAStore | DAStore | AAStore | BAStore | CAStore | SAStore | Pop | Pop2 | Dup | Dupx1 | Dupx2 | Dup2 | Dup2x1 | Dup2x2 | Swap | IAdd | LAdd | FAdd | DAdd | ISub | LSub | FSub | DSub | IMul | LMul | FMul | DMul | IDiv | LDiv | FDiv | DDiv | IRem | LRem | FRem | DRem | INeg | LNeg | FNeg | DNeg | IShl | LShl | IShr | LShr | IUshr | LUshr | IAnd | LAnd | IOr | LOr | IXor | LXor | I2L | I2F | I2D | L2I | L2F | L2D | F2I | F2L | F2D | D2I | D2L | D2F | I2B | I2C | I2S | LCmp | FCmpL | FCmpG | DCmpL | DCmpG | IReturn | LReturn | FReturn | DReturn | AReturn | Return | ArrayLength | AThrow | MonitorEnter | MonitorExit => {}
+        }
+        Ok(())
+    }
+}
