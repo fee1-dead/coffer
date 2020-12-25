@@ -27,8 +27,8 @@ pub mod error;
 pub mod insn;
 pub mod mod_utf8;
 pub mod constant_pool;
+pub mod insns;
 
 #[cfg(test)]
 mod tests;
 pub(crate) mod byteswapper;
-mod insns;
