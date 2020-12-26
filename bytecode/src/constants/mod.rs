@@ -16,5 +16,4 @@
 */
 
 pub const JVM_MAGIC: u32 = 0xCAFEBABE;
-pub mod access;
 pub mod insn;

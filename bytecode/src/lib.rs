@@ -28,6 +28,7 @@ pub mod insn;
 pub mod mod_utf8;
 pub mod constant_pool;
 pub mod insns;
+pub mod access;
 
 #[cfg(test)]
 mod tests;
