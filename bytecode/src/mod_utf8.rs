@@ -56,41 +56,31 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MUTFError> {
                 )
             }
             14 => {
-                'surrougate: loop { // Reason: Rust characters differ from java, in java a character is 2 bytes, and in rust it is 4.
-                    // This means that rust is able to represent an emoji as one character (not two), whereas java will need two `char`s
-                    if c == 0b1110_1101 {
-                        count += 6;
-                        if count > len {
-                            count -= 6;
-                            break 'surrougate;
-                        }
+                // Reason: Rust characters differ from java, in java a character is 2 bytes, and in rust it is 4.
+                // This means that rust is able to represent an emoji as one character (not two), whereas java will need two `char`s
+                if c == 0b1110_1101 {
+                    count += 6;
+                    if count <= len {
                         let c2 = buf[count - 5];
                         let c3 = buf[count - 4];
                         let c4 = buf[count - 3];
                         let c5 = buf[count - 2];
                         let c6 = buf[count - 1];
-                        if c4 != 0b1110_1101 {
-                            break 'surrougate;
+                        if c4 == 0b1110_1101 && c2 >> 4u8 == 0b1010 && c5 >> 4u8 == 0b1011 {
+                            let c2 = c2 as u32;
+                            let c3 = c3 as u32;
+                            let c5 = c5 as u32;
+                            let c6 = c6 as u32;
+                            str.push(char::try_from(
+                                (((c2 & 0b1111) + 1) << 16)
+                                    | ((c3 & 0b111111) << 10)
+                                    | ((c5 & 0b1111) << 6)
+                                    | (c6 & 0b111111),
+                            ).ok().ok_or(MUTFError::AroundByte(count))?);
+                            continue 'outer;
                         }
-                        if c2 >> 4u8 != 0b1010 {
-                            break 'surrougate;
-                        }
-                        if c5 >> 4u8 != 0b1011 {
-                            break 'surrougate;
-                        }
-                        let c2 = c2 as u32;
-                        let c3 = c3 as u32;
-                        let c5 = c5 as u32;
-                        let c6 = c6 as u32;
-                        str.push(char::try_from(
-                            (((c2 & 0b1111) + 1) << 16)
-                                | ((c3 & 0b111111) << 10)
-                                | ((c5 & 0b1111) << 6)
-                                | (c6 & 0b111111),
-                        ).ok().ok_or(MUTFError::AroundByte(count))?);
-                        continue 'outer;
                     }
-                    break;
+                    count -= 6;
                 }
                 let c = c as u32;
                 count += 3;
@@ -140,13 +130,13 @@ pub fn string_to_modified_utf8(str: &str) -> Vec<u8> {
             0b0 | 0b100_00000..=0b11111_111111 => {
                 // 110xxxxx 10xxxxxx
                 vec.push(((c >> 6) as u8 & 0b011111) | 0b110_00000);
-                vec.push(((c >> 0) as u8 & 0b111111) | 0b10_000000);
+                vec.push(( c       as u8 & 0b111111) | 0b10_000000);
             }
             0b1000_00000000..=0b1111_111111_111111 => {
                 // 1110xxxx 10xxxxxx 10xxxxxx
                 vec.push(((c >> 12) as u8 & 0b001111) | 0b1110_0000);
-                vec.push(((c >> 6) as u8 & 0b111111) | 0b10_000000);
-                vec.push(((c >> 0) as u8 & 0b111111) | 0b10_000000);
+                vec.push(((c >> 6 ) as u8 & 0b111111) | 0b10_000000);
+                vec.push(( c        as u8 & 0b111111) | 0b10_000000);
             }
             _ => {
                 // 11101101 1010(xxxxx - 1) 10xxxxxx 11101101 1011xxxx 10xxxxxx
