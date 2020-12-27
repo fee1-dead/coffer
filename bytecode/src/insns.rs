@@ -48,7 +48,6 @@ pub enum Constant<'a> {
     },
     MethodType(Type<'a>),
     MethodHandle(MethodHandle<'a>)
-    // TODO add remaining types
 }
 
 impl Constant<'static> {
@@ -340,7 +339,57 @@ pub struct Code<'a> {
 }
 
 use crate::access::AccessFlags;
+use std::collections::HashMap;
 
+/// Some values actually becomes ints in the constant pool.
+#[derive(Clone, PartialEq)]
+pub enum AnnotationValue<'a> {
+    Byte(i8),
+    Char(u16),
+    Double(f64),
+    Float(f32),
+    Int(i32),
+    Long(i64),
+    Short(i16),
+    Boolean(bool),
+    String(Cow<'a, str>),
+    Enum(Type<'a>, Cow<'a, str>),
+    Class(Option<Type<'a>>),
+    Annotation(Type<'a>, HashMap<Cow<'a, str>, AnnotationValue<'a>>),
+    Array(Vec<AnnotationValue<'a>>)
+}
+
+/// Incomplete
+#[derive(Clone, PartialEq)]
+pub enum TypeAnnotationTarget {
+    TypeParameter(u8),
+    SuperType(u16),
+    TypeParameterBound(u8, u8),
+    Empty,
+    FormalParameter(u8),
+    Throws(u16),
+    // LocalVar, // Not Yet available before I figure out
+    Catch(u16),
+    Offset(u16),
+    TypeArgument(u16, u8)
+}
+
+#[derive(Clone, PartialEq)]
+pub struct TypeAnnotation<'a> {
+    pub target_b: u8,
+    pub target: TypeAnnotationTarget,
+    pub type_path: Vec<(u8, u8)>,
+    pub annotation_type: Type<'a>,
+    pub element_values: HashMap<Cow<'a, str>, AnnotationValue<'a>>
+}
+
+#[derive(Clone, PartialEq)]
+pub struct Annotation<'a> {
+    pub annotation_type: Type<'a>,
+    pub element_values: HashMap<Cow<'a, str>, AnnotationValue<'a>>
+}
+
+/// Completed
 #[derive(Clone, PartialEq)]
 pub enum FieldAttribute<'a> {
     Deprecated,
@@ -350,14 +399,18 @@ pub enum FieldAttribute<'a> {
     ConstantValueFloat(f32),
     ConstantValueLong(i64),
     ConstantValueDouble(f64),
-    ConstantValueString(Cow<'a, str>)
-    // TODO annotations
+    ConstantValueString(Cow<'a, str>),
+    VisibleAnnotations(Vec<Annotation<'a>>),
+    InvisibleAnnotations(Vec<Annotation<'a>>),
+    VisibleTypeAnnotations(Vec<TypeAnnotation<'a>>),
+    InvisibleTypeAnnotations(Vec<TypeAnnotation<'a>>)
 }
 
 pub struct Field<'a> {
     pub access: AccessFlags,
     pub name: Cow<'a, str>,
-    pub descriptor: Type<'a>
+    pub descriptor: Type<'a>,
+    pub attrs: Vec<FieldAttribute<'a>>
 }
 
 pub struct Method<'a> {

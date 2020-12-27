@@ -17,3 +17,4 @@
 
 pub const JVM_MAGIC: u32 = 0xCAFEBABE;
 pub mod insn;
+pub mod target_types;
