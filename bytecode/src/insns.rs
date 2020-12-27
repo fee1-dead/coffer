@@ -232,11 +232,60 @@ pub enum MonitorOperation {
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash)]
 pub enum Type<'a> {
-    Byte, Char, Double, Float, Int, Long, Ref(Cow<'a, str>), ArrayRef(u8, Cow<'a, str>),
+    Byte, Char, Double, Float, Int, Long, Boolean, Ref(Cow<'a, str>), ArrayRef(u8, Box<Type<'a>>),
     /// The Method type. First is the parameter list and second is the return type. If the return type is `None`, it represents a `void` return type.
     ///
     /// It is invalid if any of the parameter types and the return type is a method type.
     Method(Vec<Type<'a>>, Option<Box<Type<'a>>>)
+}
+
+impl<'a> Display for Type<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        use std::fmt::Write;
+        match self {
+            Type::Byte => {
+                f.write_char('B')?;
+            }
+            Type::Char => {
+                f.write_char('C')?;
+            }
+            Type::Double => {
+                f.write_char('D')?;
+            }
+            Type::Float => {
+                f.write_char('F')?;
+            }
+            Type::Int => {
+                f.write_char('I')?;
+            }
+            Type::Long => {
+                f.write_char('J')?;
+            }
+            Type::Boolean => {
+                f.write_char('Z')?;
+            }
+            Type::Ref(s) => {
+                write!(f, "L{};", s)?;
+            }
+            Type::ArrayRef(dim, t) => {
+                "[".repeat(*dim as usize).fmt(f)?;
+                t.fmt(f)?;
+            }
+            Type::Method(params, ret) => {
+                f.write_char('(')?;
+                for t in params {
+                    t.fmt(f)?;
+                }
+                f.write_char(')')?;
+                if let Some(ref t) = ret {
+                    t.fmt(f)?;
+                } else {
+                    f.write_char('V')?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Type<'static> {
@@ -246,6 +295,21 @@ impl Type<'static> {
     pub const FLOAT: Type<'static> = Type::Float;
     pub const INT: Type<'static> = Type::Int;
     pub const LONG: Type<'static> = Type::Long;
+    pub const BOOLEAN: Type<'static> = Type::Boolean;
+}
+
+impl<'a> Type<'a> {
+    #[inline]
+    pub fn method(params: Vec<Type<'a>>, ret: Option<Type<'a>>) -> Type<'a> {
+        Type::Method(params, ret.map(Box::new))
+    }
+    #[inline]
+    pub fn reference<S>(str: S) -> Type<'a> where S: Into<Cow<'a, str>> {
+        Type::Ref(str.into())
+    }
+    pub fn array(dim: u8, t: Type<'a>) -> Type<'a> {
+        Type::ArrayRef(dim, Box::new(t))
+    }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
@@ -340,6 +404,9 @@ pub struct Code<'a> {
 
 use crate::access::AccessFlags;
 use std::collections::HashMap;
+use std::fmt::Display;
+use std::fmt::Formatter;
+
 
 /// Some values actually becomes ints in the constant pool.
 #[derive(Clone, PartialEq)]
