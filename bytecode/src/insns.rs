@@ -288,16 +288,6 @@ impl<'a> Display for Type<'a> {
     }
 }
 
-impl Type<'static> {
-    pub const BYTE: Type<'static> = Type::Byte;
-    pub const CHAR: Type<'static> = Type::Char;
-    pub const DOUBLE: Type<'static> = Type::Double;
-    pub const FLOAT: Type<'static> = Type::Float;
-    pub const INT: Type<'static> = Type::Int;
-    pub const LONG: Type<'static> = Type::Long;
-    pub const BOOLEAN: Type<'static> = Type::Boolean;
-}
-
 impl<'a> Type<'a> {
     #[inline]
     pub fn method(params: Vec<Type<'a>>, ret: Option<Type<'a>>) -> Type<'a> {
