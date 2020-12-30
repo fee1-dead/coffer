@@ -275,7 +275,7 @@ pub enum MethodHandleKind {
 
 /// Note: dynamic computed constants are syntactically allowed to refer to themselves via the bootstrap method table but it will fail during resolution.
 /// Rust ownership rules prevent us from doing so.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub struct Dynamic<'a> {
     pub bsm: Box<BootstrapMethod<'a>>,
     pub name: Cow<'a, str>,
@@ -478,13 +478,28 @@ pub enum Frame<'a> {
     Full(u16, Vec<VerificationType<'a>>, Vec<VerificationType<'a>>)
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub struct InnerClass<'a> {
     pub inner_fqname: Cow<'a, str>,
     pub outer_fqname: Cow<'a, str>,
     /// None if the inner class is an anonymous class.
     pub inner_name: Option<Cow<'a, str>>,
     pub inner_access: AccessFlags
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct Module<'a> {
+    pub name: Cow<'a, str>,
+    pub flags: AccessFlags,
+    pub version: Option<Cow<'a, str>>,
+    /// module name, requires flags, module version
+    pub requires: Vec<(Cow<'a, str>, AccessFlags, Option<Cow<'a, str>>)>,
+    /// package name, exports flags, export to modules (empty = export to all)
+    pub exports: Vec<(Cow<'a, str>, AccessFlags, Vec<Cow<'a, str>>)>,
+    pub opens: Vec<(Cow<'a, str>, AccessFlags, Vec<Cow<'a, str>>)>,
+    pub uses: Vec<Cow<'a, str>>,
+    /// service interface fqname, service impls fqnames
+    pub provides: Vec<(Cow<'a, str>, Vec<Cow<'a, str>>)>
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -495,7 +510,7 @@ pub enum ClassAttribute<'a> {
     /// second: name of the method that encloses this inner/anonymous class.
     /// third: descriptor of the method.
     EnclosingMethod(Cow<'a, str>, Cow<'a, str>, Type<'a>), SourceDebugExtension(Cow<'a, str>),
-    BootstrapMethods(Vec<BootstrapMethod<'a>>),
+    BootstrapMethods(Vec<BootstrapMethod<'a>>), Module(Module<'a>)
 }
 
 #[derive(Debug, Clone, PartialEq, Hash)]
