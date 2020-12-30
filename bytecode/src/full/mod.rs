@@ -16,6 +16,7 @@
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
 pub mod annotation;
+pub mod version;
 
 mod signature;
 pub use signature::*;
@@ -272,15 +273,16 @@ pub enum MethodHandleKind {
     GetField = 1, GetStatic, PutField, PutStatic, InvokeVirtual, InvokeStatic, InvokeSpecial, NewInvokeSpecial, InvokeInterface
 }
 
+/// Note: dynamic computed constants are syntactically allowed to refer to themselves via the bootstrap method table but it will fail during resolution.
+/// Rust ownership rules prevent us from doing so.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Dynamic<'a> {
-    pub bsm: MethodHandle<'a>,
-    pub args: Vec<Constant<'a>>,
+    pub bsm: Box<BootstrapMethod<'a>>,
     pub name: Cow<'a, str>,
     pub descriptor: Type<'a>
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub enum OrDynamic<'a, T> {
     Dynamic(Dynamic<'a>),
     Static(T)
@@ -374,7 +376,6 @@ pub struct LocalVariable<'a> {
 #[derive(Clone, PartialEq, Debug)]
 pub enum CodeAttribute<'a> {
     LocalVarTable(Vec<LocalVariable<'a>>),
-    Signature(Cow<'a, str>),
     TypeAnnotation(CodeTypeAnnotation<'a>),
     Frames(Vec<Frame<'a>>)
 }
@@ -399,14 +400,15 @@ use crate::access::AccessFlags;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use annotation::Annotation;
-use crate::full::annotation::{FieldTypeAnnotation, MethodTypeAnnotation, CodeTypeAnnotation};
+use crate::full::annotation::{FieldTypeAnnotation, MethodTypeAnnotation, CodeTypeAnnotation, AnnotationValue};
+use crate::full::version::JavaVersion;
 
 /// Completed
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum FieldAttribute<'a> {
     Deprecated,
     Synthetic,
-    Signature(Cow<'a, str>),
+    Signature(FieldSignature<'a>),
     ConstantValueInt(i32),
     ConstantValueFloat(f32),
     ConstantValueLong(i64),
@@ -429,16 +431,23 @@ pub struct Field<'a> {
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum MethodAttribute<'a> {
+    Code(Code<'a>),
     Deprecated,
     Synthetic,
-    Signature(Cow<'a, str>),
+    Signature(MethodSignature<'a>),
     VisibleAnnotations(Vec<Annotation<'a>>),
     InvisibleAnnotations(Vec<Annotation<'a>>),
     VisibleTypeAnnotations(Vec<MethodTypeAnnotation<'a>>),
     InvisibleTypeAnnotations(Vec<MethodTypeAnnotation<'a>>),
-    Raw(RawAttribute<'a>)
+    VisibleParameterAnnotations(Vec<Vec<Annotation<'a>>>),
+    InvisibleParameterAnnotations(Vec<Vec<Annotation<'a>>>),
+    Raw(RawAttribute<'a>),
+    Exceptions(Vec<Cow<'a, str>>),
+    AnnotationDefault(AnnotationValue<'a>),
+    MethodParameters(Vec<(Cow<'a, str>, AccessFlags)>)
 }
 
+#[derive(PartialEq, Debug, Clone)]
 pub struct Method<'a> {
     pub access: AccessFlags,
     pub name: Cow<'a, str>,
@@ -469,6 +478,42 @@ pub enum Frame<'a> {
     Full(u16, Vec<VerificationType<'a>>, Vec<VerificationType<'a>>)
 }
 
-pub struct Class {
+#[derive(PartialEq, Debug, Clone)]
+pub struct InnerClass<'a> {
+    pub inner_fqname: Cow<'a, str>,
+    pub outer_fqname: Cow<'a, str>,
+    /// None if the inner class is an anonymous class.
+    pub inner_name: Option<Cow<'a, str>>,
+    pub inner_access: AccessFlags
+}
 
+#[derive(PartialEq, Debug, Clone)]
+pub enum ClassAttribute<'a> {
+    Signature(ClassSignature<'a>),
+    Synthetic, Deprecated, SourceFile(Cow<'a, str>), InnerClasses(Vec<InnerClass<'a>>),
+    /// first: fully qualified name of the innermost outer class.
+    /// second: name of the method that encloses this inner/anonymous class.
+    /// third: descriptor of the method.
+    EnclosingMethod(Cow<'a, str>, Cow<'a, str>, Type<'a>), SourceDebugExtension(Cow<'a, str>),
+    BootstrapMethods(Vec<BootstrapMethod<'a>>),
+}
+
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub struct BootstrapMethod<'a> {
+    pub method: MethodHandle<'a>,
+    /// constants must not be null. They don't have a corresponding constant pool entry.
+    pub arguments: Vec<OrDynamic<'a, Constant<'a>>>
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct Class<'a> {
+    pub version: JavaVersion,
+    pub access: AccessFlags,
+    pub name: Cow<'a, str>,
+    /// java/lang/Object has no superclass.
+    pub super_name: Option<Cow<'a, str>>,
+    pub interfaces: Vec<Cow<'a, str>>,
+    pub fields: Vec<Field<'a>>,
+    pub methods: Vec<Method<'a>>,
+    pub attributes: Vec<ClassAttribute<'a>>
 }
