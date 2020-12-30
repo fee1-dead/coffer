@@ -20,6 +20,9 @@
 #[macro_use]
 extern crate bitflags;
 
+#[macro_use]
+extern crate coffer_proc_macros;
+
 pub mod constants;
 pub mod index;
 pub mod jcoder;
@@ -33,3 +36,29 @@ pub mod access;
 #[cfg(test)]
 mod tests;
 pub(crate) mod byteswapper;
+
+use std::io::{Read, Write, Result};
+
+pub trait ReadWrite where Self: Sized {
+    fn read_from<T: Read>(reader: &mut T) -> Result<Self>;
+    fn write_to<T: Write>(&self, writer: &mut T) -> Result<()>;
+}
+
+macro_rules! impl_readwrite_ints {
+    ($($i:ty, $s:literal)*) => {
+        $(
+            impl ReadWrite for $i {
+                fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
+                    let mut bytes = [0u8; $s];
+                    reader.read_exact(&mut bytes)?;
+                    Ok(<$i>::from_be_bytes(bytes))
+                }
+                fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
+                    writer.write_all(&self.to_be_bytes())?;
+                    Ok(())
+                }
+            }
+        )*
+    };
+}
+impl_readwrite_ints! { u8, 1 i8, 1 u16, 2 i16, 2 u32, 4 i32, 4 u64, 8 i64, 8 u128, 16 i128, 16 }

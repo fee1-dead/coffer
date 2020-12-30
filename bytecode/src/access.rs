@@ -14,6 +14,9 @@
     You should have received a copy of the GNU Lesser General Public License
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
+use crate::ReadWrite;
+use std::io::{Read, Write, Result};
+
 bitflags! {
     pub struct AccessFlags: u16 {
         // @formatter:off
@@ -41,5 +44,15 @@ bitflags! {
         const ACC_MANDATED     = 0b1000_0000_0000_0000;
         const ACC_MODULE       = 0b1000_0000_0000_0000;
         // @formatter:on
+    }
+}
+
+impl ReadWrite for AccessFlags {
+    fn read_from<T: Read>(reader: &mut T) -> Result<AccessFlags> {
+        Ok(AccessFlags::from_bits(u16::read_from(reader)?).unwrap())
+    }
+
+    fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
+        Ok(self.bits().write_to(writer)?)
     }
 }
