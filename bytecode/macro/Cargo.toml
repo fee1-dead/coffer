@@ -1,0 +1,8 @@
+[package]
+name = "coffer-proc-macros"
+version = "1.0.0"
+authors = ["Deadbeef"]
+edition = "2018"
+
+[lib]
+proc-macro = true
