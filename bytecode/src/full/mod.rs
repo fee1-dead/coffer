@@ -511,7 +511,7 @@ pub enum ClassAttribute<'a> {
     /// third: descriptor of the method.
     EnclosingMethod(Cow<'a, str>, Cow<'a, str>, Type<'a>), SourceDebugExtension(Cow<'a, str>),
     BootstrapMethods(Vec<BootstrapMethod<'a>>), Module(Module<'a>), ModulePackages(Vec<Cow<'a, str>>), ModuleMainClass(Cow<'a, str>),
-    NestHost(Cow<'a, str>), NestMembers(Vec<Cow<'a, str>>)
+    NestHost(Cow<'a, str>), NestMembers(Vec<Cow<'a, str>>), Raw(RawAttribute<'a>)
 }
 
 #[derive(Debug, Clone, PartialEq, Hash)]
