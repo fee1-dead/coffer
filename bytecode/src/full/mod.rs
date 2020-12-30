@@ -367,7 +367,7 @@ pub struct LocalVariable<'a> {
     pub end: Label,
     pub name: Cow<'a, str>,
     pub descriptor: Type<'a>,
-    pub signature: Option<Type<'a>>,
+    pub signature: Option<FieldSignature<'a>>,
     pub index: u16
 }
 
@@ -375,7 +375,8 @@ pub struct LocalVariable<'a> {
 pub enum CodeAttribute<'a> {
     LocalVarTable(Vec<LocalVariable<'a>>),
     Signature(Cow<'a, str>),
-    TypeAnnotation(CodeTypeAnnotation<'a>)
+    TypeAnnotation(CodeTypeAnnotation<'a>),
+    Frames(Vec<Frame<'a>>)
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -418,7 +419,7 @@ pub enum FieldAttribute<'a> {
     Raw(RawAttribute<'a>)
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Field<'a> {
     pub access: AccessFlags,
     pub name: Cow<'a, str>,
@@ -426,7 +427,7 @@ pub struct Field<'a> {
     pub attrs: Vec<FieldAttribute<'a>>
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum MethodAttribute<'a> {
     Deprecated,
     Synthetic,
@@ -443,6 +444,29 @@ pub struct Method<'a> {
     pub name: Cow<'a, str>,
     pub descriptor: Type<'a>,
     pub attributes: Vec<MethodAttribute<'a>>
+}
+
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+pub enum VerificationType<'a> {
+    Top, Int, Float, Null, UninitializedThis, Object(Cow<'a, str>),
+    /// Following the label, must be a `NEW` instruction.
+    UninitializedVariable(Label), Long, Double
+}
+
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
+pub enum Chop {
+    One, Two, Three
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum Frame<'a> {
+    Same(u16), SameLocalsOneStack(u16, VerificationType<'a>),
+    /// Chop up to three.
+    Chop(u16, u8),
+    /// At most three items.
+    Append(u16, Vec<VerificationType<'a>>),
+    /// Locals and then stack values.
+    Full(u16, Vec<VerificationType<'a>>, Vec<VerificationType<'a>>)
 }
 
 pub struct Class {
