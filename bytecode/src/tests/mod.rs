@@ -19,7 +19,7 @@ use std::io::Cursor;
 
 mod mutf8;
 mod insn;
-mod insns_type;
+mod full_type;
 
 #[test]
 fn test_parse_class_index() {
