@@ -1,3 +1,4 @@
+
 /*
     This file is part of Coffer.
 
@@ -14,11 +15,18 @@
     You should have received a copy of the GNU Lesser General Public License
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
+pub mod annotation;
+
+mod signature;
+pub use signature::*;
 use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
 use std::ops::Range;
 
-#[derive(Clone, PartialEq, Hash)]
+#[derive(Debug, Eq, PartialOrd, PartialEq, Ord, Hash, Copy, Clone)]
+pub struct Label(u32);
+
+#[derive(Clone, PartialEq, Hash, Debug)]
 pub struct MethodHandle<'a> {
     kind: MethodHandleKind,
     owner: Cow<'a, str>,
@@ -26,7 +34,7 @@ pub struct MethodHandle<'a> {
     descriptor: Type<'a>
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Constant<'a> {
     Null,
     I32(i32),
@@ -62,50 +70,23 @@ impl From<i32> for Constant<'_> {
 
 impl<'a> Hash for Constant<'a> {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
         match self {
-            Constant::Null => {
-                state.write(&[0]);
-            }
-            Constant::I32(i) => {
-                state.write(&[1]);
-                i.hash(state);
-            }
-            Constant::F32(f) => {
-                state.write(&[2]);
-                (*f).to_bits().hash(state);
-            }
-            Constant::I64(i) => {
-                state.write(&[3]);
-                i.hash(state);
-            }
-            Constant::F64(f) => {
-                state.write(&[4]);
-                (*f).to_bits().hash(state);
-            }
-            Constant::String(s) => {
-                state.write(&[5]);
-                s.hash(state);
-            }
-            Constant::Class(s) => {
-                state.write(&[6]);
-                s.hash(state);
-            }
-            Constant::MethodType(s) => {
-                state.write(&[7]);
-                s.hash(state);
-            }
-            Constant::MethodHandle(m) => {
-                state.write(&[8]);
-                m.hash(state)
-            }
+            Constant::Null => {}
+            Constant::I32(i) => { i.hash(state); }
+            Constant::F32(f) => { (*f).to_bits().hash(state); }
+            Constant::I64(i) => { i.hash(state); }
+            Constant::F64(f) => { (*f).to_bits().hash(state); }
+            Constant::String(s) => { s.hash(state); }
+            Constant::Class(s) => { s.hash(state); }
+            Constant::MethodType(s) => { s.hash(state); }
+            Constant::MethodHandle(m) => { m.hash(state) }
             Constant::Field { owner, name, descriptor } => {
-                state.write(&[9]);
                 owner.hash(state);
                 name.hash(state);
                 descriptor.hash(state);
             }
             Constant::Method { interface, owner, name, descriptor } => {
-                state.write(&[10]);
                 interface.hash(state);
                 owner.hash(state);
                 name.hash(state);
@@ -177,8 +158,7 @@ pub enum JumpCondition {
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum LoadOrStore {
-    Load,
-    Store
+    Load, Store
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -225,8 +205,7 @@ pub enum IntOperation {
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum MonitorOperation {
-    Enter,
-    Exit
+    Enter, Exit
 }
 
 
@@ -243,33 +222,19 @@ impl<'a> Display for Type<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         use std::fmt::Write;
         match self {
-            Type::Byte => {
-                f.write_char('B')?;
-            }
-            Type::Char => {
-                f.write_char('C')?;
-            }
-            Type::Double => {
-                f.write_char('D')?;
-            }
-            Type::Float => {
-                f.write_char('F')?;
-            }
-            Type::Int => {
-                f.write_char('I')?;
-            }
-            Type::Long => {
-                f.write_char('J')?;
-            }
-            Type::Boolean => {
-                f.write_char('Z')?;
-            }
+            Type::Byte => { f.write_char('B') }
+            Type::Char => { f.write_char('C') }
+            Type::Double => { f.write_char('D') }
+            Type::Float => { f.write_char('F') }
+            Type::Int => { f.write_char('I') }
+            Type::Long => { f.write_char('J') }
+            Type::Boolean => { f.write_char('Z') }
             Type::Ref(s) => {
-                write!(f, "L{};", s)?;
+                write!(f, "L{};", s)
             }
             Type::ArrayRef(dim, t) => {
                 "[".repeat(*dim as usize).fmt(f)?;
-                t.fmt(f)?;
+                t.fmt(f)
             }
             Type::Method(params, ret) => {
                 f.write_char('(')?;
@@ -282,9 +247,9 @@ impl<'a> Display for Type<'a> {
                 } else {
                     f.write_char('V')?;
                 }
+                Ok(())
             }
         }
-        Ok(())
     }
 }
 
@@ -307,7 +272,7 @@ pub enum MethodHandleKind {
     GetField = 1, GetStatic, PutField, PutStatic, InvokeVirtual, InvokeStatic, InvokeSpecial, NewInvokeSpecial, InvokeInterface
 }
 
-
+#[derive(Debug, Clone, PartialEq)]
 pub struct Dynamic<'a> {
     pub bsm: MethodHandle<'a>,
     pub args: Vec<Constant<'a>>,
@@ -315,23 +280,21 @@ pub struct Dynamic<'a> {
     pub descriptor: Type<'a>
 }
 
-pub trait CanBeDynamic {}
-impl CanBeDynamic for Constant<'_> {}
-// todo determine more types or eliminate to just Constant
-
-pub enum OrDynamic<'a, T: CanBeDynamic> {
+#[derive(Debug, Clone, PartialEq)]
+pub enum OrDynamic<'a, T> {
     Dynamic(Dynamic<'a>),
     Static(T)
 }
-impl<'a, T: CanBeDynamic> From<Dynamic<'a>> for OrDynamic<'a, T> {
+impl<'a, T> From<Dynamic<'a>> for OrDynamic<'a, T> {
     #[inline]
     fn from(d: Dynamic<'a>) -> Self {
         OrDynamic::Dynamic(d)
     }
 }
-impl<'a, T: CanBeDynamic> From<T> for OrDynamic<'a, T> {
+
+impl<'a> From<Constant<'a>> for OrDynamic<'a, Constant<'a>> {
     #[inline]
-    fn from(t: T) -> Self {
+    fn from(t: Constant<'a>) -> Self {
         OrDynamic::Static(t)
     }
 }
@@ -340,6 +303,13 @@ impl<'a, T: CanBeDynamic> From<T> for OrDynamic<'a, T> {
 /// Note that while each valid instruction corresponds to one and only one enum variant,
 /// a value may correspond to multiple possibilities of actual operation used in bytecode.
 /// Normally, it should choose the option that takes the lowest space.
+///
+/// Some variants don't actually appear in the code,
+/// but instead they represent attributes of the Code attribute.
+/// This gives benefits such that when modifying the class it doesn't need to modify the indices of the attributes to remain valid.
+///
+/// However, StackMap frames will not be a variant because they become quite invalid after modifications made to code, thus, frames should be regenerated every time.
+#[derive(Debug, Clone, PartialEq)]
 pub enum Instruction<'a> {
     /// Push a constant value to the current stack.
     Push(OrDynamic<'a, Constant<'a>>),
@@ -367,14 +337,19 @@ pub enum Instruction<'a> {
     InvokeExact(Constant<'a>),
     LineNumber(u16),
     Try,
-    Catch(Option<Cow<'a, str>>)
+    /// None means catch everything
+    Catch(Option<Cow<'a, str>>),
+    /// Not real in bytecode, used as a marker of location.
+    Label(Label)
 }
 
-pub struct RawAttribute<T> {
+#[derive(Clone, PartialEq, Debug)]
+pub struct RawAttribute<'a> {
     /// Whether to keep this attribute upon writing.
     /// Attributes that are related to local variables will default to `false`, whereas newly created attributes will be `true`.
     pub keep: bool,
-    pub inner: T
+    pub name: Cow<'a, str>,
+    pub inner: Cow<'a, [u8]>
 }
 
 /// All `usize` fields represent indexes into the vector of instructions.
@@ -386,6 +361,32 @@ pub struct Exception<'a> {
     pub catch_type: Option<Cow<'a, str>>
 }
 
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct LocalVariable<'a> {
+    pub start: Label,
+    pub end: Label,
+    pub name: Cow<'a, str>,
+    pub descriptor: Type<'a>,
+    pub signature: Option<Type<'a>>,
+    pub index: u16
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub enum CodeAttribute<'a> {
+    LocalVarTable(Vec<LocalVariable<'a>>),
+    Signature(Cow<'a, str>),
+    TypeAnnotation(CodeTypeAnnotation<'a>)
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct Catch<'a> {
+    pub start: Label,
+    pub end: Label,
+    pub handler: Label,
+    pub catch: Cow<'a, str>
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub struct Code<'a> {
     pub max_stack: u16,
     pub max_locals: u16,
@@ -393,61 +394,14 @@ pub struct Code<'a> {
 }
 
 use crate::access::AccessFlags;
-use std::collections::HashMap;
+
 use std::fmt::Display;
 use std::fmt::Formatter;
-
-
-/// Some values actually becomes ints in the constant pool.
-#[derive(Clone, PartialEq)]
-pub enum AnnotationValue<'a> {
-    Byte(i8),
-    Char(u16),
-    Double(f64),
-    Float(f32),
-    Int(i32),
-    Long(i64),
-    Short(i16),
-    Boolean(bool),
-    String(Cow<'a, str>),
-    Enum(Type<'a>, Cow<'a, str>),
-    Class(Option<Type<'a>>),
-    Annotation(Type<'a>, HashMap<Cow<'a, str>, AnnotationValue<'a>>),
-    Array(Vec<AnnotationValue<'a>>)
-}
-
-/// Incomplete
-#[derive(Clone, PartialEq)]
-pub enum TypeAnnotationTarget {
-    TypeParameter(u8),
-    SuperType(u16),
-    TypeParameterBound(u8, u8),
-    Empty,
-    FormalParameter(u8),
-    Throws(u16),
-    // LocalVar, // Not Yet available before I figure out
-    Catch(u16),
-    Offset(u16),
-    TypeArgument(u16, u8)
-}
-
-#[derive(Clone, PartialEq)]
-pub struct TypeAnnotation<'a> {
-    pub target_b: u8,
-    pub target: TypeAnnotationTarget,
-    pub type_path: Vec<(u8, u8)>,
-    pub annotation_type: Type<'a>,
-    pub element_values: HashMap<Cow<'a, str>, AnnotationValue<'a>>
-}
-
-#[derive(Clone, PartialEq)]
-pub struct Annotation<'a> {
-    pub annotation_type: Type<'a>,
-    pub element_values: HashMap<Cow<'a, str>, AnnotationValue<'a>>
-}
+use annotation::Annotation;
+use crate::full::annotation::{FieldTypeAnnotation, MethodTypeAnnotation, CodeTypeAnnotation};
 
 /// Completed
-#[derive(Clone, PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum FieldAttribute<'a> {
     Deprecated,
     Synthetic,
@@ -459,10 +413,12 @@ pub enum FieldAttribute<'a> {
     ConstantValueString(Cow<'a, str>),
     VisibleAnnotations(Vec<Annotation<'a>>),
     InvisibleAnnotations(Vec<Annotation<'a>>),
-    VisibleTypeAnnotations(Vec<TypeAnnotation<'a>>),
-    InvisibleTypeAnnotations(Vec<TypeAnnotation<'a>>)
+    VisibleTypeAnnotations(Vec<FieldTypeAnnotation<'a>>),
+    InvisibleTypeAnnotations(Vec<FieldTypeAnnotation<'a>>),
+    Raw(RawAttribute<'a>)
 }
 
+#[derive(Debug)]
 pub struct Field<'a> {
     pub access: AccessFlags,
     pub name: Cow<'a, str>,
@@ -470,10 +426,23 @@ pub struct Field<'a> {
     pub attrs: Vec<FieldAttribute<'a>>
 }
 
+#[derive(PartialEq)]
+pub enum MethodAttribute<'a> {
+    Deprecated,
+    Synthetic,
+    Signature(Cow<'a, str>),
+    VisibleAnnotations(Vec<Annotation<'a>>),
+    InvisibleAnnotations(Vec<Annotation<'a>>),
+    VisibleTypeAnnotations(Vec<MethodTypeAnnotation<'a>>),
+    InvisibleTypeAnnotations(Vec<MethodTypeAnnotation<'a>>),
+    Raw(RawAttribute<'a>)
+}
+
 pub struct Method<'a> {
     pub access: AccessFlags,
     pub name: Cow<'a, str>,
-    pub descriptor: Type<'a>
+    pub descriptor: Type<'a>,
+    pub attributes: Vec<MethodAttribute<'a>>
 }
 
 pub struct Class {
