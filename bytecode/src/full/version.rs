@@ -1,14 +1,15 @@
 use std::fmt::{Display, Formatter, Result};
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, ReadWrite)]
 pub struct JavaVersion {
     pub minor: u16,
     pub major: MajorVersion
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, ReadWrite)]
+#[tag_type(u16)]
 pub enum MajorVersion {
-    J1, J1_2, J1_3, J1_4, J5, J6, J7, J8, J9, J10, J11, J12, J13, J14, J15
+    J1 = 45, J1_2, J1_3, J1_4, J5, J6, J7, J8, J9, J10, J11, J12, J13, J14, J15
 }
 
 impl Display for JavaVersion {

@@ -15,7 +15,8 @@
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
 use crate::ReadWrite;
-use std::io::{Read, Write, Result};
+use crate::Result;
+use std::io::{Read, Write};
 
 bitflags! {
     pub struct AccessFlags: u16 {

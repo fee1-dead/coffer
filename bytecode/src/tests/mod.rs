@@ -16,8 +16,6 @@
 */
 use crate::index::JClassIdx;
 use std::io::Cursor;
-use std::mem::size_of;
-use crate::full::VerificationType;
 
 mod mutf8;
 mod insn;

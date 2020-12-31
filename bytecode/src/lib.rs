@@ -37,8 +37,15 @@ pub mod access;
 mod tests;
 pub(crate) mod byteswapper;
 
-use std::io::{Read, Write, Result};
+use std::io::{Read, Write};
+pub use crate::error::Result;
+use crate::full::{Type, BootstrapMethod, Constant};
+use std::borrow::Cow;
 
+/// The generic read and write trait. This indicates a structure can be read without additional contextual information.
+///
+/// This trait can be derived with #[derive(ReadWrite)] if all the types it can hold are also `ReadWrite`.
+/// Furthermore, all integer types implement `ReadWrite`.
 pub trait ReadWrite where Self: Sized {
     fn read_from<T: Read>(reader: &mut T) -> Result<Self>;
     fn write_to<T: Write>(&self, writer: &mut T) -> Result<()>;
@@ -61,4 +68,20 @@ macro_rules! impl_readwrite_ints {
         )*
     };
 }
-impl_readwrite_ints! { u8, 1 i8, 1 u16, 2 i16, 2 u32, 4 i32, 4 u64, 8 i64, 8 u128, 16 i128, 16 }
+impl_readwrite_nums! { u8, 1  i8, 1  u16, 2  i16, 2  u32, 4  i32, 4  f32, 4  u64, 8  i64, 8  f64, 8  u128, 16  i128, 16 }
+
+impl ReadWrite for String {
+    fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
+        let length = u16::read_from(reader)?;
+        let mut buf = Vec::with_capacity(length as usize);
+        reader.read_exact(&mut buf)?;
+        Ok(crate::mod_utf8::modified_utf8_to_string(&buf)?)
+    }
+
+    fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
+        let string = crate::mod_utf8::string_to_modified_utf8(self);
+        (string.len() as u16).write_to(writer)?;
+        writer.write_all(&string)?;
+        Ok(())
+    }
+}

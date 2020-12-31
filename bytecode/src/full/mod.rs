@@ -268,7 +268,8 @@ impl<'a> Type<'a> {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, ReadWrite)]
+#[tag_type(u8)]
 pub enum MethodHandleKind {
     GetField = 1, GetStatic, PutField, PutStatic, InvokeVirtual, InvokeStatic, InvokeSpecial, NewInvokeSpecial, InvokeInterface
 }
