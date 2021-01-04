@@ -19,57 +19,82 @@ pub mod annotation;
 pub mod version;
 
 mod signature;
+pub mod cp;
+
 pub use signature::*;
 use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
 use std::ops::Range;
+use crate::access::AccessFlags;
+
+use std::fmt::Display;
+use std::fmt::Formatter;
+use annotation::Annotation;
+use crate::full::annotation::{FieldTypeAnnotation, MethodTypeAnnotation, CodeTypeAnnotation, AnnotationValue};
+use crate::full::version::JavaVersion;
+use crate::{ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite};
+use std::str::FromStr;
+use std::io::{Read, Write};
 
 #[derive(Debug, Eq, PartialOrd, PartialEq, Ord, Hash, Copy, Clone)]
 pub struct Label(u32);
 
 #[derive(Clone, PartialEq, Hash, Debug)]
-pub struct MethodHandle<'a> {
+pub struct MethodHandle {
     kind: MethodHandleKind,
-    owner: Cow<'a, str>,
-    name: Cow<'a, str>,
-    descriptor: Type<'a>
+    owner: Cow<'static, str>,
+    name: Cow<'static, str>,
+    descriptor: Type
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub enum Constant<'a> {
+pub enum Constant {
     Null,
     I32(i32),
     F32(f32),
     I64(i64),
     F64(f64),
-    String(Cow<'a, str>),
-    Class(Cow<'a, str>),
+    String(Cow<'static, str>),
+    Class(Cow<'static, str>),
     Field {
-        owner: Cow<'a, str>,
-        name: Cow<'a, str>,
-        descriptor: Type<'a>
+        owner: Cow<'static, str>,
+        name: Cow<'static, str>,
+        descriptor: Type
     },
     Method {
         interface: bool,
-        owner: Cow<'a, str>,
-        name: Cow<'a, str>,
-        descriptor: Type<'a>
+        owner: Cow<'static, str>,
+        name: Cow<'static, str>,
+        descriptor: Type
     },
-    MethodType(Type<'a>),
-    MethodHandle(MethodHandle<'a>)
+    MethodType(Type),
+    MethodHandle(MethodHandle)
 }
 
-impl Constant<'static> {
-    pub const NULL: Constant<'static> = Constant::Null;
+impl ConstantPoolReadWrite for Constant {
+    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> crate::Result<Self> {
+        let idx = ReadWrite::read_from(reader)?;
+        cp.read_constant(idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", idx.to_string()))
+    }
+
+    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<()> {
+        ReadWrite::write_to(&cp.insert_constant(self), writer)
+    }
 }
 
-impl From<i32> for Constant<'_> {
+impl Constant {
+    pub const NULL: Constant = Constant::Null;
+}
+
+impl From<i32> for Constant {
     fn from(i: i32) -> Self {
         Self::I32(i)
     }
 }
 
-impl<'a> Hash for Constant<'a> {
+#[allow(clippy::derive_hash_xor_eq)]
+// Hash cannot be directly derived for floating point types; hash by actual bits of the fp values because that is what will be written in byte form.
+impl Hash for Constant {
     fn hash<H: Hasher>(&self, state: &mut H) {
         std::mem::discriminant(self).hash(state);
         match self {
@@ -211,15 +236,91 @@ pub enum MonitorOperation {
 
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash)]
-pub enum Type<'a> {
-    Byte, Char, Double, Float, Int, Long, Boolean, Ref(Cow<'a, str>), ArrayRef(u8, Box<Type<'a>>),
+pub enum Type {
+    Byte, Char, Double, Float, Int, Long, Boolean, Ref(Cow<'static, str>), ArrayRef(u8, Box<Type>),
     /// The Method type. First is the parameter list and second is the return type. If the return type is `None`, it represents a `void` return type.
     ///
     /// It is invalid if any of the parameter types and the return type is a method type.
-    Method(Vec<Type<'a>>, Option<Box<Type<'a>>>)
+    Method(Vec<Type>, Option<Box<Type>>)
 }
 
-impl<'a> Display for Type<'a> {
+impl FromStr for Type {
+    type Err = crate::error::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        #[inline]
+        fn unexpected_end() -> crate::error::Error {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "Unexpected end of string when parsing descriptor").into()
+        }
+        fn get_type(c: &mut std::str::Chars, st: &str) -> Result<Type, crate::error::Error> {
+            let next_char = c.next();
+            Ok(match next_char {
+                Some('B') => Type::Byte,
+                Some('C') => Type::Char,
+                Some('D') => Type::Double,
+                Some('F') => Type::Float,
+                Some('I') => Type::Int,
+                Some('J') => Type::Long,
+                Some('Z') => Type::Boolean,
+                Some('L') => {
+                    let mut st = String::new();
+                    while c.as_str().chars().next().unwrap_or(')') != ')' {
+                        st.push(c.next().unwrap())
+                    }
+                    if c.next().is_none() {
+                        return Err(unexpected_end())
+                    } else {
+                        Type::Ref(Cow::Owned(st))
+                    }
+                }
+                Some('[') => {
+                    let mut dim: u8 = 1;
+                    while let Some('[') = c.as_str().chars().next() {
+                        c.next();
+                        dim = dim.checked_add(1).ok_or(crate::error::Error::ArithmeticOverflow)?;
+                    }
+                    let r = get_type(c, st)?;
+                    Type::ArrayRef(dim, Box::new(r))
+                }
+                Some('(') => {
+                    let mut types = Vec::new();
+                    while c.as_str().chars().next().unwrap_or(')') != ')' {
+                        types.push(get_type(c, st)?)
+                    }
+                    if c.next().is_none() {
+                        return Err(unexpected_end())
+                    } else {
+                        Type::Method(types, if let Some('V') = c.as_str().chars().next() {
+                            None
+                        } else {
+                            Some(Box::new(get_type(c, st)?))
+                        })
+                    }
+                }
+                Some(ch) => {
+                    return Err(crate::error::Error::Invalid("type character", ch.into()))
+                }
+                None => {
+                    return Err(unexpected_end())
+                }
+            })
+        }
+        get_type(&mut s.chars(), s)
+    }
+}
+
+impl ConstantPoolReadWrite for Type {
+    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> crate::Result<Self> {
+        let idx = ReadWrite::read_from(reader)?;
+        cp.read_utf8(idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", idx.to_string()))?.parse()
+    }
+
+    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<()> {
+        ReadWrite::write_to(&cp.insert_utf8(self.to_string().as_str()), writer)
+    }
+}
+
+impl Display for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         use std::fmt::Write;
         match self {
@@ -230,9 +331,7 @@ impl<'a> Display for Type<'a> {
             Type::Int => { f.write_char('I') }
             Type::Long => { f.write_char('J') }
             Type::Boolean => { f.write_char('Z') }
-            Type::Ref(s) => {
-                write!(f, "L{};", s)
-            }
+            Type::Ref(s) => { write!(f, "L{};", s) }
             Type::ArrayRef(dim, t) => {
                 "[".repeat(*dim as usize).fmt(f)?;
                 t.fmt(f)
@@ -254,16 +353,16 @@ impl<'a> Display for Type<'a> {
     }
 }
 
-impl<'a> Type<'a> {
+impl Type {
     #[inline]
-    pub fn method(params: Vec<Type<'a>>, ret: Option<Type<'a>>) -> Type<'a> {
+    pub fn method(params: Vec<Type>, ret: Option<Type>) -> Type {
         Type::Method(params, ret.map(Box::new))
     }
     #[inline]
-    pub fn reference<S>(str: S) -> Type<'a> where S: Into<Cow<'a, str>> {
+    pub fn reference<S>(str: S) -> Type where S: Into<Cow<'static, str>> {
         Type::Ref(str.into())
     }
-    pub fn array(dim: u8, t: Type<'a>) -> Type<'a> {
+    pub fn array(dim: u8, t: Type) -> Type {
         Type::ArrayRef(dim, Box::new(t))
     }
 }
@@ -277,27 +376,27 @@ pub enum MethodHandleKind {
 /// Note: dynamic computed constants are syntactically allowed to refer to themselves via the bootstrap method table but it will fail during resolution.
 /// Rust ownership rules prevent us from doing so.
 #[derive(Debug, Clone, PartialEq, Hash)]
-pub struct Dynamic<'a> {
-    pub bsm: Box<BootstrapMethod<'a>>,
-    pub name: Cow<'a, str>,
-    pub descriptor: Type<'a>
+pub struct Dynamic {
+    pub bsm: Box<BootstrapMethod>,
+    pub name: Cow<'static, str>,
+    pub descriptor: Type
 }
 
 #[derive(Debug, Clone, PartialEq, Hash)]
-pub enum OrDynamic<'a, T> {
-    Dynamic(Dynamic<'a>),
+pub enum OrDynamic<T> {
+    Dynamic(Dynamic),
     Static(T)
 }
-impl<'a, T> From<Dynamic<'a>> for OrDynamic<'a, T> {
+impl<T> From<Dynamic> for OrDynamic<T> {
     #[inline]
-    fn from(d: Dynamic<'a>) -> Self {
+    fn from(d: Dynamic) -> Self {
         OrDynamic::Dynamic(d)
     }
 }
 
-impl<'a> From<Constant<'a>> for OrDynamic<'a, Constant<'a>> {
+impl From<Constant> for OrDynamic<Constant> {
     #[inline]
-    fn from(t: Constant<'a>) -> Self {
+    fn from(t: Constant) -> Self {
         OrDynamic::Static(t)
     }
 }
@@ -313,9 +412,9 @@ impl<'a> From<Constant<'a>> for OrDynamic<'a, Constant<'a>> {
 ///
 /// However, StackMap frames will not be a variant because they become quite invalid after modifications made to code, thus, frames should be regenerated every time.
 #[derive(Debug, Clone, PartialEq)]
-pub enum Instruction<'a> {
+pub enum Instruction {
     /// Push a constant value to the current stack.
-    Push(OrDynamic<'a, Constant<'a>>),
+    Push(OrDynamic<Constant>),
     /// Duplicate one or two stack values and insert them zero or more values down.
     ///
     /// `Duplicate(One, None)` is equivalent to `DUP`
@@ -337,128 +436,127 @@ pub enum Instruction<'a> {
     Conversion(NumberType, NumberType),
     ConvertInt(BitType),
     Field(GetOrPut, MemberType),
-    InvokeExact(Constant<'a>),
+    InvokeExact(Constant),
     LineNumber(u16),
     Try,
     /// None means catch everything
-    Catch(Option<Cow<'a, str>>),
+    Catch(Option<Cow<'static, str>>),
     /// Not real in bytecode, used as a marker of location.
     Label(Label)
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct RawAttribute<'a> {
+pub struct RawAttribute {
     /// Whether to keep this attribute upon writing.
     /// Attributes that are related to local variables will default to `false`, whereas newly created attributes will be `true`.
     pub keep: bool,
-    pub name: Cow<'a, str>,
-    pub inner: Cow<'a, [u8]>
+    pub name: Cow<'static, str>,
+    pub inner: Cow<'static, [u8]>
+}
+
+impl RawAttribute {
+    /// Used by the procedural macro.
+    fn __new(name: Cow<'static, str>, inner: Vec<u8>) -> Self {
+        Self {
+            keep: false,
+            name,
+            inner: Cow::Owned(inner)
+        }
+    }
 }
 
 /// All `usize` fields represent indexes into the vector of instructions.
 ///
 /// The end is exclusive, as defined by the JVM specification as well as the `Range` struct.
-pub struct Exception<'a> {
+pub struct Exception {
     pub range: Range<usize>,
     pub handler: usize,
-    pub catch_type: Option<Cow<'a, str>>
+    pub catch_type: Option<Cow<'static, str>>
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct LocalVariable<'a> {
+pub struct LocalVariable {
     pub start: Label,
     pub end: Label,
-    pub name: Cow<'a, str>,
-    pub descriptor: Type<'a>,
-    pub signature: Option<FieldSignature<'a>>,
+    pub name: Cow<'static, str>,
+    pub descriptor: Type,
+    pub signature: Option<FieldSignature>,
     pub index: u16
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub enum CodeAttribute<'a> {
-    LocalVarTable(Vec<LocalVariable<'a>>),
-    TypeAnnotation(CodeTypeAnnotation<'a>),
-    Frames(Vec<Frame<'a>>)
+pub enum CodeAttribute {
+    LocalVarTable(Vec<LocalVariable>),
+    TypeAnnotation(CodeTypeAnnotation),
+    Frames(Vec<Frame>)
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct Catch<'a> {
+pub struct Catch {
     pub start: Label,
     pub end: Label,
     pub handler: Label,
-    pub catch: Cow<'a, str>
+    pub catch: Cow<'static, str>
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct Code<'a> {
+pub struct Code {
     pub max_stack: u16,
     pub max_locals: u16,
-    pub code: Vec<Instruction<'a>>,
+    pub code: Vec<Instruction>,
 }
-
-use crate::access::AccessFlags;
-
-use std::fmt::Display;
-use std::fmt::Formatter;
-use annotation::Annotation;
-use crate::full::annotation::{FieldTypeAnnotation, MethodTypeAnnotation, CodeTypeAnnotation, AnnotationValue};
-use crate::full::version::JavaVersion;
 
 /// Completed
 #[derive(PartialEq, Debug, Clone)]
-pub enum FieldAttribute<'a> {
+pub enum FieldAttribute {
     Deprecated,
     Synthetic,
-    Signature(FieldSignature<'a>),
-    ConstantValueInt(i32),
-    ConstantValueFloat(f32),
-    ConstantValueLong(i64),
-    ConstantValueDouble(f64),
-    ConstantValueString(Cow<'a, str>),
-    VisibleAnnotations(Vec<Annotation<'a>>),
-    InvisibleAnnotations(Vec<Annotation<'a>>),
-    VisibleTypeAnnotations(Vec<FieldTypeAnnotation<'a>>),
-    InvisibleTypeAnnotations(Vec<FieldTypeAnnotation<'a>>),
-    Raw(RawAttribute<'a>)
+    Signature(FieldSignature),
+    ConstantValue(Constant),
+    VisibleAnnotations(Vec<Annotation>),
+    InvisibleAnnotations(Vec<Annotation>),
+    VisibleTypeAnnotations(Vec<FieldTypeAnnotation>),
+    InvisibleTypeAnnotations(Vec<FieldTypeAnnotation>),
+    Raw(RawAttribute)
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct Field<'a> {
+pub struct Field {
     pub access: AccessFlags,
-    pub name: Cow<'a, str>,
-    pub descriptor: Type<'a>,
-    pub attrs: Vec<FieldAttribute<'a>>
+    pub name: Cow<'static, str>,
+    pub descriptor: Type,
+    pub attrs: Vec<FieldAttribute>
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum MethodAttribute<'a> {
-    Code(Code<'a>),
+pub enum MethodAttribute {
+    Code(Code),
     Deprecated,
     Synthetic,
-    Signature(MethodSignature<'a>),
-    VisibleAnnotations(Vec<Annotation<'a>>),
-    InvisibleAnnotations(Vec<Annotation<'a>>),
-    VisibleTypeAnnotations(Vec<MethodTypeAnnotation<'a>>),
-    InvisibleTypeAnnotations(Vec<MethodTypeAnnotation<'a>>),
-    VisibleParameterAnnotations(Vec<Vec<Annotation<'a>>>),
-    InvisibleParameterAnnotations(Vec<Vec<Annotation<'a>>>),
-    Raw(RawAttribute<'a>),
-    Exceptions(Vec<Cow<'a, str>>),
-    AnnotationDefault(AnnotationValue<'a>),
-    MethodParameters(Vec<(Cow<'a, str>, AccessFlags)>)
+    Signature(MethodSignature),
+    VisibleAnnotations(Vec<Annotation>),
+    InvisibleAnnotations(Vec<Annotation>),
+    VisibleTypeAnnotations(Vec<MethodTypeAnnotation>),
+    InvisibleTypeAnnotations(Vec<MethodTypeAnnotation>),
+    VisibleParameterAnnotations(Vec<Vec<Annotation>>),
+    InvisibleParameterAnnotations(Vec<Vec<Annotation>>),
+    Raw(RawAttribute),
+    Exceptions(Vec<Cow<'static, str>>),
+    AnnotationDefault(AnnotationValue),
+    MethodParameters(Vec<(Cow<'static, str>, AccessFlags)>)
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct Method<'a> {
+pub struct Method {
     pub access: AccessFlags,
-    pub name: Cow<'a, str>,
-    pub descriptor: Type<'a>,
-    pub attributes: Vec<MethodAttribute<'a>>
+    pub name: Cow<'static, str>,
+    pub descriptor: Type,
+    pub attributes: Vec<MethodAttribute>
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub enum VerificationType<'a> {
-    Top, Int, Float, Null, UninitializedThis, Object(Cow<'a, str>),
+pub enum VerificationType {
+    Top, Int, Float, Null, UninitializedThis, Object(Cow<'static, str>),
     /// Following the label, must be a `NEW` instruction.
     UninitializedVariable(Label), Long, Double
 }
@@ -469,68 +567,68 @@ pub enum Chop {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum Frame<'a> {
-    Same(u16), SameLocalsOneStack(u16, VerificationType<'a>),
+pub enum Frame {
+    Same(u16), SameLocalsOneStack(u16, VerificationType),
     /// Chop up to three.
     Chop(u16, u8),
     /// At most three items.
-    Append(u16, Vec<VerificationType<'a>>),
+    Append(u16, Vec<VerificationType>),
     /// Locals and then stack values.
-    Full(u16, Vec<VerificationType<'a>>, Vec<VerificationType<'a>>)
+    Full(u16, Vec<VerificationType>, Vec<VerificationType>)
 }
 
 #[derive(Eq, PartialEq, Debug, Clone)]
-pub struct InnerClass<'a> {
-    pub inner_fqname: Cow<'a, str>,
-    pub outer_fqname: Cow<'a, str>,
+pub struct InnerClass {
+    pub inner_fqname: Cow<'static, str>,
+    pub outer_fqname: Cow<'static, str>,
     /// None if the inner class is an anonymous class.
-    pub inner_name: Option<Cow<'a, str>>,
+    pub inner_name: Option<Cow<'static, str>>,
     pub inner_access: AccessFlags
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct Module<'a> {
-    pub name: Cow<'a, str>,
+pub struct Module {
+    pub name: Cow<'static, str>,
     pub flags: AccessFlags,
-    pub version: Option<Cow<'a, str>>,
+    pub version: Option<Cow<'static, str>>,
     /// module name, requires flags, module version
-    pub requires: Vec<(Cow<'a, str>, AccessFlags, Option<Cow<'a, str>>)>,
+    pub requires: Vec<(Cow<'static, str>, AccessFlags, Option<Cow<'static, str>>)>,
     /// package name, exports flags, export to modules (empty = export to all)
-    pub exports: Vec<(Cow<'a, str>, AccessFlags, Vec<Cow<'a, str>>)>,
-    pub opens: Vec<(Cow<'a, str>, AccessFlags, Vec<Cow<'a, str>>)>,
-    pub uses: Vec<Cow<'a, str>>,
+    pub exports: Vec<(Cow<'static, str>, AccessFlags, Vec<Cow<'static, str>>)>,
+    pub opens: Vec<(Cow<'static, str>, AccessFlags, Vec<Cow<'static, str>>)>,
+    pub uses: Vec<Cow<'static, str>>,
     /// service interface fqname, service impls fqnames
-    pub provides: Vec<(Cow<'a, str>, Vec<Cow<'a, str>>)>
+    pub provides: Vec<(Cow<'static, str>, Vec<Cow<'static, str>>)>
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum ClassAttribute<'a> {
-    Signature(ClassSignature<'a>),
-    Synthetic, Deprecated, SourceFile(Cow<'a, str>), InnerClasses(Vec<InnerClass<'a>>),
+pub enum ClassAttribute {
+    Signature(ClassSignature),
+    Synthetic, Deprecated, SourceFile(Cow<'static, str>), InnerClasses(Vec<InnerClass>),
     /// first: fully qualified name of the innermost outer class.
     /// second: name of the method that encloses this inner/anonymous class.
     /// third: descriptor of the method.
-    EnclosingMethod(Cow<'a, str>, Cow<'a, str>, Type<'a>), SourceDebugExtension(Cow<'a, str>),
-    BootstrapMethods(Vec<BootstrapMethod<'a>>), Module(Module<'a>), ModulePackages(Vec<Cow<'a, str>>), ModuleMainClass(Cow<'a, str>),
-    NestHost(Cow<'a, str>), NestMembers(Vec<Cow<'a, str>>), Raw(RawAttribute<'a>)
+    EnclosingMethod(Cow<'static, str>, Cow<'static, str>, Type), SourceDebugExtension(Cow<'static, str>),
+    BootstrapMethods(Vec<BootstrapMethod>), Module(Module), ModulePackages(Vec<Cow<'static, str>>), ModuleMainClass(Cow<'static, str>),
+    NestHost(Cow<'static, str>), NestMembers(Vec<Cow<'static, str>>), Raw(RawAttribute)
 }
 
 #[derive(Debug, Clone, PartialEq, Hash)]
-pub struct BootstrapMethod<'a> {
-    pub method: MethodHandle<'a>,
+pub struct BootstrapMethod {
+    pub method: MethodHandle,
     /// constants must not be null. They don't have a corresponding constant pool entry.
-    pub arguments: Vec<OrDynamic<'a, Constant<'a>>>
+    pub arguments: Vec<OrDynamic<Constant>>
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct Class<'a> {
+pub struct Class {
     pub version: JavaVersion,
     pub access: AccessFlags,
-    pub name: Cow<'a, str>,
+    pub name: Cow<'static, str>,
     /// java/lang/Object has no superclass.
-    pub super_name: Option<Cow<'a, str>>,
-    pub interfaces: Vec<Cow<'a, str>>,
-    pub fields: Vec<Field<'a>>,
-    pub methods: Vec<Method<'a>>,
-    pub attributes: Vec<ClassAttribute<'a>>
+    pub super_name: Option<Cow<'static, str>>,
+    pub interfaces: Vec<Cow<'static, str>>,
+    pub fields: Vec<Field>,
+    pub methods: Vec<Method>,
+    pub attributes: Vec<ClassAttribute>
 }

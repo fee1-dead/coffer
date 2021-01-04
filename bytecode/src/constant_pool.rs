@@ -60,7 +60,7 @@ trait ConstantEntryRead: Read + Sized {
             7 | 8 | 16 | 19 | 20 => transmute_entry!(self, tag, 2, 2..4),
             9 | 10..=12 | 17 | 18 => transmute_entry!(self, tag, 2, 2..4, 2, 4..6),
             15 => transmute_entry!(self, tag, 1, 1..2, 2, 2..4),
-            _ => return Err(Error::Unrecognized("Constant Entry Tag", tag.to_string()))
+            _ => return Err(Error::Invalid("Constant Entry Tag", tag.to_string()))
         })
     }
 }

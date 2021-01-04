@@ -7,7 +7,7 @@ use super::Type;
 
 /// Some values actually becomes ints in the constant pool.
 #[derive(Clone, PartialEq, Debug)]
-pub enum AnnotationValue<'a> {
+pub enum AnnotationValue {
     Byte(i8),
     Char(u16),
     Double(f64),
@@ -16,15 +16,15 @@ pub enum AnnotationValue<'a> {
     Long(i64),
     Short(i16),
     Boolean(bool),
-    String(Cow<'a, str>),
-    Enum(Type<'a>, Cow<'a, str>),
-    Class(Option<Type<'a>>),
-    Annotation(Type<'a>, HashMap<Cow<'a, str>, AnnotationValue<'a>>),
-    Array(Vec<AnnotationValue<'a>>)
+    String(Cow<'static, str>),
+    Enum(Type, Cow<'static, str>),
+    Class(Option<Type>),
+    Annotation(Type, HashMap<Cow<'static, str>, AnnotationValue>),
+    Array(Vec<AnnotationValue>)
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct Annotation<'a> {
-    pub annotation_type: Type<'a>,
-    pub element_values: HashMap<Cow<'a, str>, AnnotationValue<'a>>
+pub struct Annotation {
+    pub annotation_type: Type,
+    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
 }

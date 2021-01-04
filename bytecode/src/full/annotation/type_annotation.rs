@@ -29,13 +29,13 @@ pub enum MethodTypeAnnotationTarget {
     Throws(u16) = 0x17
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum CodeTypeAnnotationTarget<'a> {
+pub enum CodeTypeAnnotationTarget {
     /// Example `@Foo A a = bar();`
     LocalVariable(Label, Label),
     /// Example `try (@Foo A a = bar()) {}`
     ResourceVariable(Label, Label),
     /// Example `try { } catch (@Foo A a) { }`
-    CatchParameter(Catch<'a>),
+    CatchParameter(Catch),
     /// Example `a instanceof @Foo B`
     InstanceOf(Label),
     /// Example `new @Foo Bar()`
@@ -73,32 +73,32 @@ pub enum TypeAnnotationTarget {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ClassTypeAnnotation<'a> {
+pub struct ClassTypeAnnotation {
     pub target: ClassTypeAnnotationTarget,
     pub type_path: Vec<(u8, u8)>,
-    pub annotation_type: Type<'a>,
-    pub element_values: HashMap<Cow<'a, str>, AnnotationValue<'a>>
+    pub annotation_type: Type,
+    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct MethodTypeAnnotation<'a> {
+pub struct MethodTypeAnnotation {
     pub target: MethodTypeAnnotationTarget,
     pub type_path: Vec<(u8, u8)>,
-    pub annotation_type: Type<'a>,
-    pub element_values: HashMap<Cow<'a, str>, AnnotationValue<'a>>
+    pub annotation_type: Type,
+    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct FieldTypeAnnotation<'a> {
+pub struct FieldTypeAnnotation {
     pub type_path: Vec<(u8, u8)>,
-    pub annotation_type: Type<'a>,
-    pub element_values: HashMap<Cow<'a, str>, AnnotationValue<'a>>
+    pub annotation_type: Type,
+    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CodeTypeAnnotation<'a> {
-    pub target: CodeTypeAnnotationTarget<'a>,
+pub struct CodeTypeAnnotation {
+    pub target: CodeTypeAnnotationTarget,
     pub type_path: Vec<(u8, u8)>,
-    pub annotation_type: Type<'a>,
-    pub element_values: HashMap<Cow<'a, str>, AnnotationValue<'a>>
+    pub annotation_type: Type,
+    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
 }

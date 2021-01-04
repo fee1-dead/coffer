@@ -22,12 +22,8 @@ macro_rules! read_fn {
     ($type:ty, $fnName: ident, $bytesize:literal) => {
         fn $fnName(&mut self) -> Result<$type> {
             let mut buf = [0u8; $bytesize];
-            let bytes = self.read(&mut buf)?;
-            if bytes != $bytesize {
-                Err(Error::EOF)
-            } else {
-                Ok(<$type>::from_be_bytes(buf))
-            }
+            self.read_exact(&mut buf)?;
+            Ok(<$type>::from_be_bytes(buf))
         }
     };
 }
@@ -59,24 +55,15 @@ pub trait JDecoder: Read {
     fn read_mutf(&mut self) -> Result<String> {
         let length = self.read_u16()? as usize;
         let mut slice = vec![0u8; length];
-        let length_read = self.read(&mut slice)?;
-        if length_read < length {
-            Err(Error::EOF)
-        } else {
-            Ok(crate::mod_utf8::modified_utf8_to_string(&slice)?)
-        }
+        self.read_exact(&mut slice)?;
+        Ok(crate::mod_utf8::modified_utf8_to_string(&slice)?)
     }
 }
 macro_rules! write_fn {
     ($type:ty, $fnName: ident, $bytesize:literal) => {
         fn $fnName(&mut self, i: $type) -> Result<()> {
-            let buf = i.to_be_bytes();
-            let bytes = self.write(&buf)?;
-            if bytes != $bytesize {
-                Err(Error::EOF)
-            } else {
-                Ok(())
-            }
+            self.write_all(&i.to_be_bytes())?;
+            Ok(())
         }
     };
 }
@@ -95,12 +82,8 @@ pub trait JEncoder: Write {
         let slice = crate::mod_utf8::string_to_modified_utf8(str);
         let length = slice.len();
         self.write_u16(u16::try_from(length).map_err(|_| Error::ArithmeticOverflow)?)?;
-        let length_written = self.write(&slice)?;
-        if length_written < length {
-            Err(Error::EOF)
-        } else {
-            Ok(())
-        }
+        self.write_all(&slice)?;
+        Ok(())
     }
 }
 

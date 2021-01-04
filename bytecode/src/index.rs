@@ -86,7 +86,7 @@ impl JClassIdx {
                 7 | 8 | 16 | 19 | 20 => 2,
                 15 => 3,
                 3 | 4 | 9 | 10 | 11 | 12 | 17 | 18 => 4,
-                _ => return Err(Error::Unrecognized("constant entry tag", format!("{} at index {}", tag, i)))
+                _ => return Err(Error::Invalid("constant entry tag", format!("{} at index {}", tag, i)))
             };
             value.seek(SeekFrom::Current(jump))?;
             constant_pool.push(value.stream_position()?);
@@ -103,11 +103,6 @@ impl JClassIdx {
         let fields = fields_or_methods(value)?;
         let methods = fields_or_methods(value)?;
         let attrs = attrs(value)?;
-        let len = value.stream_len()?;
-        let idx = value.stream_position()?;
-        if idx != len {
-            return Err(Error::ExtraBytes(len - idx));
-        }
         Ok(JClassIdx {
             constant_pool,
             itfs,

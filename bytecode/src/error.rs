@@ -18,18 +18,16 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("IO Error")]
+    #[error(transparent)]
     IO(#[from] std::io::Error),
-    #[error("Extra bytes ({0}) remaining in class file.")]
-    ExtraBytes(u64),
-    #[error("Reached End Of File")]
-    EOF,
-    #[error("unrecognized {0}: {1}")]
-    Unrecognized(&'static str, String),
+    #[error("Invalid {0}: {1}")]
+    Invalid(&'static str, String),
     #[error(transparent)]
     MUTF(#[from] crate::mod_utf8::MUTFError),
+    #[error("Attribute length mismatch: actual length ({0} bytes) is greater than length consumed ({1} bytes)")]
+    AttributeLength(u32, u32),
     #[error("Conversion overflows")]
-    ArithmeticOverflow
+    ArithmeticOverflow,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

@@ -2,77 +2,77 @@ use std::fmt::{Display, Formatter, Result, Write};
 use std::borrow::Cow;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum TypeSignature<'a> {
-    Byte, Char, Double, Float, Int, Long, Boolean, Ref(RefTypeSignature<'a>)
+pub enum TypeSignature {
+    Byte, Char, Double, Float, Int, Long, Boolean, Ref(RefTypeSignature)
 }
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct FieldSignature<'a>(RefTypeSignature<'a>);
+pub struct FieldSignature(RefTypeSignature);
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ClassSignature<'a> {
-    pub type_parameters: Vec<TypeParameter<'a>>,
-    pub super_class: ClassTypeSignature<'a>,
-    pub interfaces: Vec<ClassTypeSignature<'a>>
+pub struct ClassSignature {
+    pub type_parameters: Vec<TypeParameter>,
+    pub super_class: ClassTypeSignature,
+    pub interfaces: Vec<ClassTypeSignature>
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct MethodSignature<'a> {
-    pub type_parameters: Vec<TypeParameter<'a>>,
-    pub parameters: Vec<TypeSignature<'a>>,
-    pub return_type: Option<TypeSignature<'a>>,
-    pub throws: Vec<Throws<'a>>
+pub struct MethodSignature {
+    pub type_parameters: Vec<TypeParameter>,
+    pub parameters: Vec<TypeSignature>,
+    pub return_type: Option<TypeSignature>,
+    pub throws: Vec<Throws>
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct TypeParameter<'a> {
-    pub name: Cow<'a, str>,
-    pub class_bound: Option<RefTypeSignature<'a>>,
-    pub interface_bounds: Vec<RefTypeSignature<'a>>
+pub struct TypeParameter {
+    pub name: Cow<'static, str>,
+    pub class_bound: Option<RefTypeSignature>,
+    pub interface_bounds: Vec<RefTypeSignature>
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Throws<'a> {
-    TypeParameter(Cow<'a , str>),
-    Class(ClassTypeSignature<'a>)
+pub enum Throws {
+    TypeParameter(Cow<'static, str>),
+    Class(ClassTypeSignature)
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum TypeArgument<'a> {
-    Extends(RefTypeSignature<'a>),
-    Super(RefTypeSignature<'a>),
+pub enum TypeArgument {
+    Extends(RefTypeSignature),
+    Super(RefTypeSignature),
     Any
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SimpleClassTypeSignature<'a> {
-    pub name: Cow<'a, str>,
-    pub type_arguments: Vec<TypeArgument<'a>>
+pub struct SimpleClassTypeSignature {
+    pub name: Cow<'static, str>,
+    pub type_arguments: Vec<TypeArgument>
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ClassTypeSignature<'a> {
-    pub package: Vec<Cow<'a, str>>,
-    pub name: SimpleClassTypeSignature<'a>,
-    pub suffix: Vec<SimpleClassTypeSignature<'a>>
+pub struct ClassTypeSignature {
+    pub package: Vec<Cow<'static, str>>,
+    pub name: SimpleClassTypeSignature,
+    pub suffix: Vec<SimpleClassTypeSignature>
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum RefTypeSignature<'a> {
-    TypeVariable(Cow<'a, str>),
-    ArrayRef(u8, Box<TypeSignature<'a>>),
-    ClassType(ClassTypeSignature<'a>)
+pub enum RefTypeSignature {
+    TypeVariable(Cow<'static, str>),
+    ArrayRef(u8, Box<TypeSignature>),
+    ClassType(ClassTypeSignature)
 }
 
 // Implementations
 
-impl<'a> Display for FieldSignature<'a> {
+impl Display for FieldSignature {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.0.fmt(f)
     }
 }
-impl<'a> Display for TypeSignature<'a> {
+impl Display for TypeSignature {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             TypeSignature::Byte => { f.write_char('B') }
@@ -86,7 +86,7 @@ impl<'a> Display for TypeSignature<'a> {
         }
     }
 }
-impl<'a> Display for TypeArgument<'a> {
+impl Display for TypeArgument {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             TypeArgument::Extends(ref t) => {
@@ -103,7 +103,7 @@ impl<'a> Display for TypeArgument<'a> {
         }
     }
 }
-impl<'a> Display for SimpleClassTypeSignature<'a> {
+impl Display for SimpleClassTypeSignature {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.name.fmt(f)?;
         if !self.type_arguments.is_empty() {
@@ -116,7 +116,7 @@ impl<'a> Display for SimpleClassTypeSignature<'a> {
         Ok(())
     }
 }
-impl<'a> Display for ClassTypeSignature<'a> {
+impl Display for ClassTypeSignature {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str("L")?;
         for s in &self.package {
@@ -131,7 +131,7 @@ impl<'a> Display for ClassTypeSignature<'a> {
         f.write_str(";")
     }
 }
-impl<'a> Display for RefTypeSignature<'a> {
+impl Display for RefTypeSignature {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             RefTypeSignature::TypeVariable(name) => {
@@ -147,7 +147,7 @@ impl<'a> Display for RefTypeSignature<'a> {
         }
     }
 }
-impl<'a> Display for Throws<'a> {
+impl Display for Throws {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_char('^')?;
         match self {
@@ -160,7 +160,7 @@ impl<'a> Display for Throws<'a> {
         }
     }
 }
-impl<'a> Display for TypeParameter<'a> {
+impl Display for TypeParameter {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.name.fmt(f)?;
         f.write_char(':')?;
@@ -174,7 +174,7 @@ impl<'a> Display for TypeParameter<'a> {
         Ok(())
     }
 }
-impl<'a> Display for MethodSignature<'a> {
+impl Display for MethodSignature {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         if !self.type_parameters.is_empty() {
             f.write_char('<')?;
@@ -199,7 +199,7 @@ impl<'a> Display for MethodSignature<'a> {
         Ok(())
     }
 }
-impl<'a> Display for ClassSignature<'a> {
+impl Display for ClassSignature {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         if !self.type_parameters.is_empty() {
             f.write_char('<')?;
