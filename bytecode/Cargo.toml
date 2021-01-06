@@ -10,6 +10,7 @@ edition = "2018"
 thiserror = "1.0"
 bitflags = "1.0"
 delegate = "0.4.3"
+nom = "6.0.1"
 coffer-proc-macros = { path = "./macro" }
 
 [dev-dependencies]

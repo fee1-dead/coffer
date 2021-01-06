@@ -1,9 +1,10 @@
-use std::fmt::{Display, Formatter, Result, Write};
+use std::fmt::{Display, Formatter, Write};
 use std::borrow::Cow;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TypeSignature {
-    Byte, Char, Double, Float, Int, Long, Boolean, Ref(RefTypeSignature)
+    Byte, Char, Double, Float, Int, Long, Boolean, Short, Ref(RefTypeSignature)
 }
 
 #[repr(transparent)]
@@ -67,13 +68,163 @@ pub enum RefTypeSignature {
 
 // Implementations
 
+#[inline]
+pub(super) fn unexpected_end<T>() -> crate::Result<T> {
+    Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Unexpected end of string").into())
+}
+
+use nom::{take, one_of, IResult, take_until1, many0, char, complete, peek, alt, take_until, take_till1, do_parse, terminated, switch, opt};
+
+fn type_sig(i: &str) -> IResult<&str, TypeSignature> {
+    let (i, c) = alt!(i, one_of!("BCDFIJSZ") | peek!(one_of!("[TL")))?;
+    Ok((i, match c {
+        'B' => TypeSignature::Byte,
+        'C' => TypeSignature::Char,
+        'D' => TypeSignature::Double,
+        'F' => TypeSignature::Float,
+        'I' => TypeSignature::Int,
+        'J' => TypeSignature::Long,
+        'S' => TypeSignature::Short,
+        'Z' => TypeSignature::Boolean,
+        _ => { return ref_type_sig(i).map(|(i, r)| (i, TypeSignature::Ref(r))) }
+    }))
+}
+fn ref_type_sig(i: &str) -> IResult<&str, RefTypeSignature> {
+    let (newi, c) = one_of!(i, "[TL")?;
+    match c {
+        '[' => {
+            let (i, o) = many0!(newi, char!('['))?;
+            let dim = o.len() + 1;
+            let (i, t) = type_sig(i)?;
+            Ok((i, RefTypeSignature::ArrayRef(dim as u8, Box::new(t))))
+        }
+        'T' => {
+            let (i, o) = take_until1!(newi, ";")?;
+            let (i, _) = take!(i, 1)?;
+            Ok((i, RefTypeSignature::TypeVariable(o.to_owned().into())))
+        }
+        'L' => {
+            let (i, sig) = class_type_sig(i)?;
+            Ok((i, RefTypeSignature::ClassType(sig)))
+        }
+        _ => { unsafe { std::hint::unreachable_unchecked() } }
+    }
+}
+
+fn throws(i: &str) -> IResult<&str, Throws> {
+    do_parse!(i,
+        char!('^') >>
+        res: switch!(peek!(take!(1)),
+        "T" => do_parse!(char!('T') >>
+            ty: take_until1!(";") >>
+            take!(1) >>
+            (Throws::TypeParameter(ty.to_owned().into()))) |
+        "L" => do_parse!(sig: class_type_sig >> (Throws::Class(sig)))) >>
+    (res))
+}
+
+// TODO Error when encountering illegal characters
+fn class_type_sig(i: &str) -> IResult<&str, ClassTypeSignature> {
+    do_parse!(i,
+    char!('L') >>
+    package: packages >>
+    name: simple_type_sig >>
+    suffix: terminated!(many0!(do_parse!(char!('.') >>
+    sig: simple_type_sig >> (sig))), char!(';')) >>
+    (ClassTypeSignature { package, name, suffix }))
+}
+
+fn packages(i: &str) -> IResult<&str, Vec<Cow<'static, str>>> {
+    let (i, o) = many0!(i, take_until!("/"))?;
+    Ok((i, o.into_iter().map(ToOwned::to_owned).map(Into::into).collect()))
+}
+
+fn type_arg(i: &str) -> IResult<&str, TypeArgument> {
+    let (i, o) = one_of!(i, "-+*")?;
+    Ok(match o {
+        '*' => { (i, TypeArgument::Any) }
+        '-' => {
+            let (i, o) = ref_type_sig(i)?;
+            (i, TypeArgument::Super(o))
+        }
+        '+' => {
+            let (i, o) = ref_type_sig(i)?;
+            (i, TypeArgument::Extends(o))
+        }
+        _ => { unsafe { std::hint::unreachable_unchecked() } }
+    })
+}
+
+fn simple_type_sig(i: &str) -> IResult<&str, SimpleClassTypeSignature> {
+    fn type_var_start(c: char) -> bool { c == '<' }
+    do_parse!(i, name: take_till1!(type_var_start) >> type_arguments: opt!(do_parse!(char!('<') >> res: many0!(type_arg) >> char!('>') >> (res))) >> (SimpleClassTypeSignature { name: name.to_owned().into(), type_arguments: type_arguments.unwrap_or_default() }))
+}
+
+fn type_parameter(i: &str) -> IResult<&str, TypeParameter> {
+    do_parse!(i, ident: take_until1!(":") >> char!(':') >> class_bound: opt!(ref_type_sig) >> interface_bounds: many0!(do_parse!(char!(':') >> res: ref_type_sig >> (res))) >> (TypeParameter { name: ident.to_owned().into(), class_bound, interface_bounds }))
+}
+
+fn type_parameters(i: &str) -> IResult<&str, Vec<TypeParameter>> {
+    do_parse!(i, res: opt!(do_parse!(char!('<') >> res: many0!(type_parameter) >> char!('>') >> (res))) >> (res.unwrap_or_default()))
+}
+
+fn method_sig(i: &str) -> IResult<&str, MethodSignature> {
+    do_parse!(i, type_parameters: type_parameters >> char!('(') >> parameters: many0!(type_sig) >> char!(')') >> return_type: opt!(type_sig) >> throws: many0!(throws) >> (MethodSignature { type_parameters, parameters, return_type, throws }))
+}
+
+fn class_sig(i: &str) -> IResult<&str, ClassSignature> {
+    do_parse!(i, type_parameters: type_parameters >> super_class: class_type_sig >> interfaces: many0!(class_type_sig) >> (ClassSignature { type_parameters, super_class, interfaces }))
+}
+
+macro_rules! convert_result {
+    ($s: expr, $i:expr) => {
+        match complete!($s, $i) {
+            Ok((i, r)) => { if i.is_empty() { Ok(r) } else { unexpected_end() } }
+            Err(e) => { Err(Box::<dyn std::error::Error>::from(e.to_string()).into()) }
+        }
+    };
+}
+macro_rules! fromstr_impls {
+    ($($ty: ty, $fn: expr),*) => {
+        $(
+            impl FromStr for $ty {
+                type Err = crate::error::Error;
+
+                fn from_str(s: &str) -> Result<Self, Self::Err> {
+                    convert_result!(s, $fn)
+                }
+            }
+        )*
+    };
+}
+
+fromstr_impls!(
+    SimpleClassTypeSignature, simple_type_sig,
+    RefTypeSignature, ref_type_sig,
+    ClassTypeSignature, class_type_sig,
+    TypeSignature, type_sig,
+    Throws, throws,
+    TypeParameter, type_parameter,
+    ClassSignature, class_sig,
+    MethodSignature, method_sig
+);
+
+impl FromStr for FieldSignature {
+    type Err = crate::error::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(FromStr::from_str(s)?))
+    }
+}
+
 impl Display for FieldSignature {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
     }
 }
+
 impl Display for TypeSignature {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TypeSignature::Byte => { f.write_char('B') }
             TypeSignature::Char => { f.write_char('C') }
@@ -82,19 +233,21 @@ impl Display for TypeSignature {
             TypeSignature::Int => { f.write_char('I') }
             TypeSignature::Long => { f.write_char('J') }
             TypeSignature::Boolean => { f.write_char('Z') }
+            TypeSignature::Short => { f.write_char('S') }
             TypeSignature::Ref(r) => { r.fmt(f) }
         }
     }
 }
+
 impl Display for TypeArgument {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TypeArgument::Extends(ref t) => {
                 f.write_str("+")?;
                 t.fmt(f)
             }
             TypeArgument::Super(ref t) => {
-                f.write_str("-")?; // TODO not sure, determine whether super is - or +.
+                f.write_str("-")?;
                 t.fmt(f)
             }
             TypeArgument::Any => {
@@ -103,8 +256,9 @@ impl Display for TypeArgument {
         }
     }
 }
+
 impl Display for SimpleClassTypeSignature {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.name.fmt(f)?;
         if !self.type_arguments.is_empty() {
             f.write_char('<')?;
@@ -116,8 +270,9 @@ impl Display for SimpleClassTypeSignature {
         Ok(())
     }
 }
+
 impl Display for ClassTypeSignature {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("L")?;
         for s in &self.package {
             s.fmt(f)?;
@@ -132,7 +287,7 @@ impl Display for ClassTypeSignature {
     }
 }
 impl Display for RefTypeSignature {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             RefTypeSignature::TypeVariable(name) => {
                 write!(f, "T{};", name)
@@ -147,8 +302,9 @@ impl Display for RefTypeSignature {
         }
     }
 }
+
 impl Display for Throws {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_char('^')?;
         match self {
             Throws::TypeParameter(p) => {
@@ -160,8 +316,9 @@ impl Display for Throws {
         }
     }
 }
+
 impl Display for TypeParameter {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.name.fmt(f)?;
         f.write_char(':')?;
         if let Some(ref sig) = self.class_bound {
@@ -174,8 +331,9 @@ impl Display for TypeParameter {
         Ok(())
     }
 }
+
 impl Display for MethodSignature {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if !self.type_parameters.is_empty() {
             f.write_char('<')?;
             for par in &self.type_parameters {
@@ -199,8 +357,9 @@ impl Display for MethodSignature {
         Ok(())
     }
 }
+
 impl Display for ClassSignature {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if !self.type_parameters.is_empty() {
             f.write_char('<')?;
             for par in &self.type_parameters {
