@@ -1,8 +1,8 @@
 use super::AnnotationValue;
-use super::super::{Type, Catch};
+use super::super::{Type};
 use std::collections::HashMap;
 use std::borrow::Cow;
-use crate::full::Label;
+use crate::full::{Label, Catch};
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

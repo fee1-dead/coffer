@@ -1,19 +1,19 @@
 /*
-    This file is part of Coffer.
-
-    Coffer is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Lesser General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    Coffer is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public License
-    along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
-*/
+ *     This file is part of Coffer.
+ *
+ *     Coffer is free software: you can redistribute it and/or modify
+ *     it under the terms of the GNU Lesser General Public License as published by
+ *     the Free Software Foundation, either version 3 of the License, or
+ *     (at your option) any later version.
+ *
+ *     Coffer is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *     GNU General Public License for more details.
+ *
+ *     You should have received a copy of the GNU Lesser General Public License
+ *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
+ */
 #![feature(seek_convenience)]
 #![feature(arbitrary_enum_discriminant)]
 
@@ -39,8 +39,10 @@ pub(crate) mod byteswapper;
 
 use std::io::{Read, Write};
 pub use crate::error::Result;
-use crate::full::{Type, BootstrapMethod, Constant};
+pub use crate::error::Error;
+use crate::full::{Type, BootstrapMethod, Constant, Label, Catch};
 use std::borrow::Cow;
+use crate::full::cp::RawConstantEntry;
 
 /// The generic read and write trait. This indicates a structure can be read without additional contextual information.
 ///
@@ -53,26 +55,148 @@ pub trait ReadWrite where Self: Sized {
 
 /// A trait for writing constant pool entries.
 pub trait ConstantPoolWriter {
+    fn insert_raw(&mut self, value: RawConstantEntry) -> u16;
     fn insert_constant(&mut self, value: &Constant) -> u16;
     /// InvokeDynamic and Dynamic is distinguished by the [Type](crate::Type) enum.
     fn insert_dynamic(&mut self, bsm: &BootstrapMethod, name: &str, ty: Type) -> u16;
-    /// insert an indirect string such as String / Module / Package entry.
-    fn insert_indirect_str(&mut self, tag: u8, st: &str) -> u16;
-    fn insert_utf8(&mut self, st: &str) -> u16;
-    fn insert_nameandtype(&mut self, name: &str, descriptor: &str) -> u16 {
+    /// insert an indirect string such as String / Module / Package entry, used by the procedural macro.
+    fn insert_indirect_str<T: Into<Cow<'static, str>>>(&mut self, tag: u8, st: T) -> u16 {
+        let str_ref = self.insert_utf8(st);
+        self.insert_raw(match tag {
+            7 => RawConstantEntry::Class(str_ref),
+            8 => RawConstantEntry::String(str_ref),
+            19 => RawConstantEntry::Module(str_ref),
+            20 => RawConstantEntry::Package(str_ref),
+            _ => {
+                #[cfg(debug_assertions)]
+                panic!("invalid tag for indirect string: {}", tag);
+
+                #[cfg(not(debug_assertions))]
+                unsafe { std::hint::unreachable_unchecked() }
+            }
+        })
+    }
+    fn insert_utf8<T: Into<Cow<'static, str>>>(&mut self, st: T) -> u16 {
+        self.insert_raw(RawConstantEntry::UTF8(st.into()))
+    }
+    fn insert_nameandtype<N: Into<Cow<'static, str>>, D: Into<Cow<'static, str>>>(&mut self, name: N, descriptor: D) -> u16 {
         let a = self.insert_utf8(name);
         let b = self.insert_utf8(descriptor);
-        self.nameandtype(a, b)
+        self.insert_raw(RawConstantEntry::NameAndType(a, b))
     }
-    fn nameandtype(&mut self, name: u16, descriptor: u16) -> u16;
+    fn insert_int(&mut self, i: i32) -> u16 {
+        self.insert_raw(RawConstantEntry::Int(i))
+    }
+    fn insert_long(&mut self, l: i64) -> u16 {
+        self.insert_raw(RawConstantEntry::Long(l))
+    }
+    fn insert_float(&mut self, f: f32) -> u16 {
+        self.insert_raw(RawConstantEntry::Float(f))
+    }
+    fn insert_double(&mut self, d: f64) -> u16 {
+        self.insert_raw(RawConstantEntry::Double(d))
+    }
+
+    /// map a label to the actual offset in the code array.
+    /// this is not implemented by default, and it will be defined in a wrapper type in implementation of ConstantPoolReadWrite for `Code`.
+    #[inline]
+    fn label(&mut self, _lbl: Label) -> u16 {
+        #[cfg(debug_assertions)]
+            unimplemented!();
+        #[cfg(not(debug_assertions))]
+        unsafe {
+            core::hint::unreachable_unchecked();
+        }
+    }
+
+    /// Get the index of the catch.
+    #[inline]
+    fn catch(&mut self, _catch: &Catch) -> Option<u16> {
+        #[cfg(debug_assertions)]
+        unimplemented!();
+        #[cfg(not(debug_assertions))]
+            unsafe {
+            core::hint::unreachable_unchecked();
+        }
+    }
 }
 
-/// A trait for reading constant pool entries from ind
+/// A trait for reading constant pool entries.
 pub trait ConstantPoolReader {
+
     fn read_raw(&mut self, idx: u16) -> Option<crate::full::cp::RawConstantEntry>;
-    fn read_nameandtype(&mut self, idx: u16) -> Option<(Cow<str>, Cow<str>)>;
+    fn read_nameandtype(&mut self, idx: u16) -> Option<(Cow<'static, str>, Type)> {
+        match self.read_raw(idx) {
+            Some(RawConstantEntry::NameAndType(n, t)) => self.read_utf8(n).and_then(|n| self.read_utf8(t).as_deref().map(str::parse).and_then(Result::ok).map(|t| (n, t))),
+            _ => None
+        }
+    }
     fn read_constant(&mut self, idx: u16) -> Option<Constant>;
-    fn read_utf8(&mut self, idx: u16) -> Option<Cow<str>>;
+    fn read_int(&mut self, idx: u16) -> Option<i32> {
+        match self.read_raw(idx) {
+            Some(RawConstantEntry::Int(i)) => Some(i),
+            _ => None
+        }
+    }
+    fn read_long(&mut self, idx: u16) -> Option<i64> {
+        match self.read_raw(idx) {
+            Some(RawConstantEntry::Long(l)) => Some(l),
+            _ => None
+        }
+    }
+    fn read_float(&mut self, idx: u16) -> Option<f32> {
+        match self.read_raw(idx) {
+            Some(RawConstantEntry::Float(f)) => Some(f),
+            _ => None
+        }
+    }
+    fn read_double(&mut self, idx: u16) -> Option<f64> {
+        match self.read_raw(idx) {
+            Some(RawConstantEntry::Double(d)) => Some(d),
+            _ => None
+        }
+    }
+
+    fn read_indirect_str(&mut self, tag: u8, idx: u16) -> Option<Cow<'static, str>> {
+        self.read_raw(idx).map(|c| match c {
+            RawConstantEntry::Module(u) if tag == 19 => self.read_utf8(u),
+            RawConstantEntry::Package(u) if tag == 20 => self.read_utf8(u),
+            RawConstantEntry::String(u) if tag == 8 => self.read_utf8(u),
+            RawConstantEntry::Class(u) if tag == 7 => self.read_utf8(u),
+            _ => None
+        }).flatten().map(Into::into)
+    }
+    fn read_utf8(&mut self, idx: u16) -> Option<Cow<'static, str>> {
+        match self.read_raw(idx) {
+            Some(RawConstantEntry::UTF8(s)) => Some(s),
+            _ => None
+        }
+    }
+
+    // Implementations from Code
+
+    /// get a uniquely identified label from an actual offset of the code array.
+    /// The label is lazily inserted into the Code vector.
+    #[inline]
+    fn get_label(&mut self, _idx: u16) -> Label {
+        #[cfg(debug_assertions)]
+        unimplemented!();
+        #[cfg(not(debug_assertions))]
+        unsafe {
+            core::hint::unreachable_unchecked();
+        }
+    }
+
+    /// Get a catch based on the element index. This is implemented using a wrapper when reading the `Code` struct.
+    #[inline]
+    fn get_catch(&mut self, _idx: u16) -> Option<Catch> {
+        #[cfg(debug_assertions)]
+        unimplemented!();
+        #[cfg(not(debug_assertions))]
+            unsafe {
+            core::hint::unreachable_unchecked();
+        }
+    }
 }
 
 /// The read and write trait where the structure must be read with constant pool information, and will insert constant entries into the the constant pool when writing.
@@ -101,6 +225,44 @@ macro_rules! impl_readwrite_nums {
         )*
     };
 }
+
+#[macro_export]
+/// helpful macro to return an error if the constant entry is not found or occupied by a double-sized entry.
+macro_rules! try_cp_read {
+    ($cp: ident, $reader: ident, $fn: ident) => ({
+        let idx = $crate::ReadWrite::read_from($reader)?;
+        $crate::try_cp_read!(idx, $cp.$fn(idx))
+    });
+    ($idx: expr, $opt: expr) => ({
+        match $opt {
+            Some(s) => Ok(s),
+            None => Err($crate::error::Error::Invalid("Constant pool entry index", Into::into($idx.to_string())))
+        }
+    })
+}
+
+/// Helper macro to disambigurate two implementations for one type.
+#[macro_export]
+macro_rules! read_from {
+    ($writer: expr) => {
+        $crate::ReadWrite::read_from($writer)
+    };
+    ($cp: expr, $writer: expr) => {
+        $crate::ConstantPoolReadWrite::read_from($cp, $writer)
+    };
+}
+
+/// Helper macro to disambigurate two implementations for one type.
+#[macro_export]
+macro_rules! write_to {
+    ($self: expr, $writer:expr) => {
+        $crate::ReadWrite::write_to($self, $writer)
+    };
+    ($self: expr, $cp: expr, $writer: expr) => {
+        $crate::ConstantPoolReadWrite::write_to($self, $cp, $writer)
+    };
+}
+
 impl_readwrite_nums! { u8, 1  i8, 1  u16, 2  i16, 2  u32, 4  i32, 4  f32, 4  u64, 8  i64, 8  f64, 8  u128, 16  i128, 16 }
 
 impl ReadWrite for String {
@@ -118,3 +280,33 @@ impl ReadWrite for String {
         Ok(())
     }
 }
+
+impl<'a> ReadWrite for Cow<'a, str> {
+    fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
+        Ok(Cow::Owned(read_from!(reader)?))
+    }
+
+    fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
+        self.as_ref().to_owned().write_to(writer)?;
+        Ok(())
+    }
+}
+
+macro_rules! cprw_impls {
+    ($(($ty: ty, $read: ident, $insert: ident)),*) => {
+        $(
+            impl ConstantPoolReadWrite for $ty {
+                fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self> {
+                    try_cp_read!(cp, reader, $read)
+                }
+
+                fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()> {
+                    cp.$insert(*self).write_to(writer)
+                }
+            }
+        )*
+    };
+}
+
+cprw_impls!((i32, read_int, insert_int), (i64, read_long, insert_long), (f32, read_float, insert_float), (f64, read_double, insert_double));
+

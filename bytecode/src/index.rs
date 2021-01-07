@@ -1,19 +1,19 @@
 /*
-    This file is part of Coffer.
-
-    Coffer is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Lesser General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    Coffer is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public License
-    along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
-*/
+ *     This file is part of Coffer.
+ *
+ *     Coffer is free software: you can redistribute it and/or modify
+ *     it under the terms of the GNU Lesser General Public License as published by
+ *     the Free Software Foundation, either version 3 of the License, or
+ *     (at your option) any later version.
+ *
+ *     Coffer is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *     GNU General Public License for more details.
+ *
+ *     You should have received a copy of the GNU Lesser General Public License
+ *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
+ */
 use crate::jcoder::JDecoder;
 use std::io::{Read, Seek, SeekFrom};
 use crate::error::{Error, Result};
@@ -86,7 +86,7 @@ impl JClassIdx {
                 7 | 8 | 16 | 19 | 20 => 2,
                 15 => 3,
                 3 | 4 | 9 | 10 | 11 | 12 | 17 | 18 => 4,
-                _ => return Err(Error::Invalid("constant entry tag", format!("{} at index {}", tag, i)))
+                _ => return Err(Error::Invalid("constant entry tag", format!("{} at index {}", tag, i).into()))
             };
             value.seek(SeekFrom::Current(jump))?;
             constant_pool.push(value.stream_position()?);

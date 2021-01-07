@@ -402,7 +402,7 @@ pub trait InstructionRead: Read + Sized {
                 TableSwitch(default, low, high, vec)
             }
             _ => {
-                return Err(Error::Invalid("opcode", op.to_string()));
+                return Err(Error::Invalid("opcode", op.to_string().into()));
             }
         })
     }

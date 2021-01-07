@@ -74,6 +74,7 @@ pub(super) fn unexpected_end<T>() -> crate::Result<T> {
 }
 
 use nom::{take, one_of, IResult, take_until1, many0, char, complete, peek, alt, take_until, take_till1, do_parse, terminated, switch, opt};
+use crate::ConstantPoolReadWrite;
 
 fn type_sig(i: &str) -> IResult<&str, TypeSignature> {
     let (i, c) = alt!(i, one_of!("BCDFIJSZ") | peek!(one_of!("[TL")))?;
@@ -184,6 +185,7 @@ macro_rules! convert_result {
         }
     };
 }
+
 macro_rules! fromstr_impls {
     ($($ty: ty, $fn: expr),*) => {
         $(
@@ -192,6 +194,22 @@ macro_rules! fromstr_impls {
 
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
                     convert_result!(s, $fn)
+                }
+            }
+        )*
+    };
+}
+
+macro_rules! cprw_impls {
+    ($($ty: ty), *) => {
+        $(
+            impl ConstantPoolReadWrite for $ty {
+                fn read_from<C: crate::ConstantPoolReader, R: std::io::Read>(cp: &mut C, reader: &mut R) -> crate::Result<Self> {
+                    FromStr::from_str(Cow::<'static, str>::read_from(cp, reader)?.as_ref())
+                }
+
+                fn write_to<C: crate::ConstantPoolWriter, W: std::io::Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<()> {
+                    Cow::<'static, str>::write_to(&self.to_string().into(), cp, writer)
                 }
             }
         )*
@@ -216,6 +234,8 @@ impl FromStr for FieldSignature {
         Ok(Self(FromStr::from_str(s)?))
     }
 }
+
+cprw_impls!(SimpleClassTypeSignature, RefTypeSignature, ClassTypeSignature, TypeSignature, Throws, TypeParameter, ClassSignature, MethodSignature);
 
 impl Display for FieldSignature {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

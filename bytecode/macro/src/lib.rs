@@ -5,7 +5,7 @@ use syn::export::TokenStream2;
 use proc_macro2::{Ident, Span, Group};
 use quote::{quote, quote_spanned, ToTokens};
 
-#[proc_macro_derive(ConstantPoolReadWrite, attributes(tag_type, tag, attr_enum, raw_variant, attr_normal_size, use_normal_rw, indirect_str))]
+#[proc_macro_derive(ConstantPoolReadWrite, attributes(tag_type, tag, attr_enum, raw_variant, attr_normal_size, use_normal_rw, str_type, str_optional, vec_len_type))]
 pub fn derive_cp_readwrite(item: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(item as DeriveInput);
     let is_enum = input.attrs.iter().any(|a| a.path.to_token_stream().to_string() == "attr_enum");
@@ -113,7 +113,7 @@ fn attr_enum(input: DeriveInput) -> Result<TokenStream2> {
             impl #generics crate::ConstantPollReadWrite for #ident #generics #where_c {
                 fn read_from<C: crate::ConstantPoolReader, R: std::io::Read>(cp: &mut C, reader: &mut R) -> crate::Result<Self> {
                     let idx = u16::read_from(reader)?;
-                    let attribute_name = cp.read_utf8(idx).ok_or_else(|| crate::error::Error::Invalid("attribute index", idx.to_string()))?;
+                    let attribute_name = cp.read_utf8(idx).ok_or_else(|| crate::error::Error::Invalid("attribute index", Into::into(idx.to_string())))?;
                     match attribute_name.as_ref() {
                         #(
                                     #attr_names => {
@@ -225,7 +225,7 @@ fn add_one(litint: LitInt) -> LitInt {
         LitInt::new(&str, litint.span())
     }
 }
-fn gen_read_and_write<T: ToTokens>(f: &Field, reciever: &T, trait_type: TokenStream2, additional_fields_r: TokenStream2, additional_fields_w: TokenStream2) -> Result<(TokenStream2, TokenStream2)> {
+fn gen_read_and_write<T: ToTokens>(f: &Field, reciever: &T, mut trait_type: TokenStream2, mut additional_fields_r: TokenStream2, mut additional_fields_w: TokenStream2) -> Result<(TokenStream2, TokenStream2)> {
     #[inline]
     fn rw_fncalls<T: ToTokens + Spanned>(ty: &T, traitty: TokenStream2) -> (TokenStream2, TokenStream2) {
         let sp = ty.span();
@@ -233,8 +233,30 @@ fn gen_read_and_write<T: ToTokens>(f: &Field, reciever: &T, trait_type: TokenStr
     }
     let span = f.span();
     let ty = &f.ty;
-    let use_normal_rw = f.attrs.iter().any(|a| a.path.to_token_stream().to_string() == "use_normal_rw");
-    let use_trait: TokenStream2 = if use_normal_rw { quote! { crate::ReadWrite } } else { trait_type };
+    let mut use_normal_rw = false;
+    let mut str_type = None;
+    let mut str_optional = false;
+    for a in &f.attrs {
+        let st = a.path.to_token_stream().to_string();
+        match st.as_str() {
+            "use_normal_rw" => {
+                use_normal_rw = true;
+            }
+            "str_type" => {
+                str_type = Some(parse2::<Group>(a.tokens.clone())?.stream().to_string());
+            }
+            "str_optional" => {
+                str_optional = true;
+            }
+            _ => {}
+        }
+    }
+    if use_normal_rw {
+        trait_type = quote! { crate::ReadWrite };
+        additional_fields_r = quote! { reader };
+        additional_fields_w = quote! { writer };
+    }
+
     if let Type::Path(p) = ty {
         let segment_last = p.path.segments.last().unwrap();
         if segment_last.ident == "Vec" {
@@ -247,11 +269,11 @@ fn gen_read_and_write<T: ToTokens>(f: &Field, reciever: &T, trait_type: TokenStr
                         .and_then(|attr| parse2::<Group>(attr.tokens.to_owned()))
                         .and_then(|g| parse2::<Ident>(g.stream()))?;
                     let (read_vec_len_fn, write_vec_len_fn) = rw_fncalls(&vec_len_ty, quote! { crate::ReadWrite });
-                    let (read_fn, write_fn) = rw_fncalls(ty, use_trait);
+                    let (read_fn, write_fn) = rw_fncalls(ty, trait_type);
                     return Ok((quote! {
                         {
                             let len = #read_vec_len_fn(reader)?;
-                            let vec = Vec::with_capacity(len as usize);
+                            let mut vec = Vec::with_capacity(len as usize);
                             for _ in 0..len {
                                 vec.push(#read_fn(#additional_fields_r)?);
                             }
@@ -267,8 +289,60 @@ fn gen_read_and_write<T: ToTokens>(f: &Field, reciever: &T, trait_type: TokenStr
             }
         }
     }
-    let (read_fn, write_fn) = rw_fncalls(ty, use_trait);
-    Ok((quote! { #read_fn(#additional_fields_r)? }, quote! { #write_fn(#reciever, #additional_fields_w)?; }))
+    let (read_fn, write_fn) = rw_fncalls(ty, trait_type);
+    if str_optional && str_type.is_none() {
+        Ok((quote! {{
+            let idx = u16::read_from(reader)?;
+            if idx == 0 {
+                None
+            } else {
+                Some(cp.read_utf8(idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", Into::into(idx.to_string())))?)
+            }
+        }},quote! {
+            if let Some(s) = #reciever {
+                cp.insert_utf8(s.clone()).write_to(writer)?;
+            } else {
+                0u16.write_to(writer)?;
+            }
+        }))
+    } else if let Some(s) = str_type {
+        let tag: u8 = match s.as_str() {
+            "String" => 8,
+            "Class" => 7,
+            "Module" => 19,
+            "Package" => 20,
+            _ => {
+                return Err(Error::new(f.span(), "Invalid String type"))
+            }
+        };
+
+        Ok(if str_optional {
+            (quote! {{
+            let idx = u16::read_from(reader)?;
+                if idx == 0 {
+                    None
+                } else {
+                    Some(cp.read_indirect_str(#tag, idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", Into::into(idx.to_string())))?)
+                }
+            }},
+            quote! {
+                if let Some(s) = #reciever {
+                    cp.insert_indirect_str(#tag, s.clone()).write_to(writer)?;
+                } else {
+                    0u16.write_to(writer)?;
+                }
+            })
+        } else {
+            (quote! { {
+                let idx = u16::read_from(reader)?;
+                cp.read_indirect_str(#tag, idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", Into::into(idx.to_string())))?
+            } },
+            quote! { cp.insert_indirect_str(#tag, #reciever.clone()).write_to(writer)?; })
+        })
+    } else {
+        Ok((quote! { #read_fn(#additional_fields_r)? }, quote! { #write_fn(#reciever, #additional_fields_w)?; }))
+    }
+
 }
 fn derive_readwrite_inner(mut input: DeriveInput, trait_ty: TokenStream2, fields_r: TokenStream2, fields_w: TokenStream2, rsig: TokenStream2, wsig: TokenStream2) -> Result<TokenStream2> {
     let (generics, where_c) = generics(&input);
@@ -280,7 +354,7 @@ fn derive_readwrite_inner(mut input: DeriveInput, trait_ty: TokenStream2, fields
             let (r, w): (Vec<_>, Vec<_>) = s.fields
                 .iter().enumerate()
                 .map(|(i, f)| {
-                    let ident = f.ident.as_ref().map(ToTokens::to_token_stream).unwrap_or_else(|| i.to_token_stream());
+                    let ident = f.ident.as_ref().map(ToTokens::to_token_stream).unwrap_or_else(|| syn::Index::from(i).to_token_stream());
                     gen_read_and_write(f, &quote! { (&self.#ident) }, trait_ty.clone(), fields_r.clone(), fields_w.clone())
                 })
                 .collect::<Result<Vec<_>>>()?
@@ -302,10 +376,10 @@ fn derive_readwrite_inner(mut input: DeriveInput, trait_ty: TokenStream2, fields
 
             Ok(quote! {
                 impl #generics #trait_ty for #name #generics #where_c {
-                        fn read_from<Reader: std::io::Read>(reader: &mut Reader) -> crate::error::Result<Self> {
+                        fn read_from#rsig -> crate::error::Result<Self> {
                             Ok(#construct)
                         }
-                        fn write_to<Writer: std::io::Write>(&self, writer: &mut Writer) -> crate::error::Result<()> {
+                        fn write_to#wsig -> crate::error::Result<()> {
                             #( #w )*
                             Ok(())
                         }
@@ -387,7 +461,7 @@ fn derive_readwrite_inner(mut input: DeriveInput, trait_ty: TokenStream2, fields
                                     }
                                 )*
                                 _ => {
-                                    Err(crate::error::Error::Invalid("tag", tag.to_string()))
+                                    Err(crate::error::Error::Invalid("tag", Into::into(tag.to_string())))
                                 }
                             }
                         }

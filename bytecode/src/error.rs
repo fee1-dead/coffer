@@ -15,19 +15,27 @@
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
 use thiserror::Error;
+use std::borrow::Cow;
 
 #[derive(Debug, Error)]
 pub enum Error {
     #[error(transparent)]
     IO(#[from] std::io::Error),
+
     #[error("Invalid {0}: {1}")]
-    Invalid(&'static str, String),
+    Invalid(&'static str, Cow<'static, str>),
+
     #[error(transparent)]
     MUTF(#[from] crate::mod_utf8::MUTFError),
+
     #[error("Attribute length mismatch: actual length ({0} bytes) is greater than length consumed ({1} bytes)")]
     AttributeLength(u32, u32),
+
     #[error("Conversion overflows")]
     ArithmeticOverflow,
+
+    #[error(transparent)]
+    Custom(#[from] Box<dyn std::error::Error>)
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T, E = Error> = std::result::Result<T, E>;

@@ -24,7 +24,6 @@ pub mod cp;
 pub use signature::*;
 use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
-use std::ops::Range;
 use crate::access::AccessFlags;
 
 use std::fmt::Display;
@@ -32,19 +31,151 @@ use std::fmt::Formatter;
 use annotation::Annotation;
 use crate::full::annotation::{FieldTypeAnnotation, MethodTypeAnnotation, CodeTypeAnnotation, AnnotationValue};
 use crate::full::version::JavaVersion;
-use crate::{ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite};
+use crate::{ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite, Result, Error, read_from, try_cp_read};
 use std::str::FromStr;
 use std::io::{Read, Write};
+use crate::full::cp::RawConstantEntry;
 
 #[derive(Debug, Eq, PartialOrd, PartialEq, Ord, Hash, Copy, Clone)]
 pub struct Label(u32);
 
+impl ConstantPoolReadWrite for Label {
+    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self> {
+        Ok(cp.get_label(ReadWrite::read_from(reader)?))
+    }
+    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()> {
+        ReadWrite::write_to(&cp.label(*self), writer)
+    }
+}
+
 #[derive(Clone, PartialEq, Hash, Debug)]
 pub struct MethodHandle {
-    kind: MethodHandleKind,
-    owner: Cow<'static, str>,
-    name: Cow<'static, str>,
-    descriptor: Type
+    pub kind: MethodHandleKind,
+    pub owner: Cow<'static, str>,
+    pub name: Cow<'static, str>,
+    pub descriptor: Type,
+    pub interface: bool
+}
+
+impl MethodHandle {
+    pub fn check(&self) -> Result<()> {
+        macro_rules! should_not_be_method {
+            ($($kind: path),*) => {
+                match self {
+                    $(
+                        MethodHandle {
+                            kind: $kind,
+                            descriptor: Type::Method(..),
+                            ..
+                        } => return Err(Error::Invalid("MethodHandle", concat!("kind is ", stringify!($kind), "but descriptor is method").into())),
+                    )*
+                    _ => {}
+                }
+            };
+        }
+        macro_rules! should_be_method {
+            ($($kind:path),*) => {
+                match self {
+                    $(
+                        MethodHandle {
+                            kind: $kind,
+                            descriptor: Type::Method(..),
+                            ..
+                        } => {},
+                        MethodHandle {
+                            kind: $kind,
+                            ..
+                        } => return Err(Error::Invalid("MethodHandle", concat!("kind is ", stringify!($kind), "but descriptor is NOT method").into())),
+                    )*
+                    _ => {}
+                }
+            };
+        }
+        should_not_be_method! { MethodHandleKind::GetField, MethodHandleKind::GetStatic, MethodHandleKind::PutField, MethodHandleKind::PutStatic }
+        should_be_method! { MethodHandleKind::InvokeInterface, MethodHandleKind::InvokeSpecial, MethodHandleKind::InvokeStatic, MethodHandleKind::InvokeVirtual, MethodHandleKind::NewInvokeSpecial }
+        Ok(())
+    }
+}
+impl ConstantPoolReadWrite for MethodHandle {
+    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self, Error> {
+        let kind = read_from!(reader)?;
+        let entry = try_cp_read!(cp, reader, read_raw)?;
+        match entry {
+            RawConstantEntry::Field(owner, nameandtype) | RawConstantEntry::Method(owner, nameandtype)=> {
+                let owner = try_cp_read!(owner, cp.read_indirect_str(7, owner))?;
+                let (name, descriptor) = try_cp_read!(nameandtype, cp.read_nameandtype(nameandtype))?;
+                let res = Self {
+                    kind, owner, name, descriptor, interface: false
+                };
+                res.check()?;
+                Ok(res)
+            }
+            RawConstantEntry::InterfaceMethod(owner, nameandtype) => {
+                let owner = try_cp_read!(owner, cp.read_indirect_str(7, owner))?;
+                let (name, descriptor) = try_cp_read!(nameandtype, cp.read_nameandtype(nameandtype))?;
+                let res = Self {
+                    kind, owner, name, descriptor, interface: true
+                };
+                res.check()?;
+                Ok(res)
+            }
+            _ => return Err(Error::Invalid("constant pool entry in method handle", format!("{:?}", entry).into()))
+        }
+    }
+
+    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<(), Error> {
+        fn not_init(handle: &MethodHandle) -> Result<()> {
+            match handle.name.as_ref() {
+                "<init>" => Err(Error::Invalid("MethodHandle", Cow::Borrowed("name must not be <init>"))),
+                "<clinit>" => Err(Error::Invalid("MethodHandle", Cow::Borrowed("name must not be <clinit>"))),
+                _ => Ok(())
+            }
+        }
+        self.kind.write_to(writer)?;
+        match self.kind {
+            MethodHandleKind::GetField  |
+            MethodHandleKind::GetStatic |
+            MethodHandleKind::PutField |
+            MethodHandleKind::PutStatic => {
+                let owner = cp.insert_indirect_str(7, self.owner.clone());
+                let name = cp.insert_nameandtype(self.name.clone(), self.descriptor.to_string());
+                cp.insert_raw(RawConstantEntry::Field(owner, name)).write_to(writer)?;
+            }
+            MethodHandleKind::InvokeVirtual => {
+                not_init(self)?;
+                let owner = cp.insert_indirect_str(7, self.owner.clone());
+                let name = cp.insert_nameandtype(self.name.clone(), self.descriptor.to_string());
+                cp.insert_raw(RawConstantEntry::Method(owner, name)).write_to(writer)?;
+            }
+            MethodHandleKind::InvokeStatic |
+            MethodHandleKind::InvokeSpecial => {
+                not_init(self)?;
+                let owner = cp.insert_indirect_str(7, self.owner.clone());
+                let name = cp.insert_nameandtype(self.name.clone(), self.descriptor.to_string());
+
+                cp.insert_raw(if self.interface {
+                    RawConstantEntry::InterfaceMethod(owner, name)
+                } else {
+                    RawConstantEntry::Method(owner, name)
+                }).write_to(writer)?;
+            }
+            MethodHandleKind::NewInvokeSpecial => {
+                if self.name != "<init>" {
+                    return Err(Error::Invalid("MethodHandle", Cow::Borrowed("name for NewInvokeSpecial must be <init>")))
+                }
+                let owner = cp.insert_indirect_str(7, self.owner.clone());
+                let name = cp.insert_nameandtype(self.name.clone(), self.descriptor.to_string());
+                cp.insert_raw(RawConstantEntry::Method(owner, name)).write_to(writer)?;
+            }
+            MethodHandleKind::InvokeInterface => {
+                not_init(self)?;
+                let owner = cp.insert_indirect_str(7, self.owner.clone());
+                let name = cp.insert_nameandtype(self.name.clone(), self.descriptor.to_string());
+                cp.insert_raw(RawConstantEntry::InterfaceMethod(owner, name)).write_to(writer)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -72,12 +203,12 @@ pub enum Constant {
 }
 
 impl ConstantPoolReadWrite for Constant {
-    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> crate::Result<Self> {
+    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self> {
         let idx = ReadWrite::read_from(reader)?;
-        cp.read_constant(idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", idx.to_string()))
+        cp.read_constant(idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", idx.to_string().into()))
     }
 
-    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<()> {
+    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()> {
         ReadWrite::write_to(&cp.insert_constant(self), writer)
     }
 }
@@ -237,7 +368,7 @@ pub enum MonitorOperation {
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash)]
 pub enum Type {
-    Byte, Char, Double, Float, Int, Long, Boolean, Ref(Cow<'static, str>), ArrayRef(u8, Box<Type>),
+    Byte, Char, Double, Float, Int, Long, Boolean, Short, Ref(Cow<'static, str>), ArrayRef(u8, Box<Type>),
     /// The Method type. First is the parameter list and second is the return type. If the return type is `None`, it represents a `void` return type.
     ///
     /// It is invalid if any of the parameter types and the return type is a method type.
@@ -248,10 +379,6 @@ impl FromStr for Type {
     type Err = crate::error::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        #[inline]
-        fn unexpected_end() -> crate::error::Error {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, "Unexpected end of string when parsing descriptor").into()
-        }
         fn get_type(c: &mut std::str::Chars, st: &str) -> Result<Type, crate::error::Error> {
             let next_char = c.next();
             Ok(match next_char {
@@ -262,13 +389,14 @@ impl FromStr for Type {
                 Some('I') => Type::Int,
                 Some('J') => Type::Long,
                 Some('Z') => Type::Boolean,
+                Some('S') => Type::Short,
                 Some('L') => {
                     let mut st = String::new();
                     while c.as_str().chars().next().unwrap_or(')') != ')' {
                         st.push(c.next().unwrap())
                     }
                     if c.next().is_none() {
-                        return Err(unexpected_end())
+                        return unexpected_end()
                     } else {
                         Type::Ref(Cow::Owned(st))
                     }
@@ -288,7 +416,7 @@ impl FromStr for Type {
                         types.push(get_type(c, st)?)
                     }
                     if c.next().is_none() {
-                        return Err(unexpected_end())
+                        return unexpected_end()
                     } else {
                         Type::Method(types, if let Some('V') = c.as_str().chars().next() {
                             None
@@ -298,25 +426,33 @@ impl FromStr for Type {
                     }
                 }
                 Some(ch) => {
-                    return Err(crate::error::Error::Invalid("type character", ch.into()))
+                    return Err(crate::error::Error::Invalid("type character", ch.to_string().into()))
                 }
                 None => {
-                    return Err(unexpected_end())
+                    return unexpected_end()
                 }
             })
         }
         get_type(&mut s.chars(), s)
     }
 }
-
-impl ConstantPoolReadWrite for Type {
-    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> crate::Result<Self> {
+impl ConstantPoolReadWrite for Cow<'static, str> {
+    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self> {
         let idx = ReadWrite::read_from(reader)?;
-        cp.read_utf8(idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", idx.to_string()))?.parse()
+        cp.read_utf8(idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", idx.to_string().into())).map(Into::into)
     }
 
-    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<()> {
-        ReadWrite::write_to(&cp.insert_utf8(self.to_string().as_str()), writer)
+    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()> {
+        cp.insert_utf8(self.clone()).write_to(writer)
+    }
+}
+impl ConstantPoolReadWrite for Type {
+    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self> {
+        crate::try_cp_read!(cp, reader, read_utf8)?.parse()
+    }
+
+    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()> {
+        cp.insert_utf8(self.to_string()).write_to(writer)
     }
 }
 
@@ -331,6 +467,7 @@ impl Display for Type {
             Type::Int => { f.write_char('I') }
             Type::Long => { f.write_char('J') }
             Type::Boolean => { f.write_char('Z') }
+            Type::Short => { f.write_char('S') }
             Type::Ref(s) => { write!(f, "L{};", s) }
             Type::ArrayRef(dim, t) => {
                 "[".repeat(*dim as usize).fmt(f)?;
@@ -423,8 +560,7 @@ pub enum Instruction {
     Duplicate(StackValueType, Option<StackValueType>),
     /// Pop one or two values. Use `Pop(Two)` for double/long values.
     Pop(StackValueType),
-    /// Jump to an absolute position in the index of the owner
-    Jump(usize),
+    Jump(Label),
     CompareLongs,
     CompareFloats(FloatType, NaNBehavior),
     LocalVariable(LoadOrStore, LocalType, u16),
@@ -438,9 +574,6 @@ pub enum Instruction {
     Field(GetOrPut, MemberType),
     InvokeExact(Constant),
     LineNumber(u16),
-    Try,
-    /// None means catch everything
-    Catch(Option<Cow<'static, str>>),
     /// Not real in bytecode, used as a marker of location.
     Label(Label)
 }
@@ -449,12 +582,19 @@ pub enum Instruction {
 pub struct RawAttribute {
     /// Whether to keep this attribute upon writing.
     /// Attributes that are related to local variables will default to `false`, whereas newly created attributes will be `true`.
-    pub keep: bool,
+    keep: bool,
     pub name: Cow<'static, str>,
     pub inner: Cow<'static, [u8]>
 }
 
 impl RawAttribute {
+    pub fn new<S: Into<Cow<'static, str>>, B: Into<Cow<'static, [u8]>>>(name: S, inner: B) -> Self {
+        Self {
+            keep: true,
+            name: name.into(),
+            inner: inner.into()
+        }
+    }
     /// Used by the procedural macro.
     fn __new(name: Cow<'static, str>, inner: Vec<u8>) -> Self {
         Self {
@@ -463,15 +603,6 @@ impl RawAttribute {
             inner: Cow::Owned(inner)
         }
     }
-}
-
-/// All `usize` fields represent indexes into the vector of instructions.
-///
-/// The end is exclusive, as defined by the JVM specification as well as the `Range` struct.
-pub struct Exception {
-    pub range: Range<usize>,
-    pub handler: usize,
-    pub catch_type: Option<Cow<'static, str>>
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -491,12 +622,26 @@ pub enum CodeAttribute {
     Frames(Vec<Frame>)
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug, Hash)]
 pub struct Catch {
     pub start: Label,
     pub end: Label,
     pub handler: Label,
-    pub catch: Cow<'static, str>
+    pub catch: Option<Cow<'static, str>>
+}
+
+impl ConstantPoolReadWrite for Catch {
+    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self, Error> {
+        try_cp_read!(cp, reader, get_catch)
+    }
+
+    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<(), Error> {
+        match cp.catch(self) {
+            Some(off) => off.write_to(writer),
+            // Ignore here because the block was probably removed.
+            None => Ok(())
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -504,6 +649,8 @@ pub struct Code {
     pub max_stack: u16,
     pub max_locals: u16,
     pub code: Vec<Instruction>,
+    pub catches: Vec<Catch>,
+    pub attrs: Vec<CodeAttribute>
 }
 
 /// Completed
@@ -577,28 +724,115 @@ pub enum Frame {
     Full(u16, Vec<VerificationType>, Vec<VerificationType>)
 }
 
-#[derive(Eq, PartialEq, Debug, Clone)]
+#[derive(Eq, PartialEq, Debug, Clone, ConstantPoolReadWrite)]
 pub struct InnerClass {
+    #[str_type(Class)]
     pub inner_fqname: Cow<'static, str>,
-    pub outer_fqname: Cow<'static, str>,
+    #[str_optional]
+    #[str_type(Class)]
+    pub outer_fqname: Option<Cow<'static, str>>,
     /// None if the inner class is an anonymous class.
+    #[str_optional]
     pub inner_name: Option<Cow<'static, str>>,
+    #[use_normal_rw]
     pub inner_access: AccessFlags
 }
 
-#[derive(PartialEq, Debug, Clone)]
-pub struct Module {
-    pub name: Cow<'static, str>,
+#[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
+pub struct Require {
+    #[str_type(Module)]
+    pub module: Cow<'static, str>,
+    #[use_normal_rw]
     pub flags: AccessFlags,
+    #[str_optional]
+    pub version: Option<Cow<'static, str>>
+}
+
+#[repr(transparent)]
+#[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
+pub struct To(#[str_type(Module)] Cow<'static, str>);
+
+#[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
+pub struct Export {
+    #[str_type(Package)]
+    pub package: Cow<'static, str>,
+    #[use_normal_rw]
+    pub flags: AccessFlags,
+    /// not exported; use the function to get the strings.
+    #[vec_len_type(u16)]
+    pub to: Vec<To>
+}
+impl Export {
+    pub fn new<ToStr: Into<Cow<'static, str>>>(pkg: ToStr, flags: AccessFlags, to: Vec<Cow<'static, str>>) -> Self {
+        unsafe {
+            Self {
+                package: pkg.into(),
+                flags,
+                to: std::mem::transmute(to)
+            }
+        }
+    }
+    pub fn to(&self) -> &Vec<Cow<'static, str>> {
+        // SAFETY: `To` is equivalent to a Cow<'static, str>, so it is safe to cast the pointer.
+        unsafe { &*(&self.to as *const std::vec::Vec<To> as *const std::vec::Vec<std::borrow::Cow<str>>) }
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
+pub struct Open {
+    #[str_type(Package)]
+    pub package: Cow<'static, str>,
+    #[use_normal_rw]
+    pub flags: AccessFlags,
+    #[vec_len_type(u16)]
+    pub to: Vec<To>
+}
+impl Open {
+    pub fn new<ToStr: Into<Cow<'static, str>>>(pkg: ToStr, flags: AccessFlags, to: Vec<Cow<'static, str>>) -> Self {
+        unsafe {
+            Self {
+                package: pkg.into(),
+                flags,
+                to: std::mem::transmute(to)
+            }
+        }
+    }
+    pub fn to(&self) -> &Vec<Cow<'static, str>> {
+        // SAFETY: `To` is equivalent to a Cow<'static, str>, so it is safe to cast the pointer.
+        unsafe { &*(&self.to as *const std::vec::Vec<To> as *const std::vec::Vec<std::borrow::Cow<str>>) }
+    }
+}
+
+#[repr(transparent)]
+#[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
+pub struct Clazz(#[str_type(Class)] Cow<'static, str>);
+
+#[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
+pub struct Provide {
+    #[str_type(Class)]
+    pub class: Cow<'static, str>,
+    #[vec_len_type(u16)]
+    pub with: Vec<Clazz>
+}
+
+#[derive(Eq, PartialEq, Debug, Clone, ConstantPoolReadWrite)]
+pub struct Module {
+    #[str_type(Module)]
+    pub name: Cow<'static, str>,
+    #[use_normal_rw]
+    pub flags: AccessFlags,
+    #[str_optional]
     pub version: Option<Cow<'static, str>>,
-    /// module name, requires flags, module version
-    pub requires: Vec<(Cow<'static, str>, AccessFlags, Option<Cow<'static, str>>)>,
-    /// package name, exports flags, export to modules (empty = export to all)
-    pub exports: Vec<(Cow<'static, str>, AccessFlags, Vec<Cow<'static, str>>)>,
-    pub opens: Vec<(Cow<'static, str>, AccessFlags, Vec<Cow<'static, str>>)>,
-    pub uses: Vec<Cow<'static, str>>,
-    /// service interface fqname, service impls fqnames
-    pub provides: Vec<(Cow<'static, str>, Vec<Cow<'static, str>>)>
+    #[vec_len_type(u16)]
+    pub requires: Vec<Require>,
+    #[vec_len_type(u16)]
+    pub exports: Vec<Export>,
+    #[vec_len_type(u16)]
+    pub opens: Vec<Open>,
+    #[vec_len_type(u16)]
+    pub uses: Vec<Clazz>,
+    #[vec_len_type(u16)]
+    pub provides: Vec<Provide>
 }
 
 #[derive(PartialEq, Debug, Clone)]
