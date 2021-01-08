@@ -72,6 +72,12 @@ pub enum TypeAnnotationTarget {
     TypeArgument(u16, u8)
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, ReadWrite)]
+#[tag_type(u8)]
+pub enum TypePath {
+    Array(u8), Nested(u8), TypeBound(u8), TypeArgument(u8)
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassTypeAnnotation {
     pub target: ClassTypeAnnotationTarget,
@@ -88,12 +94,15 @@ pub struct MethodTypeAnnotation {
     pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ConstantPoolReadWrite)]
 pub struct FieldTypeAnnotation {
-    pub type_path: Vec<(u8, u8)>,
+    #[vec_len_type(u8)]
+    #[use_normal_rw]
+    pub type_path: Vec<TypePath>,
     pub annotation_type: Type,
     pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
 }
+
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CodeTypeAnnotation {

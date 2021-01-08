@@ -19,7 +19,7 @@ pub fn derive_cp_readwrite(item: TokenStream) -> TokenStream {
             quote! { crate::ConstantPoolReadWrite },
             quote! { cp,reader },
             quote! { cp,writer },
-            quote! { <C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) },
+            quote! { <C: crate::ConstantPoolReader, R: std::io::Read>(cp: &mut C, reader: &mut R) },
             quote! { <C: crate::ConstantPoolWriter, W: std::io::Write>(&self, cp: &mut C, writer: &mut W) })
     }.unwrap_or_else(Error::into_compile_error).into()
 }
@@ -35,10 +35,11 @@ fn attr_enum(input: DeriveInput) -> Result<TokenStream2> {
     let ident = input.ident;
 
     if let Data::Enum(e) = input.data {
-        let raw_variant = e.variants
+        let raw_variant = &e.variants
             .iter()
             .find(|v| v.attrs.iter().any(|a| a.path.to_token_stream().to_string() == "raw_variant"))
-            .ok_or_else(|| Error::new(e.variants.span(), "Expected raw variant annotated with #[raw_variant]"))?;
+            .ok_or_else(|| Error::new(e.variants.span(), "Expected raw variant annotated with #[raw_variant]"))?
+            .ident;
         let new_variants = e.variants.iter().filter(|v| !v.attrs.iter().any(|a| a.path.to_token_stream().to_string() == "raw_variant")).collect::<Vec<_>>();
         let attr_names = new_variants.iter().map(|v| v.ident.to_string()).map(|s| quote! { #s }).collect::<Vec<_>>();
         let variant_fields_idents = new_variants.iter().map(|v| &v.fields).map(generate_idents_for_fields).collect::<Vec<_>>();
@@ -89,7 +90,8 @@ fn attr_enum(input: DeriveInput) -> Result<TokenStream2> {
             };
             let write = quote! {
                 #def
-                let inner_writer = std::io::Cursor::new(&mut vec);
+                let mut __inner_writer = std::io::Cursor::new(&mut vec);
+                let mut inner_writer = &mut __inner_writer;
                 #(#tk)*
                 u32::write_to(&(vec.len() as u32), writer)?;
                 writer.write_all(&vec)?;
@@ -102,15 +104,16 @@ fn attr_enum(input: DeriveInput) -> Result<TokenStream2> {
                 let len = u32::read_from(reader)?;
                 let mut vec = Vec::with_capacity(len as usize);
                 reader.read_exact(&mut vec)?;
-                let mut inner_reader = &vec;
+                let mut __inner_reader: &[u8] = vec.as_ref();
+                let inner_reader = &mut __inner_reader;
                 #(let #i = #r;)*
                 if !inner_reader.is_empty() {
-                    return Err(crate::error::Error::AttributeLength(len, len - (inner_reader.len() as u64)))
+                    return Err(crate::error::Error::AttributeLength(len, len - (inner_reader.len() as u32)))
                 }
             }
         });
         let res = quote! {
-            impl #generics crate::ConstantPollReadWrite for #ident #generics #where_c {
+            impl #generics crate::ConstantPoolReadWrite for #ident #generics #where_c {
                 fn read_from<C: crate::ConstantPoolReader, R: std::io::Read>(cp: &mut C, reader: &mut R) -> crate::Result<Self> {
                     let idx = u16::read_from(reader)?;
                     let attribute_name = cp.read_utf8(idx).ok_or_else(|| crate::error::Error::Invalid("attribute index", Into::into(idx.to_string())))?;
@@ -120,14 +123,14 @@ fn attr_enum(input: DeriveInput) -> Result<TokenStream2> {
                                         #variant_read_bodies
                                         Ok(#variant_constructs)
                                     }
-                                    _ => {
+                        )*
+                        _ => {
                                         let byte_size = u32::read_from(reader)?;
-                                        let bytes = Vec::with_capacity(byte_size as usize);
+                                        let mut bytes = Vec::with_capacity(byte_size as usize);
                                         reader.read_exact(&mut bytes)?;
                                         let raw_attr = crate::full::RawAttribute::__new(attribute_name, bytes);
                                         Ok(Self::#raw_variant(raw_attr))
-                                    }
-                        )*
+                        }
                     }
                 }
                 fn write_to<C: crate::ConstantPoolWriter, W: std::io::Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<()> {
@@ -139,6 +142,15 @@ fn attr_enum(input: DeriveInput) -> Result<TokenStream2> {
                                 Ok(())
                             }
                         )*
+                        Self::#raw_variant(crate::full::RawAttribute { keep: true, ref name, ref inner }) => {
+                            u16::write_to(&cp.insert_utf8(name.clone()), writer)?;
+                            crate::write_to!(&(inner.len() as u32), writer)?;
+                            writer.write_all(inner)?;
+                            Ok(())
+                        }
+                        _ => {
+                            Ok(())
+                        }
                     }
                 }
             }

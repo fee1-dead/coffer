@@ -140,15 +140,14 @@ impl ConstantPoolReadWrite for AnnotationValue {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, ConstantPoolReadWrite)]
 pub struct Annotation {
     pub annotation_type: Type,
     pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
 }
 
-impl ConstantPoolReadWrite for Annotation {
-    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self> {
-        let ty = Type::read_from(cp, reader)?;
+impl ConstantPoolReadWrite for HashMap<Cow<'static, str>, AnnotationValue> {
+    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self, Error> {
         let pairs = u16::read_from(reader)?;
         let mut element_values = HashMap::with_capacity(pairs as usize);
         for _ in 0..pairs {
@@ -156,14 +155,13 @@ impl ConstantPoolReadWrite for Annotation {
             let value = AnnotationValue::read_from(cp, reader)?;
             element_values.insert(name, value);
         }
-        Ok(Annotation { annotation_type: ty, element_values })
+        Ok(element_values)
     }
 
-    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()> {
-        self.annotation_type.write_to(cp, writer)?;
-        let size = self.element_values.len() as u16;
+    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<(), Error> {
+        let size = self.len() as u16;
         size.write_to(writer)?;
-        for (k, e) in &self.element_values {
+        for (k, e) in self {
             write_to!(k, cp, writer)?;
             e.write_to(cp, writer)?;
         }

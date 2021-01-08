@@ -235,7 +235,7 @@ impl FromStr for FieldSignature {
     }
 }
 
-cprw_impls!(SimpleClassTypeSignature, RefTypeSignature, ClassTypeSignature, TypeSignature, Throws, TypeParameter, ClassSignature, MethodSignature);
+cprw_impls!(SimpleClassTypeSignature, RefTypeSignature, ClassTypeSignature, TypeSignature, Throws, TypeParameter, ClassSignature, MethodSignature, FieldSignature);
 
 impl Display for FieldSignature {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

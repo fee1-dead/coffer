@@ -660,16 +660,18 @@ pub struct Code {
 }
 
 /// Completed
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
+#[attr_enum]
 pub enum FieldAttribute {
     Deprecated,
     Synthetic,
     Signature(FieldSignature),
     ConstantValue(Constant),
-    VisibleAnnotations(Vec<Annotation>),
-    InvisibleAnnotations(Vec<Annotation>),
-    VisibleTypeAnnotations(Vec<FieldTypeAnnotation>),
-    InvisibleTypeAnnotations(Vec<FieldTypeAnnotation>),
+    RuntimeVisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),
+    RuntimeInvisibleAnnotations(#[vec_len_type(u16)]Vec<Annotation>),
+    RuntimeVisibleTypeAnnotations(#[vec_len_type(u16)] Vec<FieldTypeAnnotation>),
+    RuntimeInvisibleTypeAnnotations(#[vec_len_type(u16)] Vec<FieldTypeAnnotation>),
+    #[raw_variant]
     Raw(RawAttribute)
 }
 
