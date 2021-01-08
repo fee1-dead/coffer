@@ -18,8 +18,8 @@ use crate::index::JClassIdx;
 use std::io::Cursor;
 
 mod mutf8;
-mod insn;
 mod full_type;
+mod insn;
 
 #[test]
 fn test_parse_class_index() {

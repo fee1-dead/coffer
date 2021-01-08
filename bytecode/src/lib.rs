@@ -27,7 +27,7 @@ pub mod constants;
 pub mod index;
 pub mod jcoder;
 pub mod error;
-pub mod insn;
+
 pub mod mod_utf8;
 pub mod constant_pool;
 pub mod full;
@@ -35,6 +35,7 @@ pub mod access;
 
 #[cfg(test)]
 mod tests;
+pub(crate) mod insn;
 pub(crate) mod byteswapper;
 
 use std::io::{Read, Write};
