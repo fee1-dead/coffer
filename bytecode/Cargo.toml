@@ -12,6 +12,7 @@ bitflags = "1.0"
 delegate = "0.4.3"
 nom = "6.0.1"
 coffer-proc-macros = { path = "./macro" }
+indexmap = "1.6.1"
 
 [dev-dependencies]
 criterion = "0.3"

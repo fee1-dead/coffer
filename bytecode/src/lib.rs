@@ -40,7 +40,7 @@ pub(crate) mod byteswapper;
 use std::io::{Read, Write};
 pub use crate::error::Result;
 pub use crate::error::Error;
-use crate::full::{Type, BootstrapMethod, Constant, Label, Catch};
+use crate::full::{Type, BootstrapMethod, Constant, Label, Catch, MemberRef};
 use std::borrow::Cow;
 use crate::full::cp::RawConstantEntry;
 
@@ -96,13 +96,32 @@ pub trait ConstantPoolWriter {
     fn insert_double(&mut self, d: f64) -> u16 {
         self.insert_raw(RawConstantEntry::Double(d))
     }
-
+    fn insert_member(&mut self, mem: MemberRef) -> u16 {
+        let a = self.insert_indirect_str(7, mem.owner.clone());
+        let b = self.insert_nameandtype(mem.name.clone(), mem.descriptor.to_string());
+        self.insert_raw(match mem {
+            MemberRef {
+                descriptor: Type::Method(..),
+                itfs: true,
+                ..
+            } => RawConstantEntry::InterfaceMethod(a, b),
+            MemberRef {
+                descriptor: Type::Method(..),
+                itfs: false,
+                ..
+            } => RawConstantEntry::Method(a, b),
+            MemberRef {
+                descriptor: _,
+                ..
+            } => RawConstantEntry::Field(a, b)
+        })
+    }
     /// map a label to the actual offset in the code array.
     /// this is not implemented by default, and it will be defined in a wrapper type in implementation of ConstantPoolReadWrite for `Code`.
     #[inline]
     fn label(&mut self, _lbl: Label) -> u16 {
         #[cfg(debug_assertions)]
-            unimplemented!();
+            unreachable!();
         #[cfg(not(debug_assertions))]
         unsafe {
             core::hint::unreachable_unchecked();
@@ -113,7 +132,7 @@ pub trait ConstantPoolWriter {
     #[inline]
     fn catch(&mut self, _catch: &Catch) -> Option<u16> {
         #[cfg(debug_assertions)]
-        unimplemented!();
+        unreachable!();
         #[cfg(not(debug_assertions))]
             unsafe {
             core::hint::unreachable_unchecked();
@@ -123,7 +142,6 @@ pub trait ConstantPoolWriter {
 
 /// A trait for reading constant pool entries.
 pub trait ConstantPoolReader {
-
     fn read_raw(&mut self, idx: u16) -> Option<crate::full::cp::RawConstantEntry>;
     fn read_nameandtype(&mut self, idx: u16) -> Option<(Cow<'static, str>, Type)> {
         match self.read_raw(idx) {
@@ -169,6 +187,23 @@ pub trait ConstantPoolReader {
     fn read_utf8(&mut self, idx: u16) -> Option<Cow<'static, str>> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::UTF8(s)) => Some(s),
+            _ => None
+        }
+    }
+    fn read_member(&mut self, idx: u16) -> Option<MemberRef> {
+        match self.read_raw(idx) {
+            Some(RawConstantEntry::Method(o, nt)) |
+            Some(RawConstantEntry::Field(o, nt)) =>
+                self.read_indirect_str(7, o)
+                    .and_then(|o|
+                        self.read_nameandtype(nt)
+                            .map(|(n,t)| (o, n, t)))
+                    .map(|(o, n, t)| MemberRef { owner: o, name: n, descriptor: t, itfs: false }),
+            Some(RawConstantEntry::InterfaceMethod(o, nt)) => self.read_indirect_str(7, o)
+                .and_then(|o|
+                    self.read_nameandtype(nt)
+                        .map(|(n,t)| (o, n, t)))
+                .map(|(o, n, t)| MemberRef { owner: o, name: n, descriptor: t, itfs: true }),
             _ => None
         }
     }

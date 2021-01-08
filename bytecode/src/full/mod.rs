@@ -34,7 +34,8 @@ use crate::full::version::JavaVersion;
 use crate::{ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite, Result, Error, read_from, try_cp_read};
 use std::str::FromStr;
 use std::io::{Read, Write};
-use crate::full::cp::RawConstantEntry;
+use std::num::NonZeroU8;
+use indexmap::map::IndexMap;
 
 #[derive(Debug, Eq, PartialOrd, PartialEq, Ord, Hash, Copy, Clone)]
 pub struct Label(u32);
@@ -51,10 +52,7 @@ impl ConstantPoolReadWrite for Label {
 #[derive(Clone, PartialEq, Hash, Debug)]
 pub struct MethodHandle {
     pub kind: MethodHandleKind,
-    pub owner: Cow<'static, str>,
-    pub name: Cow<'static, str>,
-    pub descriptor: Type,
-    pub interface: bool
+    pub member: MemberRef
 }
 
 impl MethodHandle {
@@ -65,8 +63,10 @@ impl MethodHandle {
                     $(
                         MethodHandle {
                             kind: $kind,
-                            descriptor: Type::Method(..),
-                            ..
+                            member: MemberRef {
+                                descriptor: Type::Method(..),
+                                ..
+                            }
                         } => return Err(Error::Invalid("MethodHandle", concat!("kind is ", stringify!($kind), "but descriptor is method").into())),
                     )*
                     _ => {}
@@ -79,8 +79,10 @@ impl MethodHandle {
                     $(
                         MethodHandle {
                             kind: $kind,
-                            descriptor: Type::Method(..),
-                            ..
+                            member: MemberRef {
+                                descriptor: Type::Method(..),
+                                ..
+                            }
                         } => {},
                         MethodHandle {
                             kind: $kind,
@@ -99,33 +101,17 @@ impl MethodHandle {
 impl ConstantPoolReadWrite for MethodHandle {
     fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self, Error> {
         let kind = read_from!(reader)?;
-        let entry = try_cp_read!(cp, reader, read_raw)?;
-        match entry {
-            RawConstantEntry::Field(owner, nameandtype) | RawConstantEntry::Method(owner, nameandtype)=> {
-                let owner = try_cp_read!(owner, cp.read_indirect_str(7, owner))?;
-                let (name, descriptor) = try_cp_read!(nameandtype, cp.read_nameandtype(nameandtype))?;
-                let res = Self {
-                    kind, owner, name, descriptor, interface: false
-                };
-                res.check()?;
-                Ok(res)
-            }
-            RawConstantEntry::InterfaceMethod(owner, nameandtype) => {
-                let owner = try_cp_read!(owner, cp.read_indirect_str(7, owner))?;
-                let (name, descriptor) = try_cp_read!(nameandtype, cp.read_nameandtype(nameandtype))?;
-                let res = Self {
-                    kind, owner, name, descriptor, interface: true
-                };
-                res.check()?;
-                Ok(res)
-            }
-            _ => return Err(Error::Invalid("constant pool entry in method handle", format!("{:?}", entry).into()))
-        }
+        let member = read_from!(cp, reader)?;
+        let res = Self {
+            kind, member
+        };
+        res.check()?;
+        Ok(res)
     }
 
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<(), Error> {
         fn not_init(handle: &MethodHandle) -> Result<()> {
-            match handle.name.as_ref() {
+            match handle.member.name.as_ref() {
                 "<init>" => Err(Error::Invalid("MethodHandle", Cow::Borrowed("name must not be <init>"))),
                 "<clinit>" => Err(Error::Invalid("MethodHandle", Cow::Borrowed("name must not be <clinit>"))),
                 _ => Ok(())
@@ -137,50 +123,27 @@ impl ConstantPoolReadWrite for MethodHandle {
             MethodHandleKind::GetStatic |
             MethodHandleKind::PutField |
             MethodHandleKind::PutStatic => {
-                let owner = cp.insert_indirect_str(7, self.owner.clone());
-                let name = cp.insert_nameandtype(self.name.clone(), self.descriptor.to_string());
-                cp.insert_raw(RawConstantEntry::Field(owner, name)).write_to(writer)?;
+                self.member.write_to(cp, writer)
             }
-            MethodHandleKind::InvokeVirtual => {
-                not_init(self)?;
-                let owner = cp.insert_indirect_str(7, self.owner.clone());
-                let name = cp.insert_nameandtype(self.name.clone(), self.descriptor.to_string());
-                cp.insert_raw(RawConstantEntry::Method(owner, name)).write_to(writer)?;
-            }
+            MethodHandleKind::InvokeVirtual |
             MethodHandleKind::InvokeStatic |
-            MethodHandleKind::InvokeSpecial => {
-                not_init(self)?;
-                let owner = cp.insert_indirect_str(7, self.owner.clone());
-                let name = cp.insert_nameandtype(self.name.clone(), self.descriptor.to_string());
-
-                cp.insert_raw(if self.interface {
-                    RawConstantEntry::InterfaceMethod(owner, name)
-                } else {
-                    RawConstantEntry::Method(owner, name)
-                }).write_to(writer)?;
-            }
-            MethodHandleKind::NewInvokeSpecial => {
-                if self.name != "<init>" {
-                    return Err(Error::Invalid("MethodHandle", Cow::Borrowed("name for NewInvokeSpecial must be <init>")))
-                }
-                let owner = cp.insert_indirect_str(7, self.owner.clone());
-                let name = cp.insert_nameandtype(self.name.clone(), self.descriptor.to_string());
-                cp.insert_raw(RawConstantEntry::Method(owner, name)).write_to(writer)?;
-            }
+            MethodHandleKind::InvokeSpecial |
             MethodHandleKind::InvokeInterface => {
                 not_init(self)?;
-                let owner = cp.insert_indirect_str(7, self.owner.clone());
-                let name = cp.insert_nameandtype(self.name.clone(), self.descriptor.to_string());
-                cp.insert_raw(RawConstantEntry::InterfaceMethod(owner, name)).write_to(writer)?;
+                self.member.write_to(cp, writer)
+            }
+            MethodHandleKind::NewInvokeSpecial => {
+                if self.member.name != "<init>" {
+                    return Err(Error::Invalid("MethodHandle", Cow::Borrowed("name for NewInvokeSpecial must be <init>")))
+                }
+                self.member.write_to(cp, writer)
             }
         }
-        Ok(())
     }
 }
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum Constant {
-    Null,
     I32(i32),
     F32(f32),
     I64(i64),
@@ -213,10 +176,6 @@ impl ConstantPoolReadWrite for Constant {
     }
 }
 
-impl Constant {
-    pub const NULL: Constant = Constant::Null;
-}
-
 impl From<i32> for Constant {
     fn from(i: i32) -> Self {
         Self::I32(i)
@@ -229,7 +188,6 @@ impl Hash for Constant {
     fn hash<H: Hasher>(&self, state: &mut H) {
         std::mem::discriminant(self).hash(state);
         match self {
-            Constant::Null => {}
             Constant::I32(i) => { i.hash(state); }
             Constant::F32(f) => { (*f).to_bits().hash(state); }
             Constant::I64(i) => { i.hash(state); }
@@ -538,6 +496,31 @@ impl From<Constant> for OrDynamic<Constant> {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum ClassType {
+    Object(Cow<'static, String>),
+    Array(u8, Type)
+}
+
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct MemberRef {
+    pub owner: Cow<'static, str>,
+    pub name: Cow<'static, str>,
+    pub descriptor: Type,
+    pub itfs: bool,
+}
+
+impl ConstantPoolReadWrite for MemberRef {
+    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self, Error> {
+        try_cp_read!(cp, reader, read_member)
+    }
+
+    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<(), Error> {
+        cp.insert_member(self.clone()).write_to(writer)
+    }
+}
+
+
 /// Abstract tagged union to represent the instruction set.
 /// Note that while each valid instruction corresponds to one and only one enum variant,
 /// a value may correspond to multiple possibilities of actual operation used in bytecode.
@@ -550,6 +533,8 @@ impl From<Constant> for OrDynamic<Constant> {
 /// However, StackMap frames will not be a variant because they become quite invalid after modifications made to code, thus, frames should be regenerated every time.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
+    /// Push a null object reference.
+    PushNull,
     /// Push a constant value to the current stack.
     Push(OrDynamic<Constant>),
     /// Duplicate one or two stack values and insert them zero or more values down.
@@ -560,20 +545,41 @@ pub enum Instruction {
     Duplicate(StackValueType, Option<StackValueType>),
     /// Pop one or two values. Use `Pop(Two)` for double/long values.
     Pop(StackValueType),
-    Jump(Label),
+    Jump(JumpCondition, Label),
     CompareLongs,
     CompareFloats(FloatType, NaNBehavior),
     LocalVariable(LoadOrStore, LocalType, u16),
     Array(LoadOrStore, ArrayType),
+    ArrayLength,
     IntOperation(IntType, IntOperation),
     FloatOperation(FloatType, FloatOperation),
+    Throw,
+    Checkcast(OrDynamic<ClassType>),
+    InstanceOf(OrDynamic<ClassType>),
+    NewArray(OrDynamic<Type>, NonZeroU8),
     Monitor(MonitorOperation),
+    New(OrDynamic<Cow<'static, str>>),
     /// Conversion of the same types have no effect, it will not result in an instruction.
     Conversion(NumberType, NumberType),
     ConvertInt(BitType),
-    Field(GetOrPut, MemberType),
-    InvokeExact(Constant),
+    Return(Option<LocalType>),
+    Field(GetOrPut, MemberType, OrDynamic<MemberRef>),
+    InvokeExact(MemberType, OrDynamic<MemberRef>),
+    InvokeSpecial(OrDynamic<MemberRef>),
+    InvokeDynamic(Dynamic),
+    Jsr(Label),
+    Ret(u8),
+    Swap,
     LineNumber(u16),
+    TableSwitch {
+        default: Label,
+        low: i32,
+        offsets: Vec<Label>
+    },
+    LookupSwitch {
+        default: Label,
+        table: IndexMap<i32, Label>,
+    },
     /// Not real in bytecode, used as a marker of location.
     Label(Label)
 }
@@ -850,7 +856,6 @@ pub enum ClassAttribute {
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct BootstrapMethod {
     pub method: MethodHandle,
-    /// constants must not be null. They don't have a corresponding constant pool entry.
     pub arguments: Vec<OrDynamic<Constant>>
 }
 
