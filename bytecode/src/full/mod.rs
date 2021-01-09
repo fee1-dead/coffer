@@ -15,39 +15,32 @@
     You should have received a copy of the GNU Lesser General Public License
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::hash::{Hash, Hasher};
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+use std::str::FromStr;
+
+use indexmap::map::IndexMap;
+
+use annotation::Annotation;
+pub use code::*;
+pub use signature::*;
+
+use crate::{ConstantPoolReader, ConstantPoolReadWrite, ConstantPoolWriter, Error, read_from, ReadWrite, Result, try_cp_read, try_cp_read_idx};
+use crate::access::AccessFlags;
+use crate::full::annotation::{AnnotationValue, CodeTypeAnnotation, FieldTypeAnnotation, MethodTypeAnnotation};
+use crate::full::cp::RawConstantEntry;
+use crate::full::version::JavaVersion;
+
 pub mod annotation;
 pub mod version;
 
 mod signature;
 pub mod cp;
-
-pub use signature::*;
-use std::borrow::Cow;
-use std::hash::{Hash, Hasher};
-use crate::access::AccessFlags;
-
-use std::fmt::Display;
-use std::fmt::Formatter;
-use annotation::Annotation;
-use crate::full::annotation::{FieldTypeAnnotation, MethodTypeAnnotation, CodeTypeAnnotation, AnnotationValue};
-use crate::full::version::JavaVersion;
-use crate::{ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite, Result, Error, read_from, try_cp_read};
-use std::str::FromStr;
-use std::io::{Read, Write};
-use std::num::NonZeroU8;
-use indexmap::map::IndexMap;
-
-#[derive(Debug, Eq, PartialOrd, PartialEq, Ord, Hash, Copy, Clone)]
-pub struct Label(u32);
-
-impl ConstantPoolReadWrite for Label {
-    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self> {
-        Ok(cp.get_label(ReadWrite::read_from(reader)?))
-    }
-    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()> {
-        ReadWrite::write_to(&cp.label(*self), writer)
-    }
-}
+mod code;
 
 #[derive(Clone, PartialEq, Hash, Debug)]
 pub struct MethodHandle {
@@ -150,17 +143,8 @@ pub enum Constant {
     F64(f64),
     String(Cow<'static, str>),
     Class(Cow<'static, str>),
-    Field {
-        owner: Cow<'static, str>,
-        name: Cow<'static, str>,
-        descriptor: Type
-    },
-    Method {
-        interface: bool,
-        owner: Cow<'static, str>,
-        name: Cow<'static, str>,
-        descriptor: Type
-    },
+    Field(MemberRef),
+    Method(bool, MemberRef),
     MethodType(Type),
     MethodHandle(MethodHandle)
 }
@@ -196,131 +180,15 @@ impl Hash for Constant {
             Constant::Class(s) => { s.hash(state); }
             Constant::MethodType(s) => { s.hash(state); }
             Constant::MethodHandle(m) => { m.hash(state) }
-            Constant::Field { owner, name, descriptor } => {
-                owner.hash(state);
-                name.hash(state);
-                descriptor.hash(state);
+            Constant::Field(mem) => {
+                mem.hash(state);
             }
-            Constant::Method { interface, owner, name, descriptor } => {
-                interface.hash(state);
-                owner.hash(state);
-                name.hash(state);
-                descriptor.hash(state);
+            Constant::Method(b, mem) => {
+                b.hash(state);
+                mem.hash(state);
             }
         }
     }
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum StackValueType {
-    /// Represents A stack value of computational type one. This should not be used when the stack type is a f64 or i64.
-    One,
-    /// Represents two stack values of computational type one, or one stack value of computational type two.
-    Two
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum FloatType {
-    Double,
-    Float
-}
-
-impl From<FloatType> for StackValueType {
-    #[inline]
-    fn from(ft: FloatType) -> Self {
-        match ft {
-            FloatType::Double => StackValueType::Two,
-            FloatType::Float => StackValueType::One
-        }
-    }
-}
-impl From<FloatType> for LocalType {
-    #[inline]
-    fn from(ft: FloatType) -> Self {
-        match ft {
-            FloatType::Double => LocalType::Double,
-            FloatType::Float => LocalType::Float
-        }
-    }
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum NaNBehavior {
-    ReturnsOne,
-    ReturnsNegativeOne
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum JumpCondition {
-    ReferenceEquals,
-    ReferenceNotEquals,
-    IntegerEquals,
-    IntegerNotEquals,
-    IntegerLessThan,
-    IntegerGreaterThan,
-    IntegerLessThanOrEquals,
-    IntegerGreaterThanOrEquals,
-    IntegerEqualsZero,
-    IntegerNotEqualsZero,
-    IntegerLessThanZero,
-    IntegerGreaterThanZero,
-    IntegerLessThanOrEqualsZero,
-    IntegerGreaterThanOrEqualsZero,
-    IsNull,
-    IsNonNull,
-    Always
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum LoadOrStore {
-    Load, Store
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum GetOrPut {
-    Get, Put
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum MemberType {
-    Static, Virtual
-}
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum LocalType {
-    Int, Long, Float, Double, Reference
-}
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum ArrayType {
-    ByteOrBool, Short, Char, Int, Long, Float, Double, Reference
-}
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum NumberType {
-    Int, Long, Float, Double
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum BitType {
-    Byte, Short, Char, Int, Long, Float, Double
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum IntType {
-    Int, Long
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum FloatOperation {
-    Divide, Add, Subtract, Multiply, Remainder, Negate
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum IntOperation {
-    Divide, Add, Subtract, Multiply, Remainder, Negate, ExclusiveOr, Or, And, ShiftLeft, ShiftRight, UnsignedShiftRight
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum MonitorOperation {
-    Enter, Exit
 }
 
 
@@ -462,46 +330,6 @@ impl Type {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, ReadWrite)]
-#[tag_type(u8)]
-pub enum MethodHandleKind {
-    GetField = 1, GetStatic, PutField, PutStatic, InvokeVirtual, InvokeStatic, InvokeSpecial, NewInvokeSpecial, InvokeInterface
-}
-
-/// Note: dynamic computed constants are syntactically allowed to refer to themselves via the bootstrap method table but it will fail during resolution.
-/// Rust ownership rules prevent us from doing so.
-#[derive(Debug, Clone, PartialEq, Hash)]
-pub struct Dynamic {
-    pub bsm: Box<BootstrapMethod>,
-    pub name: Cow<'static, str>,
-    pub descriptor: Type
-}
-
-#[derive(Debug, Clone, PartialEq, Hash)]
-pub enum OrDynamic<T> {
-    Dynamic(Dynamic),
-    Static(T)
-}
-impl<T> From<Dynamic> for OrDynamic<T> {
-    #[inline]
-    fn from(d: Dynamic) -> Self {
-        OrDynamic::Dynamic(d)
-    }
-}
-
-impl From<Constant> for OrDynamic<Constant> {
-    #[inline]
-    fn from(t: Constant) -> Self {
-        OrDynamic::Static(t)
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum ClassType {
-    Object(Cow<'static, String>),
-    Array(u8, Type)
-}
-
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct MemberRef {
     pub owner: Cow<'static, str>,
@@ -518,70 +346,6 @@ impl ConstantPoolReadWrite for MemberRef {
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<(), Error> {
         cp.insert_member(self.clone()).write_to(writer)
     }
-}
-
-
-/// Abstract tagged union to represent the instruction set.
-/// Note that while each valid instruction corresponds to one and only one enum variant,
-/// a value may correspond to multiple possibilities of actual operation used in bytecode.
-/// Normally, it should choose the option that takes the lowest space.
-///
-/// Some variants don't actually appear in the code,
-/// but instead they represent attributes of the Code attribute.
-/// This gives benefits such that when modifying the class it doesn't need to modify the indices of the attributes to remain valid.
-///
-/// However, StackMap frames will not be a variant because they become quite invalid after modifications made to code, thus, frames should be regenerated every time.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Instruction {
-    /// Push a null object reference.
-    PushNull,
-    /// Push a constant value to the current stack.
-    Push(OrDynamic<Constant>),
-    /// Duplicate one or two stack values and insert them zero or more values down.
-    ///
-    /// `Duplicate(One, None)` is equivalent to `DUP`
-    ///
-    /// `Duplicate(Two, Some(Two))` is equivalent to `DUP2_X2`
-    Duplicate(StackValueType, Option<StackValueType>),
-    /// Pop one or two values. Use `Pop(Two)` for double/long values.
-    Pop(StackValueType),
-    Jump(JumpCondition, Label),
-    CompareLongs,
-    CompareFloats(FloatType, NaNBehavior),
-    LocalVariable(LoadOrStore, LocalType, u16),
-    Array(LoadOrStore, ArrayType),
-    ArrayLength,
-    IntOperation(IntType, IntOperation),
-    FloatOperation(FloatType, FloatOperation),
-    Throw,
-    Checkcast(OrDynamic<ClassType>),
-    InstanceOf(OrDynamic<ClassType>),
-    NewArray(OrDynamic<Type>, NonZeroU8),
-    Monitor(MonitorOperation),
-    New(OrDynamic<Cow<'static, str>>),
-    /// Conversion of the same types have no effect, it will not result in an instruction.
-    Conversion(NumberType, NumberType),
-    ConvertInt(BitType),
-    Return(Option<LocalType>),
-    Field(GetOrPut, MemberType, OrDynamic<MemberRef>),
-    InvokeExact(MemberType, OrDynamic<MemberRef>),
-    InvokeSpecial(OrDynamic<MemberRef>),
-    InvokeDynamic(Dynamic),
-    Jsr(Label),
-    Ret(u8),
-    Swap,
-    LineNumber(u16),
-    TableSwitch {
-        default: Label,
-        low: i32,
-        offsets: Vec<Label>
-    },
-    LookupSwitch {
-        default: Label,
-        table: IndexMap<i32, Label>,
-    },
-    /// Not real in bytecode, used as a marker of location.
-    Label(Label)
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -609,54 +373,6 @@ impl RawAttribute {
             inner: Cow::Owned(inner)
         }
     }
-}
-
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct LocalVariable {
-    pub start: Label,
-    pub end: Label,
-    pub name: Cow<'static, str>,
-    pub descriptor: Type,
-    pub signature: Option<FieldSignature>,
-    pub index: u16
-}
-
-#[derive(Clone, PartialEq, Debug)]
-pub enum CodeAttribute {
-    LocalVarTable(Vec<LocalVariable>),
-    TypeAnnotation(CodeTypeAnnotation),
-    Frames(Vec<Frame>)
-}
-
-#[derive(Clone, Eq, PartialEq, Debug, Hash)]
-pub struct Catch {
-    pub start: Label,
-    pub end: Label,
-    pub handler: Label,
-    pub catch: Option<Cow<'static, str>>
-}
-
-impl ConstantPoolReadWrite for Catch {
-    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self, Error> {
-        try_cp_read!(cp, reader, get_catch)
-    }
-
-    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<(), Error> {
-        match cp.catch(self) {
-            Some(off) => off.write_to(writer),
-            // Ignore here because the block was probably removed.
-            None => Ok(())
-        }
-    }
-}
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct Code {
-    pub max_stack: u16,
-    pub max_locals: u16,
-    pub code: Vec<Instruction>,
-    pub catches: Vec<Catch>,
-    pub attrs: Vec<CodeAttribute>
 }
 
 /// Completed
@@ -709,27 +425,12 @@ pub struct Method {
     pub attributes: Vec<MethodAttribute>
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone, ConstantPoolReadWrite)]
+#[tag_type(u8)]
 pub enum VerificationType {
-    Top, Int, Float, Null, UninitializedThis, Object(Cow<'static, str>),
+    Top, Int, Float, Long, Double, Null, UninitializedThis, Object(#[str_type(Class)] Cow<'static, str>),
     /// Following the label, must be a `NEW` instruction.
-    UninitializedVariable(Label), Long, Double
-}
-
-#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
-pub enum Chop {
-    One, Two, Three
-}
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub enum Frame {
-    Same(u16), SameLocalsOneStack(u16, VerificationType),
-    /// Chop up to three.
-    Chop(u16, u8),
-    /// At most three items.
-    Append(u16, Vec<VerificationType>),
-    /// Locals and then stack values.
-    Full(u16, Vec<VerificationType>, Vec<VerificationType>)
+    UninitializedVariable(Label)
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, ConstantPoolReadWrite)]
@@ -759,57 +460,6 @@ pub struct Require {
 #[repr(transparent)]
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
 pub struct To(#[str_type(Module)] Cow<'static, str>);
-
-#[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
-pub struct Export {
-    #[str_type(Package)]
-    pub package: Cow<'static, str>,
-    #[use_normal_rw]
-    pub flags: AccessFlags,
-    /// not exported; use the function to get the strings.
-    #[vec_len_type(u16)]
-    pub to: Vec<To>
-}
-impl Export {
-    pub fn new<ToStr: Into<Cow<'static, str>>>(pkg: ToStr, flags: AccessFlags, to: Vec<Cow<'static, str>>) -> Self {
-        unsafe {
-            Self {
-                package: pkg.into(),
-                flags,
-                to: std::mem::transmute(to)
-            }
-        }
-    }
-    pub fn to(&self) -> &Vec<Cow<'static, str>> {
-        // SAFETY: `To` is equivalent to a Cow<'static, str>, so it is safe to cast the pointer.
-        unsafe { &*(&self.to as *const std::vec::Vec<To> as *const std::vec::Vec<std::borrow::Cow<str>>) }
-    }
-}
-
-#[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
-pub struct Open {
-    #[str_type(Package)]
-    pub package: Cow<'static, str>,
-    #[use_normal_rw]
-    pub flags: AccessFlags,
-    #[vec_len_type(u16)]
-    pub to: Vec<To>
-}
-impl Open {
-    pub fn new<ToStr: Into<Cow<'static, str>>>(pkg: ToStr, flags: AccessFlags, to: Vec<Cow<'static, str>>) -> Self {
-        unsafe {
-            Self {
-                package: pkg.into(),
-                flags,
-                to: std::mem::transmute(to)
-            }
-        }
-    }
-    pub fn to(&self) -> &Vec<Cow<'static, str>> {
-        // SAFETY: `To` is equivalent to a Cow<'static, str>, so it is safe to cast the pointer.
-        unsafe { &*(&self.to as *const std::vec::Vec<To> as *const std::vec::Vec<std::borrow::Cow<str>>) }
-    }
-}
 
 #[repr(transparent)]
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]

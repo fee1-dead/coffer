@@ -22,7 +22,7 @@
 use crate::{ReadWrite, Result};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ReadWrite)]
-pub(crate) struct SwitchEntry(i32, i32);
+pub(crate) struct SwitchEntry(pub i32, pub i32);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ReadWrite)]
 #[tag_type(u8)]
@@ -40,7 +40,7 @@ pub(crate) enum Wide {
     DStore(u16),
     AStore(u16),
     #[tag(0x84)]
-    IInc(u16, u16),
+    IInc(u16, i16),
     #[tag(0xA9)]
     Ret(u16),
 
@@ -282,6 +282,6 @@ pub(crate) enum Instruction {
     #[tag(0xC5)] MultiANewArray(u16, u8),
     #[tag(0xC6)] IfNull(i16),
     #[tag(0xC7)] IfNonNull(i16),
-    #[tag(0xC8)] GotoW(u32),
-    #[tag(0xC9)] JsrW(u32),
+    #[tag(0xC8)] GotoW(i32),
+    #[tag(0xC9)] JsrW(i32),
 }

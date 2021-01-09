@@ -1,8 +1,11 @@
-use super::AnnotationValue;
-use super::super::{Type};
-use std::collections::HashMap;
 use std::borrow::Cow;
-use crate::full::{Label, Catch};
+use std::collections::HashMap;
+
+use crate::{ConstantPoolReadWrite, ReadWrite};
+use crate::full::code::{Catch, Label};
+
+use super::AnnotationValue;
+use super::super::Type;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -14,10 +17,6 @@ pub enum ClassTypeAnnotationTarget {
     GenericTypeParameterBound(u8, u8) = 0x11,
 }
 
-/// tag: 0x13
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct FieldTypeAnnotationTarget;
-
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MethodTypeAnnotationTarget {
@@ -28,12 +27,42 @@ pub enum MethodTypeAnnotationTarget {
     FormalParameter(u8) = 0x16,
     Throws(u16) = 0x17
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct LocalVarTarget {
+    pub start: Label,
+    pub end: Label,
+    pub idx: u16
+}
+
+impl ConstantPoolReadWrite for LocalVarTarget {
+    fn read_from<C: crate::ConstantPoolReader, R: std::io::Read>(cp: &mut C, reader: &mut R) -> crate::Result<Self> {
+        let start_idx = u16::read_from(reader)?;
+        let start = cp.get_label(start_idx as _);
+        let end = cp.get_label(start_idx as u32 + (u16::read_from(reader)? - 1) as u32);
+        Ok(LocalVarTarget {
+            start, end, idx: crate::read_from!(reader)?
+        })
+    }
+
+    fn write_to<C: crate::ConstantPoolWriter, W: std::io::Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<()> {
+        let start = cp.label(self.start);
+        let end = cp.label(self.end);
+        start.write_to(writer)?;
+        (end - start + 1).write_to(writer)?;
+        self.idx.write_to(writer)?;
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, ConstantPoolReadWrite)]
+#[tag_type(u8)]
 pub enum CodeTypeAnnotationTarget {
+    #[tag(0x40)]
     /// Example `@Foo A a = bar();`
-    LocalVariable(Label, Label),
+    LocalVariable(#[vec_len_type(u16)] Vec<LocalVarTarget>),
     /// Example `try (@Foo A a = bar()) {}`
-    ResourceVariable(Label, Label),
+    ResourceVariable(#[vec_len_type(u16)] Vec<LocalVarTarget>),
     /// Example `try { } catch (@Foo A a) { }`
     CatchParameter(Catch),
     /// Example `a instanceof @Foo B`
@@ -45,31 +74,15 @@ pub enum CodeTypeAnnotationTarget {
     /// Example `@Baz Qux::method`
     MethodRef(Label),
     /// Example `(@Foo A & @Bar B) o` has two annotations with the same label, but different for the second field.
-    Cast(Label, u8),
+    Cast(Label, #[use_normal_rw] u8),
     /// Example `new Foo<@Bar Baz, @Bar Qux>`
-    GenericConstructor(Label, u8),
+    GenericConstructor(Label, #[use_normal_rw] u8),
     /// Example `foo.<@Bar Baz>qux()`
-    GenericMethod(Label, u8),
+    GenericMethod(Label, #[use_normal_rw] u8),
     /// Example `Foo::<@Bar Baz>new`
-    GenericConstructorRef(Label, u8),
+    GenericConstructorRef(Label, #[use_normal_rw] u8),
     /// Example `Foo::<@Bar Baz>method`
-    GenericMethodRef(Label, u8),
-}
-
-
-
-#[derive(Clone, PartialEq, Debug)]
-pub enum TypeAnnotationTarget {
-    TypeParameter(u8),
-    SuperType(u16),
-    TypeParameterBound(u8, u8),
-    Empty,
-    FormalParameter(u8),
-    Throws(u16),
-    LocalVar(),
-    Catch(u16),
-    Offset(u16),
-    TypeArgument(u16, u8)
+    GenericMethodRef(Label, #[use_normal_rw] u8),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, ReadWrite)]
@@ -94,8 +107,14 @@ pub struct MethodTypeAnnotation {
     pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
 }
 
+#[derive(Debug, Clone, PartialEq, ReadWrite, Copy, Eq)]
+#[tag_type(u8)]
+pub enum FieldTarget { #[tag(0x13)] Field }
+
 #[derive(Debug, Clone, PartialEq, ConstantPoolReadWrite)]
 pub struct FieldTypeAnnotation {
+    #[use_normal_rw]
+    pub target_type: FieldTarget,
     #[vec_len_type(u8)]
     #[use_normal_rw]
     pub type_path: Vec<TypePath>,
@@ -104,10 +123,12 @@ pub struct FieldTypeAnnotation {
 }
 
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ConstantPoolReadWrite)]
 pub struct CodeTypeAnnotation {
     pub target: CodeTypeAnnotationTarget,
-    pub type_path: Vec<(u8, u8)>,
+    #[vec_len_type(u8)]
+    #[use_normal_rw]
+    pub type_path: Vec<TypePath>,
     pub annotation_type: Type,
     pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
 }

@@ -23,6 +23,14 @@ extern crate bitflags;
 #[macro_use]
 extern crate coffer_proc_macros;
 
+use std::borrow::Cow;
+use std::io::{Read, Write};
+
+pub use crate::error::Error;
+pub use crate::error::Result;
+use crate::full::{BootstrapMethod, Constant, MemberRef, Type, Catch, Dynamic, Label, OrDynamic};
+use crate::full::cp::RawConstantEntry;
+
 pub mod constants;
 pub mod index;
 pub mod jcoder;
@@ -37,13 +45,6 @@ pub mod access;
 mod tests;
 pub(crate) mod insn;
 pub(crate) mod byteswapper;
-
-use std::io::{Read, Write};
-pub use crate::error::Result;
-pub use crate::error::Error;
-use crate::full::{Type, BootstrapMethod, Constant, Label, Catch, MemberRef};
-use std::borrow::Cow;
-use crate::full::cp::RawConstantEntry;
 
 /// The generic read and write trait. This indicates a structure can be read without additional contextual information.
 ///
@@ -150,7 +151,18 @@ pub trait ConstantPoolReader {
             _ => None
         }
     }
-    fn read_constant(&mut self, idx: u16) -> Option<Constant>;
+    fn read_constant(&mut self, idx: u16) -> Option<Constant> {
+        match self.read_raw(idx) {
+            Some(RawConstantEntry::Int(i)) => Some(Constant::I32(i)),
+            Some(RawConstantEntry::Long(l)) => Some(Constant::I64(l)),
+            Some(RawConstantEntry::Float(f)) => Some(Constant::F32(f)),
+            Some(RawConstantEntry::Double(d)) => Some(Constant::F64(d)),
+            Some(RawConstantEntry::Field(..)) => self.read_member(idx).map(Constant::Field),
+            Some(RawConstantEntry::Method(..)) => self.read_member(idx).map(|m| Constant::Method(false, m)),
+            Some(RawConstantEntry::InterfaceMethod(..)) => self.read_member(idx).map(|m| Constant::Method(true, m)),
+            _ => None
+        }
+    }
     fn read_int(&mut self, idx: u16) -> Option<i32> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::Int(i)) => Some(i),
@@ -185,9 +197,50 @@ pub trait ConstantPoolReader {
             _ => None
         }).flatten().map(Into::into)
     }
+
+    fn read_class(&mut self, idx: u16) -> Option<Cow<'static, str>> {
+        self.read_indirect_str(7, idx)
+    }
+
     fn read_utf8(&mut self, idx: u16) -> Option<Cow<'static, str>> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::UTF8(s)) => Some(s),
+            _ => None
+        }
+    }
+    fn read_or_dynamic<T, F>(&mut self, idx: u16, f: F) -> Option<OrDynamic<T>> where F: FnOnce(&mut Self, u16) -> Option<T> {
+        let dy = self.read_dynamic(idx);
+        if let Some(d) = dy {
+            Some(OrDynamic::Dynamic(d))
+        } else {
+            f(self, idx).map(OrDynamic::Static)
+        }
+    }
+    fn read_invokedynamic(&mut self, idx: u16) -> Option<Dynamic> {
+        match self.read_raw(idx) {
+            Some(RawConstantEntry::InvokeDynamic(s, a)) =>  {
+                let mut ptr = unsafe { Box::from_raw(std::ptr::NonNull::dangling().as_ptr()) };
+                let (name, descriptor) = self.read_nameandtype(a)?;
+                self.resolve_later(s, &mut ptr);
+                Some(Dynamic {
+                    bsm: ptr,
+                    name, descriptor
+                })
+            },
+            _ => None
+        }
+    }
+    fn read_dynamic(&mut self, idx: u16) -> Option<Dynamic> {
+        match self.read_raw(idx) {
+            Some(RawConstantEntry::Dynamic(s, a)) =>  {
+                let mut ptr = unsafe { Box::from_raw(std::ptr::NonNull::dangling().as_ptr()) };
+                let (name, descriptor) = self.read_nameandtype(a)?;
+                self.resolve_later(s, &mut ptr);
+                Some(Dynamic {
+                    bsm: ptr,
+                    name, descriptor
+                })
+            },
             _ => None
         }
     }
@@ -209,12 +262,15 @@ pub trait ConstantPoolReader {
         }
     }
 
+
+    fn resolve_later(&mut self, bsm_idx: u16, ptr: &mut Box<BootstrapMethod>);
+
     // Implementations from Code
 
     /// get a uniquely identified label from an actual offset of the code array.
     /// The label is lazily inserted into the Code vector.
     #[inline]
-    fn get_label(&mut self, _idx: u16) -> Label {
+    fn get_label(&mut self, _idx: u32) -> Label {
         #[cfg(debug_assertions)]
         unimplemented!();
         #[cfg(not(debug_assertions))]
@@ -269,12 +325,20 @@ macro_rules! try_cp_read {
         let idx = $crate::ReadWrite::read_from($reader)?;
         $crate::try_cp_read!(idx, $cp.$fn(idx))
     });
+
     ($idx: expr, $opt: expr) => ({
         match $opt {
             Some(s) => Ok(s),
             None => Err($crate::error::Error::Invalid("Constant pool entry index", Into::into($idx.to_string())))
         }
     })
+}
+
+#[macro_export]
+macro_rules! try_cp_read_idx {
+    ($cp: ident, $idx: expr, $fn: ident) => ({
+        $crate::try_cp_read!($idx, $cp.$fn($idx))
+    });
 }
 
 /// Helper macro to disambigurate two implementations for one type.
