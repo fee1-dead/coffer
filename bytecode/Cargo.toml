@@ -14,13 +14,13 @@ nom = "6.0.1"
 coffer-proc-macros = { path = "./macro" }
 indexmap = "1.6.1"
 
-[dev-dependencies]
-criterion = "0.3"
-curl = "0.4"
-zip = "0.5"
-class_sample = { git = "https://github.com/fee1-dead/class-sample-rs", branch = "master" }
+#[dev-dependencies]
+#criterion = "0.3"
+#curl = "0.4"
+#zip = "0.5"
+#class_sample = { git = "https://github.com/fee1-dead/class-sample-rs", branch = "master" }
 
 
-[[bench]]
-name = "insn"
-harness = false
+#[[bench]]
+#name = "insn"
+#harness = false

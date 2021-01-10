@@ -14,8 +14,6 @@
  *     You should have received a copy of the GNU Lesser General Public License
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
-#![feature(seek_convenience)]
-#![feature(arbitrary_enum_discriminant)]
 
 #[macro_use]
 extern crate bitflags;
@@ -32,19 +30,15 @@ use crate::full::{BootstrapMethod, Constant, MemberRef, Type, Catch, Dynamic, La
 use crate::full::cp::RawConstantEntry;
 
 pub mod constants;
-pub mod index;
-pub mod jcoder;
 pub mod error;
 
 pub mod mod_utf8;
-pub mod constant_pool;
 pub mod full;
 pub mod access;
 
 #[cfg(test)]
 mod tests;
 pub(crate) mod insn;
-pub(crate) mod byteswapper;
 
 /// The generic read and write trait. This indicates a structure can be read without additional contextual information.
 ///
@@ -300,24 +294,6 @@ pub trait ConstantPoolReadWrite where Self: Sized {
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()>;
 }
 
-macro_rules! impl_readwrite_nums {
-    ($(($i:ty, $s:literal)),*) => {
-        $(
-            impl ReadWrite for $i {
-                fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
-                    let mut bytes = [0u8; $s];
-                    reader.read_exact(&mut bytes)?;
-                    Ok(<$i>::from_be_bytes(bytes))
-                }
-                fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
-                    writer.write_all(&self.to_be_bytes())?;
-                    Ok(())
-                }
-            }
-        )*
-    };
-}
-
 #[macro_export]
 /// helpful macro to return an error if the constant entry is not found or occupied by a double-sized entry.
 macro_rules! try_cp_read {
@@ -360,6 +336,24 @@ macro_rules! write_to {
     };
     ($self: expr, $cp: expr, $writer: expr) => {
         $crate::ConstantPoolReadWrite::write_to($self, $cp, $writer)
+    };
+}
+
+macro_rules! impl_readwrite_nums {
+    ($(($i:ty, $s:literal)),*) => {
+        $(
+            impl ReadWrite for $i {
+                fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
+                    let mut bytes = [0u8; $s];
+                    reader.read_exact(&mut bytes)?;
+                    Ok(<$i>::from_be_bytes(bytes))
+                }
+                fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
+                    writer.write_all(&self.to_be_bytes())?;
+                    Ok(())
+                }
+            }
+        )*
     };
 }
 

@@ -14,26 +14,9 @@
     You should have received a copy of the GNU Lesser General Public License
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
-use crate::index::JClassIdx;
-use std::io::Cursor;
-
 mod mutf8;
 mod full_type;
 mod insn;
-
-#[test]
-fn test_parse_class_index() {
-    let samples = class_sample::get_sample_name_bytes(100);
-    for (name, bytes) in samples {
-        test_parse_class(name, bytes)
-    }
-}
-
-fn test_parse_class(name: String, bytes: Vec<u8>) {
-    let mut cursor = Cursor::new(bytes);
-    let _jclass = JClassIdx::try_from(&mut cursor).expect(&*format!("Parsing Class {}", name));
-}
-
 mod code_reading {
     use crate::full::{Code, BootstrapMethod, OrDynamic, Constant};
     use crate::{ConstantPoolReadWrite, ConstantPoolReader};

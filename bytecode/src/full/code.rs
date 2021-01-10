@@ -15,7 +15,7 @@
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::{Read, Write};
+use std::io::{Read, Write, Cursor};
 
 use indexmap::map::IndexMap;
 use nom::lib::std::borrow::Cow;
@@ -25,6 +25,8 @@ use crate::access::AccessFlags;
 use crate::full::{BootstrapMethod, Constant, FieldSignature, MemberRef, RawAttribute, To, Type, VerificationType};
 use crate::full::annotation::{CodeTypeAnnotation};
 use std::str::FromStr;
+use crate::insn::Instruction::AReturn;
+use std::collections::HashMap;
 
 /// Acts as a unique identifier to the code. Labels should be treated carefully because when labels become invalid (i.e. removed from the code array) it will become an error.
 #[derive(Debug, Eq, PartialOrd, PartialEq, Ord, Hash, Copy, Clone)]
@@ -44,13 +46,13 @@ pub enum StackValueType {
     /// Represents A stack value of computational type one. This should not be used when the stack type is a f64 or i64.
     One,
     /// Represents two stack values of computational type one, or one stack value of computational type two.
-    Two
+    Two,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum FloatType {
     Double,
-    Float
+    Float,
 }
 
 impl From<FloatType> for StackValueType {
@@ -76,7 +78,7 @@ impl From<FloatType> for LocalType {
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum NaNBehavior {
     ReturnsOne,
-    ReturnsNegativeOne
+    ReturnsNegativeOne,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -97,68 +99,118 @@ pub enum JumpCondition {
     IntegerGreaterThanOrEqualsZero,
     IsNull,
     IsNonNull,
-    Always
+    Always,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum LoadOrStore {
-    Load, Store
+    Load,
+    Store,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum GetOrPut {
-    Get, Put
+    Get,
+    Put,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum MemberType {
-    Static, Virtual
+    Static,
+    Virtual,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum LocalType {
-    Int, Long, Float, Double, Reference
+    Int,
+    Long,
+    Float,
+    Double,
+    Reference,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum ArrayType {
-    Byte, Bool, Short, Char, Int, Long, Float, Double, Reference
+    Byte,
+    Bool,
+    Short,
+    Char,
+    Int,
+    Long,
+    Float,
+    Double,
+    Reference,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum NumberType {
-    Int, Long, Float, Double
+    Int,
+    Long,
+    Float,
+    Double,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum BitType {
-    Byte, Short, Char, Int, Long, Float, Double
+    Byte,
+    Short,
+    Char,
+    Int,
+    Long,
+    Float,
+    Double,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum IntType {
-    Int, Long
+    Int,
+    Long,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum FloatOperation {
-    Divide, Add, Subtract, Multiply, Remainder, Negate
+    Divide,
+    Add,
+    Subtract,
+    Multiply,
+    Remainder,
+    Negate,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum IntOperation {
-    Divide, Add, Subtract, Multiply, Remainder, Negate, ExclusiveOr, Or, And, ShiftLeft, ShiftRight, UnsignedShiftRight
+    Divide,
+    Add,
+    Subtract,
+    Multiply,
+    Remainder,
+    Negate,
+    ExclusiveOr,
+    Or,
+    And,
+    ShiftLeft,
+    ShiftRight,
+    UnsignedShiftRight,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum MonitorOperation {
-    Enter, Exit
+    Enter,
+    Exit,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, ReadWrite)]
 #[tag_type(u8)]
 pub enum MethodHandleKind {
-    GetField = 1, GetStatic, PutField, PutStatic, InvokeVirtual, InvokeStatic, InvokeSpecial, NewInvokeSpecial, InvokeInterface
+    GetField = 1,
+    GetStatic,
+    PutField,
+    PutStatic,
+    InvokeVirtual,
+    InvokeStatic,
+    InvokeSpecial,
+    NewInvokeSpecial,
+    InvokeInterface,
 }
 
 /// Note: dynamic computed constants are syntactically allowed to refer to themselves via the bootstrap method table but it will fail during resolution.
@@ -167,13 +219,13 @@ pub enum MethodHandleKind {
 pub struct Dynamic {
     pub bsm: Box<BootstrapMethod>,
     pub name: Cow<'static, str>,
-    pub descriptor: Type
+    pub descriptor: Type,
 }
 
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub enum OrDynamic<T> {
     Dynamic(Dynamic),
-    Static(T)
+    Static(T),
 }
 
 impl<T> OrDynamic<T> {
@@ -202,7 +254,7 @@ impl From<Constant> for OrDynamic<Constant> {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ClassType {
     Object(Cow<'static, str>),
-    Array(u8, Type)
+    Array(u8, Type),
 }
 
 
@@ -257,19 +309,19 @@ pub enum Instruction {
     Jsr(Label),
     Ret(u16),
     Swap,
-    LocalInt(u16, i16),
+    IntIncrement(u16, i16),
     LineNumber(u16),
     TableSwitch {
         default: Label,
         low: i32,
-        offsets: Vec<Label>
+        offsets: Vec<Label>,
     },
     LookupSwitch {
         default: Label,
         table: IndexMap<i32, Label>,
     },
     /// Not real in bytecode, used as a marker of location.
-    Label(Label)
+    Label(Label),
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -279,7 +331,7 @@ pub struct LocalVariable {
     pub name: Cow<'static, str>,
     pub descriptor: Option<Type>,
     pub signature: Option<FieldSignature>,
-    pub index: u16
+    pub index: u16,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, ReadWrite, Debug)]
@@ -294,7 +346,7 @@ struct LocalVar {
     pub name: Cow<'static, str>,
     pub descriptor: Type,
     #[use_normal_rw]
-    pub index: u16
+    pub index: u16,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
@@ -306,20 +358,21 @@ pub struct LocalVarType {
     pub name: Cow<'static, str>,
     pub signature: FieldSignature,
     #[use_normal_rw]
-    pub index: u16
+    pub index: u16,
 }
 
 #[derive(Clone, PartialEq, Debug, ConstantPoolReadWrite)]
 #[attr_enum]
 enum CodeAttr {
-    LineNumberTable(#[vec_len_type(u16)] #[use_normal_rw] Vec<LineNumber>),
+    LineNumberTable(#[vec_len_type(u16)]
+                    #[use_normal_rw] Vec<LineNumber>),
     LocalVariableTable(#[vec_len_type(u16)] Vec<LocalVar>),
     LocalVariableTypeTable(#[vec_len_type(u16)] Vec<LocalVarType>),
     RuntimeInvisibleTypeAnnotations(#[vec_len_type(u16)] Vec<CodeTypeAnnotation>),
     RuntimeVisibleTypeAnnotations(#[vec_len_type(u16)] Vec<CodeTypeAnnotation>),
     StackMapTable(#[vec_len_type(u16)] Vec<RawFrame>),
     #[raw_variant]
-    Raw(RawAttribute)
+    Raw(RawAttribute),
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -327,7 +380,7 @@ pub enum CodeAttribute {
     VisibleTypeAnnotations(Vec<CodeTypeAnnotation>),
     InvisibleTypeAnnotations(Vec<CodeTypeAnnotation>),
     LocalVariables(Vec<LocalVariable>),
-    Raw(RawAttribute)
+    Raw(RawAttribute),
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash)]
@@ -335,7 +388,7 @@ pub struct Catch {
     pub start: Label,
     pub end: Label,
     pub handler: Label,
-    pub catch: Option<Cow<'static, str>>
+    pub catch: Option<Cow<'static, str>>,
 }
 
 impl ConstantPoolReadWrite for Catch {
@@ -358,7 +411,7 @@ pub struct Code {
     pub max_locals: u16,
     pub code: Vec<Instruction>,
     pub catches: Vec<Catch>,
-    pub attrs: Vec<CodeAttribute>
+    pub attrs: Vec<CodeAttribute>,
 }
 
 impl ConstantPoolReadWrite for Code {
@@ -370,14 +423,13 @@ impl ConstantPoolReadWrite for Code {
         use crate::full::StackValueType::*;
         use crate::full::MemberType::*;
         use crate::full::{IntOperation as IOp, FloatOperation as FOp};
-        use std::collections::HashMap;
         use crate::full::cp::RawConstantEntry;
-        use std::io::{Cursor, SeekFrom, Seek};
+        use std::io::{SeekFrom, Seek};
 
         struct Labeler<'a, T: ConstantPoolReader> {
             inner: &'a mut T,
             labels: HashMap<u32, crate::full::Label>,
-            catches: &'a [Catch]
+            catches: &'a [Catch],
         }
         impl<'a, T: ConstantPoolReader> ConstantPoolReader for Labeler<'a, T> {
             fn read_raw(&mut self, idx: u16) -> Option<RawConstantEntry> {
@@ -442,8 +494,8 @@ impl ConstantPoolReadWrite for Code {
                 I::MonitorEnter => Monitor(MonitorOperation::Enter),
                 I::MonitorExit => Monitor(MonitorOperation::Exit),
 
-                I::IInc(idx, val) => LocalInt(idx as u16, val as i16),
-                I::Wide(Wide::IInc(idx, val))  => LocalInt(idx, val),
+                I::IInc(idx, val) => IntIncrement(idx as u16, val as i16),
+                I::Wide(Wide::IInc(idx, val)) => IntIncrement(idx, val),
 
                 I::Pop => Pop(One),
                 I::Pop2 => Pop(Two),
@@ -664,7 +716,7 @@ impl ConstantPoolReadWrite for Code {
                 I::Return => Return(None),
 
                 I::TableSwitch(dflt, TblS { low, offsets, .. }) => TableSwitch { default: lbl!(dflt), low, offsets: offsets.into_iter().map(|i| lbl!(i)).collect() },
-                I::LookupSwitch(dflt, switches) => LookupSwitch { default: lbl!(dflt), table: switches.into_iter().map(|SwitchEntry(i,to)| (i, lbl!(to))).collect() },
+                I::LookupSwitch(dflt, switches) => LookupSwitch { default: lbl!(dflt), table: switches.into_iter().map(|SwitchEntry(i, to)| (i, lbl!(to))).collect() },
 
                 I::GetStatic(field) => Field(Get, Static, try_cp_read!(field, labeler.read_or_dynamic(field, ConstantPoolReader::read_member))?),
                 I::PutStatic(field) => Field(Put, Static, try_cp_read!(field, labeler.read_or_dynamic(field, ConstantPoolReader::read_member))?),
@@ -722,9 +774,15 @@ impl ConstantPoolReadWrite for Code {
             let start = read_from!(&mut labeler, reader)?;
             let end = read_from!(&mut labeler, reader)?;
             let handler = read_from!(&mut labeler, reader)?;
-            let ty = { let idx = u16::read_from(reader)?; if idx == 0 { None } else { Some(try_cp_read_idx!(labeler, idx, read_utf8)?) } };
+            let ty = {
+                let idx = u16::read_from(reader)?;
+                if idx == 0 { None } else { Some(try_cp_read_idx!(labeler, idx, read_utf8)?) }
+            };
             catches.push(Catch {
-                start, end, handler, catch: ty
+                start,
+                end,
+                handler,
+                catch: ty,
             });
         }
         labeler.catches = &catches;
@@ -747,7 +805,7 @@ impl ConstantPoolReadWrite for Code {
                         let start = labeler.get_label(l.start as u32);
                         let end = labeler.get_label((l.start + l.len) as u32);
 
-                        let key = LocalVarKey ( start, end, l.index, l.name.clone() );
+                        let key = LocalVarKey(start, end, l.index, l.name.clone());
                         if let Some(v) = local_vars.get_mut(&key) {
                             v.descriptor = Some(l.descriptor);
                         } else {
@@ -757,7 +815,7 @@ impl ConstantPoolReadWrite for Code {
                                 name: l.name,
                                 descriptor: Some(l.descriptor),
                                 signature: None,
-                                index: l.index
+                                index: l.index,
                             });
                         }
                     }
@@ -766,7 +824,7 @@ impl ConstantPoolReadWrite for Code {
                     for l in vartypes {
                         let start = labeler.get_label(l.start as u32);
                         let end = labeler.get_label((l.start + l.len) as u32);
-                        let key = LocalVarKey ( start, end, l.index, l.name.clone() );
+                        let key = LocalVarKey(start, end, l.index, l.name.clone());
                         if let Some(v) = local_vars.get_mut(&key) {
                             v.signature = Some(l.signature);
                         } else {
@@ -776,7 +834,7 @@ impl ConstantPoolReadWrite for Code {
                                 name: l.name,
                                 descriptor: None,
                                 signature: Some(l.signature),
-                                index: l.index
+                                index: l.index,
                             });
                         }
                     }
@@ -787,7 +845,9 @@ impl ConstantPoolReadWrite for Code {
                 CodeAttr::RuntimeVisibleTypeAnnotations(an) => attrs.push(CodeAttribute::VisibleTypeAnnotations(an))
             }
         }
-
+        if !local_vars.is_empty() {
+            attrs.push(CodeAttribute::LocalVariables(local_vars.into_iter().map(|(_, l)| l).collect()));
+        }
         instructions.reserve(to_insert.len());
         for (k, v) in labeler.labels {
             to_insert.entry(pos2idx[&k]).or_default().push(Label(v));
@@ -798,11 +858,85 @@ impl ConstantPoolReadWrite for Code {
             }
         }
         Ok(Code {
-            max_stack, max_locals, code: instructions, catches, attrs
+            max_stack,
+            max_locals,
+            code: instructions,
+            catches,
+            attrs,
         })
     }
 
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<(), Error> {
+        use crate::constants::insn::*;
+        let mut buf: Vec<Vec<u8>> = Vec::new();
+        let mut jumps: Vec<&Instruction> = Vec::new();
+        let insns = self.code.iter();
+        let mut cursor: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+        let mut line_numbers: Vec<(u16, u16)> = Vec::new();
+        let mut labels: HashMap<Label, (usize, usize)> = HashMap::new();
+        for insn in insns {
+            match insn {
+                Instruction::NoOp => NOP.write_to(writer)?,
+                Instruction::PushNull => ACONST_NULL.write_to(writer)?,
+                Instruction::Push(_) => {}
+                Instruction::Duplicate(StackValueType::One, None) => DUP.write_to(writer)?,
+                Instruction::Duplicate(StackValueType::One, Some(StackValueType::One)) => DUP_X1.write_to(writer)?,
+                Instruction::Duplicate(StackValueType::One, Some(StackValueType::Two)) => DUP_X2.write_to(writer)?,
+                Instruction::Duplicate(StackValueType::Two, None) => DUP2.write_to(writer)?,
+                Instruction::Duplicate(StackValueType::Two, Some(StackValueType::One)) => DUP2_X1.write_to(writer)?,
+                Instruction::Duplicate(StackValueType::Two, Some(StackValueType::Two)) => DUP2_X2.write_to(writer)?,
+                Instruction::Pop(StackValueType::One) => POP.write_to(writer)?,
+                Instruction::Pop(StackValueType::Two) => POP2.write_to(writer)?,
+                Instruction::CompareLongs => {}
+                Instruction::CompareFloats(_, _) => {}
+                Instruction::LocalVariable(_, _, _) => {}
+                Instruction::Array(_, _) => {}
+                Instruction::ArrayLength => {}
+                Instruction::IntOperation(_, _) => {}
+                Instruction::FloatOperation(_, _) => {}
+                Instruction::Throw => ATHROW.write_to(writer)?,
+                Instruction::CheckCast(_) => {}
+                Instruction::InstanceOf(_) => {}
+                Instruction::NewArray(_, _) => {}
+                Instruction::Monitor(MonitorOperation::Enter) => MONITORENTER.write_to(writer)?,
+                Instruction::Monitor(MonitorOperation::Exit) => MONITOREXIT.write_to(writer)?,
+                Instruction::New(_) => {}
+                Instruction::Conversion(_, _) => {}
+                Instruction::ConvertInt(_) => {}
+                Instruction::Return(None) => RETURN.write_to(writer)?,
+                Instruction::Return(Some(LocalType::Reference)) => ARETURN.write_to(writer)?,
+                Instruction::Return(Some(LocalType::Long)) => LRETURN.write_to(writer)?,
+                Instruction::Return(Some(LocalType::Int)) => IRETURN.write_to(writer)?,
+                Instruction::Return(Some(LocalType::Double)) => DRETURN.write_to(writer)?,
+                Instruction::Return(Some(LocalType::Float)) => FRETURN.write_to(writer)?,
+                Instruction::Field(_, _, _) => {}
+                Instruction::InvokeExact(_, _) => {}
+                Instruction::InvokeSpecial(_) => {}
+                Instruction::InvokeDynamic(_) => {}
+                Instruction::InvokeInterface(_) => {}
+                Instruction::Jsr(_) => {}
+                Instruction::Ret(_) => {}
+                Instruction::Swap => SWAP.write_to(writer)?,
+                Instruction::IntIncrement(l @ 0..=255, inc @ 0..=255) => {
+                    IINC.write_to(writer)?;
+                    (*l as u8).write_to(writer)?;
+                    (*inc as u8).write_to(writer)?;
+                }
+                Instruction::IntIncrement(l, inc) => {
+                    WIDE.write_to(writer)?;
+                    IINC.write_to(writer)?;
+                    l.write_to(writer)?;
+                    inc.write_to(writer)?;
+                }
+                Instruction::LineNumber(_) => {}
+                Instruction::LookupSwitch { .. } | Instruction::TableSwitch { .. } | Instruction::Jump(_, _) => {
+                    buf.push(cursor.into_inner());
+                    cursor = Cursor::new(Vec::new());
+                    jumps.push(insn);
+                }
+                Instruction::Label(_) => {}
+            }
+        }
         unimplemented!()
     }
 }
@@ -810,13 +944,14 @@ impl ConstantPoolReadWrite for Code {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum RawFrame {
-    Same(u16), SameLocalsOneStack(u16, VerificationType),
+    Same(u16),
+    SameLocalsOneStack(u16, VerificationType),
     /// Chop up to three.
     Chop(u16, u8),
     /// At most three items.
     Append(u16, Vec<VerificationType>),
     /// Locals and then stack values.
-    Full(u16, Vec<VerificationType>, Vec<VerificationType>)
+    Full(u16, Vec<VerificationType>, Vec<VerificationType>),
 }
 
 impl ConstantPoolReadWrite for RawFrame {
@@ -841,7 +976,8 @@ impl ConstantPoolReadWrite for RawFrame {
                     };
                     vec.push(veri);
                 }
-                vec }),
+                vec
+            }),
             _ => RawFrame::Full(u16::read_from(reader)?, {
                 let locals = u16::read_from(reader)?;
                 let mut local = Vec::with_capacity((tag - 251) as usize);
@@ -857,20 +993,20 @@ impl ConstantPoolReadWrite for RawFrame {
                 }
                 local
             }, {
-                let stacks = u16::read_from(reader)?;
-                let mut stack = Vec::with_capacity((tag - 251) as usize);
-                let mut i = 0;
-                while i < stacks {
-                    let veri = VerificationType::read_from(cp, reader)?;
-                    i += if let VerificationType::Double | VerificationType::Long = veri {
-                        2
-                    } else {
-                        1
-                    };
-                    stack.push(veri);
-                }
-                stack
-            })
+                                    let stacks = u16::read_from(reader)?;
+                                    let mut stack = Vec::with_capacity((tag - 251) as usize);
+                                    let mut i = 0;
+                                    while i < stacks {
+                                        let veri = VerificationType::read_from(cp, reader)?;
+                                        i += if let VerificationType::Double | VerificationType::Long = veri {
+                                            2
+                                        } else {
+                                            1
+                                        };
+                                        stack.push(veri);
+                                    }
+                                    stack
+                                })
         })
     }
 
@@ -928,7 +1064,7 @@ pub struct Export {
     pub flags: AccessFlags,
     /// not exported; use the function to get the strings.
     #[vec_len_type(u16)]
-    pub to: Vec<To>
+    pub to: Vec<To>,
 }
 
 impl Export {
@@ -937,7 +1073,7 @@ impl Export {
             Self {
                 package: pkg.into(),
                 flags,
-                to: std::mem::transmute(to)
+                to: std::mem::transmute(to),
             }
         }
     }
@@ -954,7 +1090,7 @@ pub struct Open {
     #[use_normal_rw]
     pub flags: AccessFlags,
     #[vec_len_type(u16)]
-    pub to: Vec<To>
+    pub to: Vec<To>,
 }
 
 impl Open {
@@ -963,7 +1099,7 @@ impl Open {
             Self {
                 package: pkg.into(),
                 flags,
-                to: std::mem::transmute(to)
+                to: std::mem::transmute(to),
             }
         }
     }

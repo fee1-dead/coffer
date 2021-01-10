@@ -26,7 +26,7 @@ use annotation::Annotation;
 pub use code::*;
 pub use signature::*;
 
-use crate::{ConstantPoolReader, ConstantPoolReadWrite, ConstantPoolWriter, Error, read_from, ReadWrite, Result, try_cp_read, try_cp_read_idx};
+use crate::{ConstantPoolReader, ConstantPoolReadWrite, ConstantPoolWriter, Error, read_from, ReadWrite, Result, try_cp_read};
 use crate::access::AccessFlags;
 use crate::full::annotation::{AnnotationValue, FieldTypeAnnotation, MethodTypeAnnotation};
 use crate::full::version::JavaVersion;
@@ -99,35 +99,16 @@ impl ConstantPoolReadWrite for MethodHandle {
     }
 
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<(), Error> {
-        fn not_init(handle: &MethodHandle) -> Result<()> {
-            match handle.member.name.as_ref() {
-                "<init>" => Err(Error::Invalid("MethodHandle", Cow::Borrowed("name must not be <init>"))),
-                "<clinit>" => Err(Error::Invalid("MethodHandle", Cow::Borrowed("name must not be <clinit>"))),
-                _ => Ok(())
-            }
-        }
         self.kind.write_to(writer)?;
         match self.kind {
-            MethodHandleKind::GetField  |
-            MethodHandleKind::GetStatic |
-            MethodHandleKind::PutField |
-            MethodHandleKind::PutStatic => {
-                self.member.write_to(cp, writer)
-            }
             MethodHandleKind::InvokeVirtual |
             MethodHandleKind::InvokeStatic |
             MethodHandleKind::InvokeSpecial |
-            MethodHandleKind::InvokeInterface => {
-                not_init(self)?;
-                self.member.write_to(cp, writer)
-            }
-            MethodHandleKind::NewInvokeSpecial => {
-                if self.member.name != "<init>" {
-                    Err(Error::Invalid("MethodHandle", Cow::Borrowed("name for NewInvokeSpecial must be <init>")))
-                } else {
-                    self.member.write_to(cp, writer)
-                }
-            }
+            MethodHandleKind::InvokeInterface if self.member.name == "<init>" || self.member.name == "<clinit>" =>
+                Err(Error::Invalid("MethodHandle", Cow::Borrowed("name must not be <init> or <clinit>"))),
+            MethodHandleKind::NewInvokeSpecial if self.member.name != "<init>" =>
+                Err(Error::Invalid("MethodHandle", Cow::Borrowed("name for NewInvokeSpecial must be <init>"))),
+            _ => self.member.write_to(cp, writer)
         }
     }
 }

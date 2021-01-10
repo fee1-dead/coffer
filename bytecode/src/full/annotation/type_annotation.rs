@@ -7,25 +7,34 @@ use crate::full::code::{Catch, Label};
 use super::AnnotationValue;
 use super::super::Type;
 
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ReadWrite)]
+#[tag_type(u8)]
 pub enum ClassTypeAnnotationTarget {
-    GenericTypeParameter(u8) = 0,
+    #[tag(0)]
+    GenericTypeParameter(u8),
     /// `u16::MAX` is `extends`, others are indices of `implements`
-    ExtendsImplementsClause(u16) = 0x10,
+    #[tag(0x10)]
+    ExtendsImplementsClause(u16),
     /// Type parameter index, and then bound index
-    GenericTypeParameterBound(u8, u8) = 0x11,
+    #[tag(0x11)]
+    GenericTypeParameterBound(u8, u8),
 }
 
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ReadWrite)]
+#[tag_type(u8)]
 pub enum MethodTypeAnnotationTarget {
-    GenericTypeParameter(u8) = 1,
-    GenericTypeParameterBound(u8, u8) = 0x12,
-    Return = 0x14,
-    Reciever = 0x15,
-    FormalParameter(u8) = 0x16,
-    Throws(u16) = 0x17
+    #[tag(0x1)]
+    GenericTypeParameter(u8),
+    #[tag(0x12)]
+    GenericTypeParameterBound(u8, u8),
+    #[tag(0x14)]
+    Return,
+    #[tag(0x15)]
+    Reciever,
+    #[tag(0x16)]
+    FormalParameter(u8),
+    #[tag(0x17)]
+    Throws(u16)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
