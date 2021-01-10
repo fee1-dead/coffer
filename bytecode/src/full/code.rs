@@ -404,7 +404,7 @@ impl ConstantPoolReadWrite for Code {
         }
         let max_stack = u16::read_from(reader)?;
         let max_locals = u16::read_from(reader)?;
-        let mut code = Vec::with_capacity(u32::read_from(reader)? as usize);
+        let mut code = vec![0; u32::read_from(reader)? as usize];
         reader.read_exact(&mut code)?;
         let mut labeler = Labeler { inner: cp, labels: HashMap::new(), catches: &[] };
         let len = code.len();
@@ -430,6 +430,7 @@ impl ConstantPoolReadWrite for Code {
             macro_rules! lbl {
                 ($off:expr) => ({labeler.get_label((curpos as i64 + $off as i64) as u32)});
             }
+            #[inline]
             fn push<C: Into<OrDynamic<Constant>>>(c: C) -> Instruction { Push(c.into()) }
             let insn = match insn {
                 I::AThrow => Throw,
@@ -789,7 +790,7 @@ impl ConstantPoolReadWrite for Code {
 
         instructions.reserve(to_insert.len());
         for (k, v) in labeler.labels {
-            to_insert.entry(k as usize).or_default().push(Label(v));
+            to_insert.entry(pos2idx[&k]).or_default().push(Label(v));
         }
         for (k, v) in to_insert.into_iter().rev() {
             for i in v {

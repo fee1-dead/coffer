@@ -301,7 +301,7 @@ pub trait ConstantPoolReadWrite where Self: Sized {
 }
 
 macro_rules! impl_readwrite_nums {
-    ($($i:ty, $s:literal)*) => {
+    ($(($i:ty, $s:literal)),*) => {
         $(
             impl ReadWrite for $i {
                 fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
@@ -363,7 +363,7 @@ macro_rules! write_to {
     };
 }
 
-impl_readwrite_nums! { u8, 1  i8, 1  u16, 2  i16, 2  u32, 4  i32, 4  f32, 4  u64, 8  i64, 8  f64, 8  u128, 16  i128, 16 }
+impl_readwrite_nums! { (u8, 1),  (i8, 1),  (u16, 2),  (i16, 2),  (u32, 4),  (i32, 4),  (f32, 4),  (u64, 8),  (i64, 8),  (f64, 8),  (u128, 16),  (i128, 16) }
 
 impl ReadWrite for String {
     fn read_from<T: Read>(reader: &mut T) -> Result<Self> {

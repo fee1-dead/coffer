@@ -16,14 +16,11 @@
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::hash::{Hash, Hasher};
-use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::str::FromStr;
-
-use indexmap::map::IndexMap;
 
 use annotation::Annotation;
 pub use code::*;
@@ -31,8 +28,7 @@ pub use signature::*;
 
 use crate::{ConstantPoolReader, ConstantPoolReadWrite, ConstantPoolWriter, Error, read_from, ReadWrite, Result, try_cp_read, try_cp_read_idx};
 use crate::access::AccessFlags;
-use crate::full::annotation::{AnnotationValue, CodeTypeAnnotation, FieldTypeAnnotation, MethodTypeAnnotation};
-use crate::full::cp::RawConstantEntry;
+use crate::full::annotation::{AnnotationValue, FieldTypeAnnotation, MethodTypeAnnotation};
 use crate::full::version::JavaVersion;
 
 pub mod annotation;
@@ -127,9 +123,10 @@ impl ConstantPoolReadWrite for MethodHandle {
             }
             MethodHandleKind::NewInvokeSpecial => {
                 if self.member.name != "<init>" {
-                    return Err(Error::Invalid("MethodHandle", Cow::Borrowed("name for NewInvokeSpecial must be <init>")))
+                    Err(Error::Invalid("MethodHandle", Cow::Borrowed("name for NewInvokeSpecial must be <init>")))
+                } else {
+                    self.member.write_to(cp, writer)
                 }
-                self.member.write_to(cp, writer)
             }
         }
     }
@@ -318,8 +315,8 @@ impl Display for Type {
 
 impl Type {
     #[inline]
-    pub fn method(params: Vec<Type>, ret: Option<Type>) -> Type {
-        Type::Method(params, ret.map(Box::new))
+    pub fn method<P: Into<Vec<Type>>>(params: P, ret: Option<Type>) -> Type {
+        Type::Method(params.into(), ret.map(Box::new))
     }
     #[inline]
     pub fn reference<S>(str: S) -> Type where S: Into<Cow<'static, str>> {

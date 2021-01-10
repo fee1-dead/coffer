@@ -1,7 +1,7 @@
 use std::hash::{Hash, Hasher};
 use std::borrow::Cow;
 
-#[derive(ReadWrite, Debug)]
+#[derive(ReadWrite, Debug, Clone)]
 #[tag_type(u8)]
 pub enum RawConstantEntry {
     #[tag(1)]

@@ -2,7 +2,7 @@ use crate::full::Type;
 #[test]
 fn type_method_to_str() {
     assert_eq!(
-        Type::method(vec![
+        Type::method([
             Type::Int,
             Type::Double,
             Type::reference("java/lang/Thread")
