@@ -26,7 +26,7 @@ use std::io::{Read, Write};
 
 pub use crate::error::Error;
 pub use crate::error::Result;
-use crate::full::{BootstrapMethod, Constant, MemberRef, Type, Catch, Dynamic, Label, OrDynamic};
+use crate::full::{BootstrapMethod, Constant, MemberRef, Type, Catch, Dynamic, Label, OrDynamic, MethodHandleKind};
 use crate::full::cp::RawConstantEntry;
 
 pub mod constants;
@@ -52,12 +52,36 @@ pub trait ReadWrite where Self: Sized {
 /// A trait for writing constant pool entries.
 pub trait ConstantPoolWriter {
     fn insert_raw(&mut self, value: RawConstantEntry) -> u16;
-    fn insert_constant(&mut self, value: &Constant) -> u16;
+    fn insert_constant(&mut self, value: Constant) -> u16 {
+        match value {
+            Constant::I32(i) => self.insert_int(i),
+            Constant::F32(f) => self.insert_float(f),
+            Constant::I64(l) => self.insert_long(l),
+            Constant::F64(d) => self.insert_double(d),
+            Constant::String(s) => self.insert_indirect_str(8, s),
+            Constant::Class(s) => self.insert_indirect_str(7, s),
+            Constant::Member(mem) => self.insert_member(mem),
+            Constant::MethodType(t) => {
+                let desc = self.insert_utf8(t.to_string());
+                self.insert_raw(RawConstantEntry::MethodType(desc))
+            },
+            Constant::MethodHandle(h) => {
+                let mem = self.insert_member(h.member);
+                self.insert_raw(RawConstantEntry::MethodHandle(unsafe { *(&h.kind as *const MethodHandleKind as *const u8) }, mem))
+            }
+        }
+    }
+    fn insert_ordynamic<T, F>(&mut self, or_dyn: OrDynamic<T>, f: F) -> u16 where F: FnOnce(&mut Self, T) -> u16 {
+        match or_dyn {
+            OrDynamic::Dynamic(d) => self.insert_dynamic(d),
+            OrDynamic::Static(t) => f(self, t)
+        }
+    }
     /// InvokeDynamic and Dynamic is distinguished by the [Type](crate::Type) enum.
-    fn insert_dynamic(&mut self, bsm: &BootstrapMethod, name: &str, ty: Type) -> u16;
+    fn insert_dynamic(&mut self, d: Dynamic) -> u16;
     /// insert an indirect string such as String / Module / Package entry, used by the procedural macro.
     fn insert_indirect_str<T: Into<Cow<'static, str>>>(&mut self, tag: u8, st: T) -> u16 {
-        let str_ref = self.insert_utf8(st);
+        let str_ref = self.insert_utf8(st.into().into_owned());
         self.insert_raw(match tag {
             7 => RawConstantEntry::Class(str_ref),
             8 => RawConstantEntry::String(str_ref),
@@ -72,13 +96,17 @@ pub trait ConstantPoolWriter {
             }
         })
     }
-    fn insert_utf8<T: Into<Cow<'static, str>>>(&mut self, st: T) -> u16 {
+    fn insert_utf8<T: Into<Cow<'static, str>>>(&mut self, st: T) ->  u16 {
         self.insert_raw(RawConstantEntry::UTF8(st.into()))
     }
-    fn insert_nameandtype<N: Into<Cow<'static, str>>, D: Into<Cow<'static, str>>>(&mut self, name: N, descriptor: D) -> u16 {
+    fn insert_nameandtype<T: Into<Cow<'static, str>>, T2: Into<Cow<'static, str>>>(&mut self, name: T, descriptor: T2) -> u16 {
         let a = self.insert_utf8(name);
         let b = self.insert_utf8(descriptor);
         self.insert_raw(RawConstantEntry::NameAndType(a, b))
+    }
+    fn insert_class<T: Into<Cow<'static, str>>>(&mut self, c: T) -> u16 {
+        let idx = self.insert_utf8(c);
+        self.insert_raw(RawConstantEntry::Class(idx))
     }
     fn insert_int(&mut self, i: i32) -> u16 {
         self.insert_raw(RawConstantEntry::Int(i))
@@ -93,9 +121,9 @@ pub trait ConstantPoolWriter {
         self.insert_raw(RawConstantEntry::Double(d))
     }
     fn insert_member(&mut self, mem: MemberRef) -> u16 {
-        let a = self.insert_indirect_str(7, mem.owner.clone());
-        let b = self.insert_nameandtype(mem.name.clone(), mem.descriptor.to_string());
-        self.insert_raw(match mem {
+        let a = self.insert_class(mem.owner);
+        let b = self.insert_nameandtype(mem.name, mem.descriptor);
+        self.insert_raw(match &mem {
             MemberRef {
                 descriptor: Type::Method(..),
                 itfs: true,
@@ -151,10 +179,7 @@ pub trait ConstantPoolReader {
             Some(RawConstantEntry::Long(l)) => Some(Constant::I64(l)),
             Some(RawConstantEntry::Float(f)) => Some(Constant::F32(f)),
             Some(RawConstantEntry::Double(d)) => Some(Constant::F64(d)),
-            Some(RawConstantEntry::Field(..)) => self.read_member(idx).map(Constant::Field),
-            Some(RawConstantEntry::Method(..)) => self.read_member(idx).map(|m| Constant::Method(false, m)),
-            Some(RawConstantEntry::InterfaceMethod(..)) => self.read_member(idx).map(|m| Constant::Method(true, m)),
-            _ => None
+            _ => self.read_member(idx).map(Constant::Member)
         }
     }
     fn read_int(&mut self, idx: u16) -> Option<i32> {

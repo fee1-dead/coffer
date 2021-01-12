@@ -19,7 +19,7 @@ use std::borrow::Cow;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::hash::{Hash, Hasher};
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Read, Write};
 use std::str::FromStr;
 
 use annotation::Annotation;
@@ -121,10 +121,15 @@ pub enum Constant {
     F64(f64),
     String(Cow<'static, str>),
     Class(Cow<'static, str>),
-    Field(MemberRef),
-    Method(bool, MemberRef),
+    Member(MemberRef),
     MethodType(Type),
     MethodHandle(MethodHandle)
+}
+
+impl Constant {
+    fn is_wide(&self) -> bool {
+        matches!(self, Constant::I64(_) | Constant::F64(_))
+    }
 }
 
 impl ConstantPoolReadWrite for Constant {
@@ -134,7 +139,7 @@ impl ConstantPoolReadWrite for Constant {
     }
 
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()> {
-        ReadWrite::write_to(&cp.insert_constant(self), writer)
+        ReadWrite::write_to(&cp.insert_constant(self.clone()), writer)
     }
 }
 
@@ -150,21 +155,15 @@ impl Hash for Constant {
     fn hash<H: Hasher>(&self, state: &mut H) {
         std::mem::discriminant(self).hash(state);
         match self {
-            Constant::I32(i) => { i.hash(state); }
-            Constant::F32(f) => { (*f).to_bits().hash(state); }
-            Constant::I64(i) => { i.hash(state); }
-            Constant::F64(f) => { (*f).to_bits().hash(state); }
-            Constant::String(s) => { s.hash(state); }
-            Constant::Class(s) => { s.hash(state); }
-            Constant::MethodType(s) => { s.hash(state); }
-            Constant::MethodHandle(m) => { m.hash(state) }
-            Constant::Field(mem) => {
-                mem.hash(state);
-            }
-            Constant::Method(b, mem) => {
-                b.hash(state);
-                mem.hash(state);
-            }
+            Constant::I32(i) => i.hash(state),
+            Constant::F32(f) => (*f).to_bits().hash(state),
+            Constant::I64(i) => i.hash(state),
+            Constant::F64(f) => (*f).to_bits().hash(state),
+            Constant::String(s) => s.hash(state),
+            Constant::Class(s) => s.hash(state),
+            Constant::MethodType(s) => s.hash(state),
+            Constant::MethodHandle(m) => m.hash(state),
+            Constant::Member(mem) => mem.hash(state)
         }
     }
 }
@@ -177,6 +176,44 @@ pub enum Type {
     ///
     /// It is invalid if any of the parameter types and the return type is a method type.
     Method(Vec<Type>, Option<Box<Type>>)
+}
+
+impl Type {
+    /// returns `true` if this type is `Long` or `Double`.
+    #[inline]
+    fn is_wide(&self) -> bool {
+        matches!(self, Type::Long | Type::Double)
+    }
+}
+
+impl From<Type> for Cow<'static, str> {
+    fn from(t: Type) -> Self {
+        match t {
+            Type::Byte => "B".into(),
+            Type::Char => "C".into(),
+            Type::Double => "D".into(),
+            Type::Float => "F".into(),
+            Type::Int => "I".into(),
+            Type::Long => "J".into(),
+            Type::Boolean => "Z".into(),
+            Type::Short => "S".into(),
+            Type::Ref(t) => format!("L{};", t).into(),
+            Type::ArrayRef(dim, t) => format!("{}{}", "[".repeat(dim as usize), t).into(),
+            Type::Method(ty, ret) => {
+                let mut s = String::from('(');
+                for t in ty {
+                    s.push_str(Cow::from(t).as_ref());
+                }
+                s.push(')');
+                if let Some(t) = ret {
+                    s.push_str(Cow::from(*t).as_ref());
+                } else {
+                    s.push('V');
+                }
+                s.into()
+            }
+        }
+    }
 }
 
 impl FromStr for Type {

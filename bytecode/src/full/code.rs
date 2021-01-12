@@ -25,8 +25,8 @@ use crate::access::AccessFlags;
 use crate::full::{BootstrapMethod, Constant, FieldSignature, MemberRef, RawAttribute, To, Type, VerificationType};
 use crate::full::annotation::{CodeTypeAnnotation};
 use std::str::FromStr;
-use crate::insn::Instruction::{AReturn, FCmpL};
 use std::collections::HashMap;
+use std::convert::TryFrom;
 
 /// Acts as a unique identifier to the code. Labels should be treated carefully because when labels become invalid (i.e. removed from the code array) it will become an error.
 #[derive(Debug, Eq, PartialOrd, PartialEq, Ord, Hash, Copy, Clone)]
@@ -131,8 +131,7 @@ pub enum LocalType {
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum ArrayType {
-    Byte,
-    Bool,
+    ByteOrBool,
     Short,
     Char,
     Int,
@@ -257,6 +256,14 @@ pub enum ClassType {
     Array(u8, Type),
 }
 
+impl From<ClassType> for Cow<'static, str> {
+    fn from(t: ClassType) -> Self {
+        match t {
+            ClassType::Object(s) => s,
+            ClassType::Array(dim, ty) => Cow::Owned(format!("{}{}", "[".repeat(dim as usize), ty))
+        }
+    }
+}
 
 /// Abstract tagged union to represent the instruction set.
 /// Note that while each valid instruction corresponds to one and only one enum variant,
@@ -305,7 +312,7 @@ pub enum Instruction {
     InvokeExact(MemberType, OrDynamic<MemberRef>),
     InvokeSpecial(OrDynamic<MemberRef>),
     InvokeDynamic(Dynamic),
-    InvokeInterface(OrDynamic<MemberRef>),
+    InvokeInterface(OrDynamic<MemberRef>, u8),
     Jsr(Label),
     Ret(u16),
     Swap,
@@ -470,7 +477,7 @@ impl ConstantPoolReadWrite for Code {
             let insn = match opcode {
                 crate::constants::insn::TABLESWITCH | crate::constants::insn::LOOKUPSWITCH => {
                     // pad 0-3 bytes to align properly
-                    code_reader.seek(SeekFrom::Current((4 - ((curpos % 4) & 3)) as i64))?;
+                    code_reader.seek(SeekFrom::Current((4 - (curpos & 3)) as i64))?;
                     let op = [opcode];
                     let mut temp_read = (&op).chain(&mut code_reader);
                     crate::insn::Instruction::read_from(&mut temp_read)?
@@ -537,7 +544,7 @@ impl ConstantPoolReadWrite for Code {
                 I::DALoad => Array(Load, ArrayType::Double),
                 I::CALoad => Array(Load, ArrayType::Char),
                 I::SALoad => Array(Load, ArrayType::Short),
-                I::BALoad => Array(Load, ArrayType::Byte),
+                I::BALoad => Array(Load, ArrayType::ByteOrBool),
                 I::AALoad => Array(Load, ArrayType::Reference),
 
                 I::IAStore => Array(Store, ArrayType::Int),
@@ -546,7 +553,7 @@ impl ConstantPoolReadWrite for Code {
                 I::DAStore => Array(Store, ArrayType::Double),
                 I::CAStore => Array(Store, ArrayType::Char),
                 I::SAStore => Array(Store, ArrayType::Short),
-                I::BAStore => Array(Store, ArrayType::Byte),
+                I::BAStore => Array(Store, ArrayType::ByteOrBool),
                 I::AAStore => Array(Store, ArrayType::Reference),
 
                 I::ALoad0 => LocalVariable(Load, LocalType::Reference, 0),
@@ -727,7 +734,7 @@ impl ConstantPoolReadWrite for Code {
                 I::InvokeVirtual(m) => InvokeExact(Virtual, try_cp_read!(m, labeler.read_or_dynamic(m, ConstantPoolReader::read_member))?),
 
                 I::InvokeSpecial(m) => InvokeSpecial(try_cp_read!(m, labeler.read_or_dynamic(m, ConstantPoolReader::read_member))?),
-                I::InvokeInterface(m, _, _) => InvokeInterface(try_cp_read!(m, labeler.read_or_dynamic(m, ConstantPoolReader::read_member))?),
+                I::InvokeInterface(m, c, _) => InvokeInterface(try_cp_read!(m, labeler.read_or_dynamic(m, ConstantPoolReader::read_member))?, c),
                 I::InvokeDynamic(d, _) => InvokeDynamic(try_cp_read_idx!(labeler, d, read_invokedynamic)?),
 
                 I::New(n) => New(try_cp_read!(n, labeler.read_or_dynamic(n, ConstantPoolReader::read_class))?),
@@ -840,7 +847,7 @@ impl ConstantPoolReadWrite for Code {
                     }
                 }
                 CodeAttr::Raw(r) => attrs.push(CodeAttribute::Raw(r)),
-                CodeAttr::StackMapTable(_) => {}
+                CodeAttr::StackMapTable(_) => {} // stack map will be regenerated
                 CodeAttr::RuntimeInvisibleTypeAnnotations(an) => attrs.push(CodeAttribute::InvisibleTypeAnnotations(an)),
                 CodeAttr::RuntimeVisibleTypeAnnotations(an) => attrs.push(CodeAttribute::VisibleTypeAnnotations(an))
             }
@@ -896,7 +903,47 @@ impl ConstantPoolReadWrite for Code {
             match insn {
                 Instruction::NoOp => NOP.write_to(writer)?,
                 Instruction::PushNull => ACONST_NULL.write_to(writer)?,
-                Instruction::Push(_) => {}
+                Instruction::Push(OrDynamic::Static(Constant::I32(0))) => ICONST_0.write_to(writer)?,
+                Instruction::Push(OrDynamic::Static(Constant::I32(1))) => ICONST_1.write_to(writer)?,
+                Instruction::Push(OrDynamic::Static(Constant::I32(2))) => ICONST_2.write_to(writer)?,
+                Instruction::Push(OrDynamic::Static(Constant::I32(3))) => ICONST_3.write_to(writer)?,
+                Instruction::Push(OrDynamic::Static(Constant::I32(4))) => ICONST_4.write_to(writer)?,
+                Instruction::Push(OrDynamic::Static(Constant::I32(5))) => ICONST_5.write_to(writer)?,
+                Instruction::Push(OrDynamic::Static(Constant::I32(-1))) => ICONST_M1.write_to(writer)?,
+                Instruction::Push(OrDynamic::Static(Constant::I64(0))) => LCONST_0.write_to(writer)?,
+                Instruction::Push(OrDynamic::Static(Constant::I64(1))) => LCONST_1.write_to(writer)?,
+                Instruction::Push(OrDynamic::Static(Constant::I32(i @ -128..=127))) => {
+                    BIPUSH.write_to(writer)?;
+                    (*i as i8).write_to(writer)?;
+                }
+                Instruction::Push(OrDynamic::Static(Constant::I32(i @ -32768..=32767))) => {
+                    SIPUSH.write_to(writer)?;
+                    (*i as i16).write_to(writer)?;
+                }
+
+                Instruction::Push(OrDynamic::Static(Constant::F32(f))) if f.eq(&0.0) => FCONST_0.write_to(writer)?,
+                Instruction::Push(OrDynamic::Static(Constant::F32(f))) if f.eq(&1.0) => FCONST_1.write_to(writer)?,
+                Instruction::Push(OrDynamic::Static(Constant::F32(f))) if f.eq(&2.0) => FCONST_2.write_to(writer)?,
+                Instruction::Push(OrDynamic::Static(Constant::F64(f))) if f.eq(&0.0) => DCONST_0.write_to(writer)?,
+                Instruction::Push(OrDynamic::Static(Constant::F64(f))) if f.eq(&1.0) => DCONST_1.write_to(writer)?,
+                Instruction::Push(c) => {
+                    let idx = cp.insert_ordynamic(c.clone(), C::insert_constant);
+                    let wide = match c {
+                        OrDynamic::Dynamic(d) => d.descriptor.is_wide(),
+                        OrDynamic::Static(c) => c.is_wide()
+                    };
+                    if wide {
+                        LDC2_W.write_to(writer)?;
+                        idx.write_to(writer)?;
+                    } else if let Ok(idx) = u8::try_from(idx) {
+                        LDC.write_to(writer)?;
+                        idx.write_to(writer)?;
+                    } else {
+                        LDC_W.write_to(writer)?;
+                        idx.write_to(writer)?;
+                    }
+                }
+
                 Instruction::Duplicate(StackValueType::One, None) => DUP.write_to(writer)?,
                 Instruction::Duplicate(StackValueType::One, Some(StackValueType::One)) => DUP_X1.write_to(writer)?,
                 Instruction::Duplicate(StackValueType::One, Some(StackValueType::Two)) => DUP_X2.write_to(writer)?,
@@ -925,7 +972,23 @@ impl ConstantPoolReadWrite for Code {
                     };
                     wide_or_normal!(op, l => u8);
                 }
-                Instruction::Array(_, _) => {}
+                Instruction::Array(LoadOrStore::Load, ArrayType::Int) => IALOAD.write_to(writer)?,
+                Instruction::Array(LoadOrStore::Load, ArrayType::ByteOrBool) => BALOAD.write_to(writer)?,
+                Instruction::Array(LoadOrStore::Load, ArrayType::Short) => SALOAD.write_to(writer)?,
+                Instruction::Array(LoadOrStore::Load, ArrayType::Char) => CALOAD.write_to(writer)?,
+                Instruction::Array(LoadOrStore::Load, ArrayType::Float) => FALOAD.write_to(writer)?,
+                Instruction::Array(LoadOrStore::Load, ArrayType::Long) => LALOAD.write_to(writer)?,
+                Instruction::Array(LoadOrStore::Load, ArrayType::Double) => DALOAD.write_to(writer)?,
+                Instruction::Array(LoadOrStore::Load, ArrayType::Reference) => AALOAD.write_to(writer)?,
+                Instruction::Array(LoadOrStore::Store, ArrayType::Int) => IASTORE.write_to(writer)?,
+                Instruction::Array(LoadOrStore::Store, ArrayType::ByteOrBool) => BASTORE.write_to(writer)?,
+                Instruction::Array(LoadOrStore::Store, ArrayType::Short) => SASTORE.write_to(writer)?,
+                Instruction::Array(LoadOrStore::Store, ArrayType::Char) => CASTORE.write_to(writer)?,
+                Instruction::Array(LoadOrStore::Store, ArrayType::Float) => FASTORE.write_to(writer)?,
+                Instruction::Array(LoadOrStore::Store, ArrayType::Long) => LASTORE.write_to(writer)?,
+                Instruction::Array(LoadOrStore::Store, ArrayType::Double) => DASTORE.write_to(writer)?,
+                Instruction::Array(LoadOrStore::Store, ArrayType::Reference) => AASTORE.write_to(writer)?,
+
                 Instruction::ArrayLength => ARRAYLENGTH.write_to(writer)?,
                 Instruction::IntOperation(IntType::Int, IntOperation::Subtract) => ISUB.write_to(writer)?,
                 Instruction::IntOperation(IntType::Int, IntOperation::Add) => IADD.write_to(writer)?,
@@ -965,12 +1028,21 @@ impl ConstantPoolReadWrite for Code {
                 Instruction::FloatOperation(FloatType::Double, FloatOperation::Divide) => DDIV.write_to(writer)?,
                 Instruction::FloatOperation(FloatType::Double, FloatOperation::Remainder) => DREM.write_to(writer)?,
                 Instruction::Throw => ATHROW.write_to(writer)?,
-                Instruction::CheckCast(_) => {}
-                Instruction::InstanceOf(_) => {}
+                Instruction::InstanceOf(ty) => {
+                    INSTANCEOF.write_to(writer)?;
+                    cp.insert_ordynamic(ty.clone(), C::insert_class);
+                }
+                Instruction::CheckCast(ty) => {
+                    CHECKCAST.write_to(writer)?;
+                    cp.insert_ordynamic(ty.clone(), C::insert_class);
+                }
+                Instruction::New(ty) => {
+                    NEW.write_to(writer)?;
+                    cp.insert_ordynamic(ty.clone(), C::insert_class);
+                }
                 Instruction::NewArray(_, _) => {}
                 Instruction::Monitor(MonitorOperation::Enter) => MONITORENTER.write_to(writer)?,
                 Instruction::Monitor(MonitorOperation::Exit) => MONITOREXIT.write_to(writer)?,
-                Instruction::New(_) => {}
                 Instruction::Conversion(NumberType::Long, NumberType::Int) => L2I.write_to(writer)?,
                 Instruction::Conversion(NumberType::Long, NumberType::Float) => L2F.write_to(writer)?,
                 Instruction::Conversion(NumberType::Long, NumberType::Double) => L2D.write_to(writer)?,
@@ -999,11 +1071,37 @@ impl ConstantPoolReadWrite for Code {
                 Instruction::Return(Some(LocalType::Int)) => IRETURN.write_to(writer)?,
                 Instruction::Return(Some(LocalType::Double)) => DRETURN.write_to(writer)?,
                 Instruction::Return(Some(LocalType::Float)) => FRETURN.write_to(writer)?,
-                Instruction::Field(_, _, _) => {}
-                Instruction::InvokeExact(_, _) => {}
-                Instruction::InvokeSpecial(_) => {}
-                Instruction::InvokeDynamic(_) => {}
-                Instruction::InvokeInterface(_) => {}
+                Instruction::Field(op, memty, mem) => {
+                    match (op, memty) {
+                        (GetOrPut::Get, MemberType::Virtual) => GETFIELD,
+                        (GetOrPut::Put, MemberType::Virtual) => PUTFIELD,
+                        (GetOrPut::Get, MemberType::Static) => GETSTATIC,
+                        (GetOrPut::Put, MemberType::Static) => GETSTATIC,
+                    }.write_to(writer)?;
+                    cp.insert_ordynamic(mem.clone(), C::insert_member);
+                }
+                Instruction::InvokeExact(memty, mem) => {
+                    match memty {
+                        MemberType::Static => INVOKESTATIC,
+                        MemberType::Virtual => INVOKEVIRTUAL
+                    }.write_to(writer)?;
+                    cp.insert_ordynamic(mem.clone(), C::insert_member);
+                }
+                Instruction::InvokeSpecial(mem) => {
+                    INVOKESPECIAL.write_to(writer)?;
+                    cp.insert_ordynamic(mem.clone(), C::insert_member);
+                }
+                Instruction::InvokeDynamic(dy) => {
+                    INVOKEDYNAMIC.write_to(writer)?;
+                    cp.insert_dynamic(dy.clone());
+                    writer.write_all(&[0, 0])?;
+                }
+                Instruction::InvokeInterface(mem, count) => {
+                    INVOKEINTERFACE.write_to(writer)?;
+                    cp.insert_ordynamic(mem.clone(), C::insert_member);
+                    count.write_to(writer)?;
+                    writer.write_all(&[0])?;
+                }
 
                 Instruction::Ret(i) => wide_or_normal!(RET, i => u8),
                 Instruction::Swap => SWAP.write_to(writer)?,
@@ -1021,6 +1119,69 @@ impl ConstantPoolReadWrite for Code {
                 }
             }
         }
+        buf.push(cursor.into_inner());
+        let mut index_hints = Vec::new();
+        let mut last_max_index = 0usize;
+        let mut buf_iter = buf.iter();
+        // Get minimum/maximum starting index of the next buffer, that is: index_hints[n] is max/min of buf[n + 1] resulting index.
+        for j in &jumps {
+            let this_size_max = 1 + match *j {
+                Instruction::LookupSwitch { default: _, table } => 11 + table.len() * 8,
+                Instruction::TableSwitch { default: _, low: _, offsets } => 15 + offsets.len() * 4, // +3 alignment
+                Instruction::Jsr(_) | Instruction::Jump(JumpCondition::Always, _) => 4, // goto_w/jsr_w i32
+                Instruction::Jump(_, _) => 7, // conditional jumps can't be wide, so there must be a conversion.
+                // SAFETY: other variants are not inserted
+                _ => unsafe { std::hint::unreachable_unchecked() }
+            };
+            last_max_index += this_size_max + buf_iter.next().unwrap().len();
+            index_hints.push(last_max_index);
+        }
+        /*
+        determine the actual size by partially resolving the label through index_hints
+            Optimize for possible non-wide jumps, and convert conditional jumps to make it wide-compatible:
+            such as:
+                ifnull far_away
+                ops
+            gets converted to
+                ifnonnull cont
+                goto_w far_away
+                cont:
+                    ops
+        */
+        let mut actual_indices = Vec::new();
+        let mut last_idx = 0;
+        buf_iter = buf.iter();
+        for j in &jumps {
+            last_idx += buf_iter.next().unwrap().len();
+            last_idx += 1 + match *j {
+                Instruction::LookupSwitch { default: _, table } => (4 - (last_idx & 3)) + 8 + table.len() * 8,
+                Instruction::TableSwitch { default: _, low: _, offsets } => (4 - (last_idx & 3)) + 12 + offsets.len() * 4,
+                Instruction::Jsr(target) | Instruction::Jump(JumpCondition::Always, target) => {
+                    let (buf_idx, buf_off) = *labels.get(target).ok_or_else(|| Error::Invalid("referenced label", target.0.to_string().into()))?;
+                    let target_off = if buf_idx != 0 { index_hints[buf_idx + 1] } else { 0 } + buf_off;
+                    if target_off <= 65535 {
+                        2
+                    } else {
+                        4
+                    }
+                },
+                Instruction::Jump(_, target) => {
+                    let (buf_idx, buf_off) = *labels.get(target).ok_or_else(|| Error::Invalid("referenced label", target.0.to_string().into()))?;
+                    let target_off = if buf_idx != 0 { index_hints[buf_idx + 1] } else { 0 } + buf_off;
+                    if target_off <= 65535 {
+                        2
+                    } else {
+                        7
+                    }
+                },
+                // SAFETY: other variants are not inserted
+                _ => unsafe { std::hint::unreachable_unchecked() }
+            };
+            actual_indices.push(last_idx);
+        }
+        todo!();
+        // calculate label => code array offset
+        // write to the writer
         unimplemented!()
     }
 }
