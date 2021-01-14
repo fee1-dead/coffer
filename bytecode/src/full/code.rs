@@ -881,6 +881,11 @@ impl ConstantPoolReadWrite for Code {
         let mut cursor: Cursor<Vec<u8>> = Cursor::new(Vec::new());
         let mut line_numbers: HashMap<usize, u16> = HashMap::new();
         let mut labels: HashMap<Label, (usize, usize)> = HashMap::new();
+        macro_rules! get_label {
+            ($label: expr) => {
+                *labels.get($label).ok_or_else(|| Error::Invalid("referenced label", $label.0.to_string().into()))?
+            };
+        }
         macro_rules! wide_or_normal {
             ($op: expr, $($ext: ident => $ty: ident),+) => ({
                 use std::convert::TryFrom;
@@ -1157,7 +1162,7 @@ impl ConstantPoolReadWrite for Code {
                 Instruction::LookupSwitch { default: _, table } => (4 - (last_idx & 3)) + 8 + table.len() * 8,
                 Instruction::TableSwitch { default: _, low: _, offsets } => (4 - (last_idx & 3)) + 12 + offsets.len() * 4,
                 Instruction::Jsr(target) | Instruction::Jump(JumpCondition::Always, target) => {
-                    let (buf_idx, buf_off) = *labels.get(target).ok_or_else(|| Error::Invalid("referenced label", target.0.to_string().into()))?;
+                    let (buf_idx, buf_off) = get_label!(target);
                     let target_off = if buf_idx != 0 { index_hints[buf_idx + 1] } else { 0 } + buf_off;
                     if target_off <= 65535 {
                         2
@@ -1166,8 +1171,8 @@ impl ConstantPoolReadWrite for Code {
                     }
                 },
                 Instruction::Jump(_, target) => {
-                    let (buf_idx, buf_off) = *labels.get(target).ok_or_else(|| Error::Invalid("referenced label", target.0.to_string().into()))?;
-                    let target_off = if buf_idx != 0 { index_hints[buf_idx + 1] } else { 0 } + buf_off;
+                    let (buf_idx, buf_off) = get_label!(target);
+                    let target_off = if buf_idx != 0 { index_hints[buf_idx - 1] } else { 0 } + buf_off;
                     if target_off <= 65535 {
                         2
                     } else {
@@ -1179,9 +1184,63 @@ impl ConstantPoolReadWrite for Code {
             };
             actual_indices.push(last_idx);
         }
-        todo!();
-        // calculate label => code array offset
-        // write to the writer
+        let mut jumps_iter = jumps.into_iter();
+        let mut buf_iter = buf.into_iter();
+        writer.write_all(&buf_iter.next().unwrap())?;
+        for ((i, bytes), idx) in buf_iter.enumerate().zip(actual_indices.iter()) {
+            macro_rules! resolve_label {
+                ($label: expr) => ({
+                    let (buf_off, inner_off) = get_label!($label);
+                    let that_off = (if buf_off == 0 {
+                        0
+                    } else {
+                        actual_indices[buf_off - 1] as u32
+                    }) + (inner_off as u32);
+                    (that_off as i32).wrapping_sub(*idx as i32)
+                });
+            }
+
+            macro_rules! wide {
+                ($label: ident, $off: ident => $non_wide: expr, $wide: expr) => ({
+                    let $off = resolve_label!($label);
+                    if let Ok($off) = u16::try_from($off) {
+                        $non_wide
+                    } else {
+                        $wide
+                    }
+                });
+            }
+            let jump = jumps_iter.next().unwrap();
+            match jump {
+                Instruction::LookupSwitch { default, table } => {
+                    LOOKUPSWITCH.write_to(writer)?;
+                    writer.write_all(&vec![0; 4 - actual_indices[i] % 3])?; // proper 4 byte alignment
+                    crate::write_to!(&resolve_label!(default), writer)?;
+                    (table.len() as u32).write_to(writer)?;
+                    let mut tbl = table.clone();
+                    tbl.sort_keys(); // lookup switch must be sorted
+                    for (val, off) in tbl {
+                        crate::write_to!(&val, writer)?;
+                        crate::write_to!(&resolve_label!(&off), writer)?;
+                    }
+                }
+                Instruction::TableSwitch { default, low, offsets } => {}
+                Instruction::Jsr(target) => {
+
+                }
+                Instruction::Jump(JumpCondition::Always, target) => {
+                    wide!(target, off => {
+                        GOTO.write_to(writer)?;
+                        off.write_to(writer)?;
+                    })
+                }
+                Instruction::Jump(cond, target) => {
+
+                }
+                // SAFETY: other variants are not inserted
+                _ => unsafe { std::hint::unreachable_unchecked() }
+            }
+        }
         unimplemented!()
     }
 }
