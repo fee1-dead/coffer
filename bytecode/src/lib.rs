@@ -121,24 +121,12 @@ pub trait ConstantPoolWriter {
         self.insert_raw(RawConstantEntry::Double(d))
     }
     fn insert_member(&mut self, mem: MemberRef) -> u16 {
-        let a = self.insert_class(mem.owner);
-        let b = self.insert_nameandtype(mem.name, mem.descriptor);
-        self.insert_raw(match &mem {
-            MemberRef {
-                descriptor: Type::Method(..),
-                itfs: true,
-                ..
-            } => RawConstantEntry::InterfaceMethod(a, b),
-            MemberRef {
-                descriptor: Type::Method(..),
-                itfs: false,
-                ..
-            } => RawConstantEntry::Method(a, b),
-            MemberRef {
-                descriptor: _,
-                ..
-            } => RawConstantEntry::Field(a, b)
-        })
+        let entry = match (&mem.descriptor, mem.itfs) {
+            (Type::Method(..), true) => RawConstantEntry::InterfaceMethod,
+            (Type::Method(..), false) => RawConstantEntry::Method,
+            _ => RawConstantEntry::Field
+        }(self.insert_class(mem.owner), self.insert_nameandtype(mem.name, mem.descriptor));
+        self.insert_raw(entry)
     }
     /// map a label to the actual offset in the code array.
     /// this is not implemented by default, and it will be defined in a wrapper type in implementation of ConstantPoolReadWrite for `Code`.
