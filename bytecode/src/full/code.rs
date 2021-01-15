@@ -1333,12 +1333,15 @@ impl ConstantPoolReadWrite for Code {
         struct Labeler<'a, T: ConstantPoolWriter>(&'a Vec<usize>, &'a HashMap<Label, (usize, usize)>, &'a mut T, &'a Vec<Catch>);
 
         impl<'a, T: ConstantPoolWriter> ConstantPoolWriter for Labeler<'a, T> {
+
+            #[inline]
             fn insert_raw(&mut self, value: RawConstantEntry) -> u16 {
                 self.2.insert_raw(value)
             }
 
-            fn insert_dynamic(&mut self, d: Dynamic) -> u16 {
-                self.2.insert_dynamic(d)
+            #[inline]
+            fn insert_bsm(&mut self, bsm: BootstrapMethod) -> u16 {
+                self.2.insert_bsm(bsm)
             }
 
             fn label(&mut self, lbl: &Label) -> u16 {

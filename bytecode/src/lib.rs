@@ -77,16 +77,26 @@ pub trait ConstantPoolWriter {
             OrDynamic::Static(t) => f(self, t)
         }
     }
+    fn insert_bsm(&mut self, bsm: BootstrapMethod) -> u16;
     /// InvokeDynamic and Dynamic is distinguished by the [Type](crate::Type) enum.
-    fn insert_dynamic(&mut self, d: Dynamic) -> u16;
+    fn insert_dynamic(&mut self, d: Dynamic) -> u16 {
+        let bsm = self.insert_bsm(*d.bsm);
+        let name_and_type = self.insert_nameandtype(d.name, d.descriptor);
+        let e = if d.descriptor.is_method() {
+            RawConstantEntry::InvokeDynamic
+        } else {
+            RawConstantEntry::Dynamic
+        }(bsm, name_and_type);
+        self.insert_raw(e)
+    }
     /// insert an indirect string such as String / Module / Package entry, used by the procedural macro.
     fn insert_indirect_str<T: Into<Cow<'static, str>>>(&mut self, tag: u8, st: T) -> u16 {
         let str_ref = self.insert_utf8(st.into().into_owned());
         self.insert_raw(match tag {
-            7 => RawConstantEntry::Class(str_ref),
-            8 => RawConstantEntry::String(str_ref),
-            19 => RawConstantEntry::Module(str_ref),
-            20 => RawConstantEntry::Package(str_ref),
+            7 => RawConstantEntry::Class,
+            8 => RawConstantEntry::String,
+            19 => RawConstantEntry::Module,
+            20 => RawConstantEntry::Package,
             _ => {
                 #[cfg(debug_assertions)]
                 panic!("invalid tag for indirect string: {}", tag);
@@ -94,7 +104,7 @@ pub trait ConstantPoolWriter {
                 #[cfg(not(debug_assertions))]
                 unsafe { std::hint::unreachable_unchecked() }
             }
-        })
+        }(str_ref))
     }
     fn insert_utf8<T: Into<Cow<'static, str>>>(&mut self, st: T) ->  u16 {
         self.insert_raw(RawConstantEntry::UTF8(st.into()))
