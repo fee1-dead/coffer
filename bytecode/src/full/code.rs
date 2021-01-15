@@ -1384,7 +1384,7 @@ impl ConstantPoolReadWrite for Code {
                                 len,
                                 name: lc.name.clone(),
                                 descriptor: desc.clone(),
-                                index: lc.index.clone()
+                                index: lc.index
                             })
                         }
                         if let Some(ref sig) = lc.signature {
@@ -1395,7 +1395,7 @@ impl ConstantPoolReadWrite for Code {
                                 len,
                                 name: lc.name.clone(),
                                 signature: sig.clone(),
-                                index: lc.index.clone()
+                                index: lc.index
                             })
                         }
                     }
