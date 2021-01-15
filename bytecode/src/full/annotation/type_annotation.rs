@@ -55,8 +55,8 @@ impl ConstantPoolReadWrite for LocalVarTarget {
     }
 
     fn write_to<C: crate::ConstantPoolWriter, W: std::io::Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<()> {
-        let start = cp.label(self.start);
-        let end = cp.label(self.end);
+        let start = cp.label(&self.start);
+        let end = cp.label(&self.end);
         start.write_to(writer)?;
         (end - start + 1).write_to(writer)?;
         self.idx.write_to(writer)?;

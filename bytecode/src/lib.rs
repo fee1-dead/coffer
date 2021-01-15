@@ -131,7 +131,7 @@ pub trait ConstantPoolWriter {
     /// map a label to the actual offset in the code array.
     /// this is not implemented by default, and it will be defined in a wrapper type in implementation of ConstantPoolReadWrite for `Code`.
     #[inline]
-    fn label(&mut self, _lbl: Label) -> u16 {
+    fn label(&mut self, _lbl: &Label) -> u16 {
         #[cfg(debug_assertions)]
             unreachable!();
         #[cfg(not(debug_assertions))]

@@ -27,6 +27,7 @@ use crate::full::annotation::{CodeTypeAnnotation};
 use std::str::FromStr;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use crate::full::cp::RawConstantEntry;
 
 /// Acts as a unique identifier to the code. Labels should be treated carefully because when labels become invalid (i.e. removed from the code array) it will become an error.
 #[derive(Debug, Eq, PartialOrd, PartialEq, Ord, Hash, Copy, Clone)]
@@ -37,7 +38,7 @@ impl ConstantPoolReadWrite for Label {
         Ok(cp.get_label(u16::read_from(reader)? as _))
     }
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<()> {
-        ReadWrite::write_to(&(cp.label(*self) as u16), writer)
+        ReadWrite::write_to(&cp.label(self), writer)
     }
 }
 
@@ -100,6 +101,65 @@ pub enum JumpCondition {
     IsNull,
     IsNonNull,
     Always,
+}
+
+impl From<JumpCondition> for u8 {
+    fn from(j: JumpCondition) -> Self {
+        use crate::constants::insn::*;
+        match j {
+            JumpCondition::ReferenceEquals => IFACMPEQ,
+            JumpCondition::ReferenceNotEquals => IFACMPNE,
+            JumpCondition::IntegerEquals => IFICMPEQ,
+            JumpCondition::IntegerNotEquals => IFICMPNE,
+            JumpCondition::IntegerLessThan => IFICMPLT,
+            JumpCondition::IntegerGreaterThan => IFICMPGT,
+            JumpCondition::IntegerLessThanOrEquals => IFICMPLE,
+            JumpCondition::IntegerGreaterThanOrEquals => IFICMPGE,
+            JumpCondition::IntegerEqualsZero => IFEQ,
+            JumpCondition::IntegerNotEqualsZero => IFNE,
+            JumpCondition::IntegerLessThanZero => IFLT,
+            JumpCondition::IntegerGreaterThanZero => IFGT,
+            JumpCondition::IntegerLessThanOrEqualsZero => IFLE,
+            JumpCondition::IntegerGreaterThanOrEqualsZero => IFGE,
+            JumpCondition::IsNull => IFNULL,
+            JumpCondition::IsNonNull => IFNONNULL,
+            JumpCondition::Always => GOTO,
+        }
+    }
+}
+
+impl std::ops::Neg for JumpCondition {
+    type Output = Self;
+
+    fn neg(self) -> Self {
+        match self {
+            JumpCondition::ReferenceEquals => JumpCondition::ReferenceNotEquals,
+            JumpCondition::ReferenceNotEquals => JumpCondition::ReferenceEquals,
+            JumpCondition::IntegerNotEquals => JumpCondition::IntegerEquals,
+            JumpCondition::IntegerEquals => JumpCondition::IntegerNotEquals,
+            JumpCondition::IntegerLessThan => JumpCondition::IntegerGreaterThanOrEquals,
+            JumpCondition::IntegerGreaterThan => JumpCondition::IntegerLessThanOrEquals,
+            JumpCondition::IntegerLessThanOrEquals => JumpCondition::IntegerGreaterThan,
+            JumpCondition::IntegerGreaterThanOrEquals => JumpCondition::IntegerLessThan,
+            JumpCondition::IntegerEqualsZero => JumpCondition::IntegerNotEqualsZero,
+            JumpCondition::IntegerNotEqualsZero => JumpCondition::IntegerEqualsZero,
+            JumpCondition::IntegerLessThanZero => JumpCondition::IntegerGreaterThanOrEqualsZero,
+            JumpCondition::IntegerGreaterThanZero => JumpCondition::IntegerLessThanOrEqualsZero,
+            JumpCondition::IntegerLessThanOrEqualsZero => JumpCondition::IntegerGreaterThanZero,
+            JumpCondition::IntegerGreaterThanOrEqualsZero => JumpCondition::IntegerLessThanZero,
+            JumpCondition::IsNull => JumpCondition::IsNonNull,
+            JumpCondition::IsNonNull => JumpCondition::IsNull,
+            JumpCondition::Always => unsafe { std::hint::unreachable_unchecked() }
+        }
+    }
+}
+
+impl std::ops::Neg for &JumpCondition {
+    type Output = JumpCondition;
+
+    fn neg(self) -> Self::Output {
+        (*self).neg()
+    }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -430,7 +490,6 @@ impl ConstantPoolReadWrite for Code {
         use crate::full::StackValueType::*;
         use crate::full::MemberType::*;
         use crate::full::{IntOperation as IOp, FloatOperation as FOp};
-        use crate::full::cp::RawConstantEntry;
         use std::io::{SeekFrom, Seek};
 
         struct Labeler<'a, T: ConstantPoolReader> {
@@ -875,6 +934,8 @@ impl ConstantPoolReadWrite for Code {
 
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<(), Error> {
         use crate::constants::insn::*;
+        use crate::write_to;
+
         let mut buf: Vec<Vec<u8>> = Vec::new();
         let mut jumps: Vec<&Instruction> = Vec::new();
         let insns = self.code.iter();
@@ -1215,33 +1276,143 @@ impl ConstantPoolReadWrite for Code {
                 Instruction::LookupSwitch { default, table } => {
                     LOOKUPSWITCH.write_to(writer)?;
                     writer.write_all(&vec![0; 4 - actual_indices[i] % 3])?; // proper 4 byte alignment
-                    crate::write_to!(&resolve_label!(default), writer)?;
+                    write_to!(&resolve_label!(default), writer)?;
+
                     (table.len() as u32).write_to(writer)?;
                     let mut tbl = table.clone();
                     tbl.sort_keys(); // lookup switch must be sorted
                     for (val, off) in tbl {
-                        crate::write_to!(&val, writer)?;
-                        crate::write_to!(&resolve_label!(&off), writer)?;
+                        write_to!(&val, writer)?;
+                        write_to!(&resolve_label!(&off), writer)?;
                     }
                 }
-                Instruction::TableSwitch { default, low, offsets } => {}
+                Instruction::TableSwitch { default, low, offsets } => {
+                    TABLESWITCH.write_to(writer)?;
+                    writer.write_all(&vec![0; 4 - actual_indices[i] % 3])?; // proper 4 byte alignment
+                    write_to!(&resolve_label!(default), writer)?;
+                    write_to!(low, writer)?;
+                    write_to!(&(low + (offsets.len() - 1) as i32), writer)?;
+                    for l in offsets {
+                        write_to!(&resolve_label!(l), writer)?;
+                    }
+                }
                 Instruction::Jsr(target) => {
-
+                    wide!(target, off => {
+                        JSR.write_to(writer)?;
+                        write_to!(&off, writer)?;
+                    }, {
+                        JSR_W.write_to(writer)?;
+                        write_to!(&off, writer)?;
+                    })
                 }
                 Instruction::Jump(JumpCondition::Always, target) => {
                     wide!(target, off => {
                         GOTO.write_to(writer)?;
-                        off.write_to(writer)?;
+                        write_to!(&off, writer)?;
+                    }, {
+                        GOTO_W.write_to(writer)?;
+                        write_to!(&off, writer)?;
                     })
                 }
                 Instruction::Jump(cond, target) => {
-
+                    wide!(target, off => {
+                        u8::write_to(&(*cond).into(), writer)?;
+                        write_to!(&off, writer)?;
+                    }, {
+                        u8::write_to(&(-cond).into(), writer)?;
+                        write_to!(&5i32, writer)?;
+                        GOTO_W.write_to(writer)?;
+                        write_to!(&off, writer)?;
+                    })
                 }
                 // SAFETY: other variants are not inserted
                 _ => unsafe { std::hint::unreachable_unchecked() }
             }
+            writer.write_all(&bytes)?;
         }
-        unimplemented!()
+        struct Labeler<'a, T: ConstantPoolWriter>(&'a Vec<usize>, &'a HashMap<Label, (usize, usize)>, &'a mut T, &'a Vec<Catch>);
+
+        impl<'a, T: ConstantPoolWriter> ConstantPoolWriter for Labeler<'a, T> {
+            fn insert_raw(&mut self, value: RawConstantEntry) -> u16 {
+                self.2.insert_raw(value)
+            }
+
+            fn insert_dynamic(&mut self, d: Dynamic) -> u16 {
+                self.2.insert_dynamic(d)
+            }
+
+            fn label(&mut self, lbl: &Label) -> u16 {
+                let (buf_off, inner_off) = *self.1.get(lbl).unwrap();
+                (if buf_off == 0 {
+                    0
+                } else {
+                    self.0[buf_off - 1] as u16
+                }) + (inner_off as u16)
+            }
+
+            fn catch(&mut self, catch: &Catch) -> Option<u16> {
+                self.3.iter().position(|c| c == catch).map(|n| n as u16)
+            }
+        }
+
+        (self.catches.len() as u16).write_to(writer)?;
+        let mut labeler = Labeler(&actual_indices, &labels, cp, &self.catches);
+        for Catch { start, end, handler, catch } in &self.catches {
+            labeler.label(start).write_to(writer)?;
+            labeler.label(end).write_to(writer)?;
+            labeler.label(handler).write_to(writer)?;
+            if let Some(s) = catch {
+                labeler.insert_class(s.clone())
+            } else {
+                0
+            }.write_to(writer)?;
+        }
+        (self.attrs.len() as u16).write_to(writer)?;
+        for a in &self.attrs {
+            match a {
+                CodeAttribute::VisibleTypeAnnotations(a) => CodeAttr::RuntimeVisibleTypeAnnotations(a.clone()),
+                CodeAttribute::InvisibleTypeAnnotations(a) => CodeAttr::RuntimeInvisibleTypeAnnotations(a.clone()),
+                CodeAttribute::LocalVariables(l) => {
+                    let mut ty: Vec<LocalVarType> = vec![];
+                    let mut var: Vec<LocalVar> = vec![];
+                    for lc in l {
+                        if let Some(ref desc) = lc.descriptor {
+                            let start = labeler.label(&lc.start);
+                            let len = labeler.label(&lc.end) - start;
+                            var.push(LocalVar {
+                                start,
+                                len,
+                                name: lc.name.clone(),
+                                descriptor: desc.clone(),
+                                index: lc.index.clone()
+                            })
+                        }
+                        if let Some(ref sig) = lc.signature {
+                            let start = labeler.label(&lc.start);
+                            let len = labeler.label(&lc.end) - start;
+                            ty.push(LocalVarType {
+                                start,
+                                len,
+                                name: lc.name.clone(),
+                                signature: sig.clone(),
+                                index: lc.index.clone()
+                            })
+                        }
+                    }
+                    match (ty.is_empty(), var.is_empty()) {
+                        (true, true) => return Err(Error::Invalid("local variables", "no localvariable type or descriptor present".into())),
+                        (false, true) => CodeAttr::LocalVariableTypeTable(ty),
+                        (true, false) => CodeAttr::LocalVariableTable(var),
+                        (false, false) => {
+                            CodeAttr::LocalVariableTable(var).write_to(&mut labeler, writer)?;
+                            CodeAttr::LocalVariableTypeTable(ty)
+                        }
+                    }
+                }
+                CodeAttribute::Raw(r) => CodeAttr::Raw(r.clone())
+            }.write_to(&mut labeler, writer)?;
+        }
+        Ok(())
     }
 }
 
