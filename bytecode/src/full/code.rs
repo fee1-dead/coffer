@@ -472,7 +472,7 @@ impl ConstantPoolReadWrite for Catch {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Default)]
 pub struct Code {
     pub max_stack: u16,
     pub max_locals: u16,
@@ -935,7 +935,8 @@ impl ConstantPoolReadWrite for Code {
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<(), Error> {
         use crate::constants::insn::*;
         use crate::write_to;
-
+        self.max_stack.write_to(writer)?;
+        self.max_locals.write_to(writer)?;
         let mut buf: Vec<Vec<u8>> = Vec::new();
         let mut jumps: Vec<&Instruction> = Vec::new();
         let insns = self.code.iter();
@@ -1245,6 +1246,11 @@ impl ConstantPoolReadWrite for Code {
             };
             actual_indices.push(last_idx);
         }
+        let code_len = (buf_iter.next().unwrap().len() + last_idx) as u32;
+        #[cfg(test)] {
+            println!("{}", code_len)
+        }
+        code_len.write_to(writer)?;
         let mut jumps_iter = jumps.into_iter();
         let mut buf_iter = buf.into_iter();
         writer.write_all(&buf_iter.next().unwrap())?;

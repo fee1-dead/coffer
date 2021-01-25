@@ -19,7 +19,9 @@
 extern crate bitflags;
 
 #[macro_use]
-extern crate coffer_proc_macros;
+extern crate coffer_macros;
+
+pub use coffer_macros::*;
 
 use std::borrow::Cow;
 use std::io::{Read, Write};
@@ -81,13 +83,13 @@ pub trait ConstantPoolWriter {
     /// InvokeDynamic and Dynamic is distinguished by the [Type](crate::Type) enum.
     fn insert_dynamic(&mut self, d: Dynamic) -> u16 {
         let bsm = self.insert_bsm(*d.bsm);
-        let name_and_type = self.insert_nameandtype(d.name, d.descriptor);
         let e = if d.descriptor.is_method() {
             RawConstantEntry::InvokeDynamic
         } else {
             RawConstantEntry::Dynamic
-        }(bsm, name_and_type);
-        self.insert_raw(e)
+        };
+        let name_and_type = self.insert_nameandtype(d.name, d.descriptor);
+        self.insert_raw(e(bsm, name_and_type))
     }
     /// insert an indirect string such as String / Module / Package entry, used by the procedural macro.
     fn insert_indirect_str<T: Into<Cow<'static, str>>>(&mut self, tag: u8, st: T) -> u16 {
@@ -385,7 +387,7 @@ impl_readwrite_nums! { (u8, 1),  (i8, 1),  (u16, 2),  (i16, 2),  (u32, 4),  (i32
 impl ReadWrite for String {
     fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
         let length = u16::read_from(reader)?;
-        let mut buf = Vec::with_capacity(length as usize);
+        let mut buf = vec![0; length as usize];
         reader.read_exact(&mut buf)?;
         Ok(crate::mod_utf8::modified_utf8_to_string(&buf)?)
     }
