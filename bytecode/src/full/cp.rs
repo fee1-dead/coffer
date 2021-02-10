@@ -47,3 +47,9 @@ impl Hash for RawConstantEntry {
         }
     }
 }
+
+impl RawConstantEntry {
+    pub fn is_wide(&self) -> bool {
+        matches!(self, RawConstantEntry::Long(_) | RawConstantEntry::Double(_))
+    }
+}

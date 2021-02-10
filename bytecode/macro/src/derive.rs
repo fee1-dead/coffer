@@ -119,7 +119,6 @@ pub(crate) fn attr_enum(input: DeriveInput) -> Result<TokenStream2> {
                     match attribute_name.as_ref() {
                         #(
                                     #attr_names => {
-                                        println!(stringify!(#attr_names));
                                         #variant_read_bodies
                                         Ok(#variant_constructs)
                                     }
@@ -234,8 +233,7 @@ pub(crate) fn gen_read_and_write<T: ToTokens>(f: &Field, reciever: &T, mut trait
         let sp = ty.span();
         (quote_spanned! { sp => <#ty as #traitty>::read_from }, quote_spanned! { sp => <#ty as #traitty>::write_to })
     }
-    let mut args_r: Punctuated<TokenStream2, token::Comma> = syn::parse::Parser::parse2(Punctuated::parse_terminated, additional_fields_r.clone())?;
-    let mut args_w: Punctuated<TokenStream2, token::Comma> = syn::parse::Parser::parse2(Punctuated::parse_terminated, additional_fields_w.clone())?;
+
     let span = f.span();
     let ty = &f.ty;
     let mut use_normal_rw = false;
@@ -256,11 +254,19 @@ pub(crate) fn gen_read_and_write<T: ToTokens>(f: &Field, reciever: &T, mut trait
             _ => {}
         }
     }
-    if use_normal_rw {
-        trait_type = quote! { crate::ReadWrite };
-        additional_fields_r = args_r.pop().unwrap().into_value();
-        additional_fields_w = args_w.pop().unwrap().into_value();
+    let reader: Ident; let writer: Ident;
+    {
+        let mut args_r: Punctuated<Ident, token::Comma> = syn::parse::Parser::parse2(Punctuated::parse_terminated, additional_fields_r.clone())?;
+        let mut args_w: Punctuated<Ident, token::Comma> = syn::parse::Parser::parse2(Punctuated::parse_terminated, additional_fields_w.clone())?;
+        reader = args_r.pop().unwrap().into_value();
+        writer = args_w.pop().unwrap().into_value();
+        if use_normal_rw {
+            trait_type = quote! { crate::ReadWrite };
+            additional_fields_r = reader.to_token_stream();
+            additional_fields_w = writer.to_token_stream();
+        }
     }
+
 
     if let Type::Path(p) = ty {
         let segment_last = p.path.segments.last().unwrap();
@@ -277,7 +283,7 @@ pub(crate) fn gen_read_and_write<T: ToTokens>(f: &Field, reciever: &T, mut trait
                     let (read_fn, write_fn) = rw_fncalls(ty, trait_type);
                     return Ok((quote! {
                         {
-                            let len = #read_vec_len_fn(reader)?;
+                            let len = #read_vec_len_fn(#reader)?;
                             let mut vec = Vec::with_capacity(len as usize);
                             for _ in 0..len {
                                 vec.push(#read_fn(#additional_fields_r)?);
@@ -285,7 +291,7 @@ pub(crate) fn gen_read_and_write<T: ToTokens>(f: &Field, reciever: &T, mut trait
                             vec
                         }
                     }, quote! {
-                        #write_vec_len_fn(&(#reciever.len() as #vec_len_ty), writer)?;
+                        #write_vec_len_fn(&(#reciever.len() as #vec_len_ty), #writer)?;
                         for it in #reciever.iter() {
                             #write_fn(&it, #additional_fields_w)?;
                         }

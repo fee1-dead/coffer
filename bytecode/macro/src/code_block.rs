@@ -14,6 +14,7 @@
  *     You should have received a copy of the GNU Lesser General Public License
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
+#![allow(unused)]
 
 use syn::{braced, Token, Lifetime, LitInt, token::Brace};
 use syn::parse::{Parse, ParseBuffer, ParseStream, Result};

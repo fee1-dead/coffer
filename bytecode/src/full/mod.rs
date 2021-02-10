@@ -181,9 +181,12 @@ pub enum Type {
 impl Type {
     /// returns `true` if this type is `Long` or `Double`.
     #[inline]
-    fn is_wide(&self) -> bool {
+    pub fn is_wide(&self) -> bool {
         matches!(self, Type::Long | Type::Double)
     }
+
+    #[inline]
+    pub fn is_method(&self) -> bool { matches!(self, Type::Method(..)) }
 }
 
 impl From<Type> for Cow<'static, str> {
@@ -233,7 +236,7 @@ impl FromStr for Type {
                 Some('S') => Type::Short,
                 Some('L') => {
                     let mut st = String::new();
-                    while c.as_str().chars().next().unwrap_or(')') != ')' {
+                    while c.as_str().chars().next().unwrap_or(';') != ';' {
                         st.push(c.next().unwrap())
                     }
                     if c.next().is_none() {
@@ -246,7 +249,7 @@ impl FromStr for Type {
                     let mut dim: u8 = 1;
                     while let Some('[') = c.as_str().chars().next() {
                         c.next();
-                        dim = dim.checked_add(1).ok_or(crate::error::Error::ArithmeticOverflow)?;
+                        dim = dim.checked_add(1).ok_or_else(crate::error::Error::ArithmeticOverflow)?;
                     }
                     let r = get_type(c, st)?;
                     Type::ArrayRef(dim, Box::new(r))
@@ -414,22 +417,49 @@ pub struct Field {
     pub attrs: Vec<FieldAttribute>
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
+pub struct ParameterAnnotations(#[vec_len_type(u16)] Vec<Annotation>);
+
+impl std::ops::Deref for ParameterAnnotations {
+    type Target = Vec<Annotation>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for ParameterAnnotations {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
+pub struct MethodParameter {
+    #[str_optional]
+    name: Option<Cow<'static, str>>,
+    #[use_normal_rw]
+    access: AccessFlags
+}
+
+#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
+#[attr_enum]
 pub enum MethodAttribute {
     Code(Code),
     Deprecated,
     Synthetic,
     Signature(MethodSignature),
-    VisibleAnnotations(Vec<Annotation>),
-    InvisibleAnnotations(Vec<Annotation>),
-    VisibleTypeAnnotations(Vec<MethodTypeAnnotation>),
-    InvisibleTypeAnnotations(Vec<MethodTypeAnnotation>),
-    VisibleParameterAnnotations(Vec<Vec<Annotation>>),
-    InvisibleParameterAnnotations(Vec<Vec<Annotation>>),
-    Raw(RawAttribute),
-    Exceptions(Vec<Cow<'static, str>>),
+    RuntimeVisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),
+    RuntimeInvisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),
+    RuntimeVisibleTypeAnnotations(#[vec_len_type(u16)] Vec<MethodTypeAnnotation>),
+    RuntimeInvisibleTypeAnnotations(#[vec_len_type(u16)] Vec<MethodTypeAnnotation>),
+    RuntimeVisibleParameterAnnotations(#[vec_len_type(u8)] Vec<ParameterAnnotations>),
+    RuntimeInvisibleParameterAnnotations(#[vec_len_type(u8)] Vec<ParameterAnnotations>),
+    Exceptions(#[vec_len_type(u8)] Vec<Clazz>),
     AnnotationDefault(AnnotationValue),
-    MethodParameters(Vec<(Cow<'static, str>, AccessFlags)>)
+    MethodParameters(#[vec_len_type(u8)] Vec<MethodParameter>),
+    #[raw_variant]
+    Raw(RawAttribute),
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -446,6 +476,12 @@ pub enum VerificationType {
     Top, Int, Float, Long, Double, Null, UninitializedThis, Object(#[str_type(Class)] Cow<'static, str>),
     /// Following the label, must be a `NEW` instruction.
     UninitializedVariable(Label)
+}
+
+impl VerificationType {
+    pub const fn is_wide(&self) -> bool {
+        matches!(self, VerificationType::Double | VerificationType::Long)
+    }
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, ConstantPoolReadWrite)]

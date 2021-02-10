@@ -14,6 +14,7 @@
  *     You should have received a copy of the GNU Lesser General Public License
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
+#![cfg_attr(any(feature = "backtrace", test), feature(backtrace))]
 
 #[macro_use]
 extern crate bitflags;
@@ -30,6 +31,8 @@ pub use crate::error::Error;
 pub use crate::error::Result;
 use crate::full::{BootstrapMethod, Constant, MemberRef, Type, Catch, Dynamic, Label, OrDynamic, MethodHandleKind};
 use crate::full::cp::RawConstantEntry;
+use lazycell::LazyCell;
+use std::rc::Rc;
 
 pub mod constants;
 pub mod error;
@@ -82,7 +85,7 @@ pub trait ConstantPoolWriter {
     fn insert_bsm(&mut self, bsm: BootstrapMethod) -> u16;
     /// InvokeDynamic and Dynamic is distinguished by the [Type](crate::Type) enum.
     fn insert_dynamic(&mut self, d: Dynamic) -> u16 {
-        let bsm = self.insert_bsm(*d.bsm);
+        let bsm = self.insert_bsm(std::rc::Rc::try_unwrap(d.bsm).unwrap().into_inner().unwrap());
         let e = if d.descriptor.is_method() {
             RawConstantEntry::InvokeDynamic
         } else {
@@ -179,6 +182,8 @@ pub trait ConstantPoolReader {
             Some(RawConstantEntry::Long(l)) => Some(Constant::I64(l)),
             Some(RawConstantEntry::Float(f)) => Some(Constant::F32(f)),
             Some(RawConstantEntry::Double(d)) => Some(Constant::F64(d)),
+            Some(RawConstantEntry::String(s)) => self.read_utf8(s).map(Constant::String),
+            Some(RawConstantEntry::Class(c)) => self.read_utf8(c).map(Constant::Class),
             _ => self.read_member(idx).map(Constant::Member)
         }
     }
@@ -238,9 +243,9 @@ pub trait ConstantPoolReader {
     fn read_invokedynamic(&mut self, idx: u16) -> Option<Dynamic> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::InvokeDynamic(s, a)) =>  {
-                let mut ptr = unsafe { Box::from_raw(std::ptr::NonNull::dangling().as_ptr()) };
+                let ptr = Rc::new(LazyCell::new());
                 let (name, descriptor) = self.read_nameandtype(a)?;
-                self.resolve_later(s, &mut ptr);
+                self.resolve_later(s, ptr.clone());
                 Some(Dynamic {
                     bsm: ptr,
                     name, descriptor
@@ -252,11 +257,11 @@ pub trait ConstantPoolReader {
     fn read_dynamic(&mut self, idx: u16) -> Option<Dynamic> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::Dynamic(s, a)) =>  {
-                let mut ptr = unsafe { Box::from_raw(std::ptr::NonNull::dangling().as_ptr()) };
+                let cell = Rc::new(LazyCell::new());
                 let (name, descriptor) = self.read_nameandtype(a)?;
-                self.resolve_later(s, &mut ptr);
+                self.resolve_later(s, cell.clone());
                 Some(Dynamic {
-                    bsm: ptr,
+                    bsm: cell,
                     name, descriptor
                 })
             },
@@ -282,7 +287,7 @@ pub trait ConstantPoolReader {
     }
 
 
-    fn resolve_later(&mut self, bsm_idx: u16, ptr: &mut Box<BootstrapMethod>);
+    fn resolve_later(&mut self, bsm_idx: u16, ptr: Rc<LazyCell<BootstrapMethod>>);
 
     // Implementations from Code
 

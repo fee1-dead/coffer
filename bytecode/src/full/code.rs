@@ -28,6 +28,9 @@ use std::str::FromStr;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use crate::full::cp::RawConstantEntry;
+use lazycell::LazyCell;
+use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 
 /// Acts as a unique identifier to the code. Labels should be treated carefully because when labels become invalid (i.e. removed from the code array) it will become an error.
 #[derive(Debug, Eq, PartialOrd, PartialEq, Ord, Hash, Copy, Clone)]
@@ -274,11 +277,27 @@ pub enum MethodHandleKind {
 
 /// Note: dynamic computed constants are syntactically allowed to refer to themselves via the bootstrap method table but it will fail during resolution.
 /// Rust ownership rules prevent us from doing so.
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone)]
 pub struct Dynamic {
-    pub bsm: Box<BootstrapMethod>,
+    pub bsm: Rc<LazyCell<BootstrapMethod>>, // This is very sad.
     pub name: Cow<'static, str>,
     pub descriptor: Type,
+}
+
+impl PartialEq for Dynamic {
+    fn eq(&self, other: &Self) -> bool {
+        self.bsm.borrow().eq(&other.bsm.borrow()) &&
+            self.name.eq(&other.name) &&
+            self.descriptor.eq(&other.descriptor)
+    }
+}
+
+impl Hash for Dynamic {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.bsm.borrow().hash(state);
+        self.name.hash(state);
+        self.descriptor.hash(state);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Hash)]
@@ -502,7 +521,7 @@ impl ConstantPoolReadWrite for Code {
                 self.inner.read_raw(idx)
             }
 
-            fn resolve_later(&mut self, bsm_idx: u16, ptr: &mut Box<BootstrapMethod>) {
+            fn resolve_later(&mut self, bsm_idx: u16, ptr: Rc<LazyCell<BootstrapMethod>>) {
                 self.inner.resolve_later(bsm_idx, ptr)
             }
 
@@ -833,6 +852,7 @@ impl ConstantPoolReadWrite for Code {
             };
             instructions.push(insn);
         }
+        pos2idx.insert(code_reader.get_ref().len() as u32, instructions.len()); // the last position that is still valid but will not be covered in the loop
 
         let exceptions = u16::read_from(reader)?;
         let mut catches = Vec::with_capacity(exceptions as usize);
@@ -842,7 +862,7 @@ impl ConstantPoolReadWrite for Code {
             let handler = read_from!(&mut labeler, reader)?;
             let ty = {
                 let idx = u16::read_from(reader)?;
-                if idx == 0 { None } else { Some(try_cp_read_idx!(labeler, idx, read_utf8)?) }
+                if idx == 0 { None } else { Some(try_cp_read_idx!(labeler, idx, read_class)?) }
             };
             catches.push(Catch {
                 start,
@@ -953,46 +973,46 @@ impl ConstantPoolReadWrite for Code {
                 use std::convert::TryFrom;
                 #[allow(unused_parens)]
                 if let ($(Ok($ext)),*) = ($($ty::try_from(*$ext)),*) {
-                    $op.write_to(writer)?;
+                    $op.write_to(&mut cursor)?;
                     $(
-                        $ext.write_to(writer)?;
+                        $ext.write_to(&mut cursor)?;
                     )*
                 } else {
-                    WIDE.write_to(writer)?;
-                    $op.write_to(writer)?;
+                    WIDE.write_to(&mut cursor)?;
+                    $op.write_to(&mut cursor)?;
                     $(
-                        $ext.write_to(writer)?;
+                        $ext.write_to(&mut cursor)?;
                     )*
                 }
             });
         }
         for insn in insns {
             match insn {
-                Instruction::NoOp => NOP.write_to(writer)?,
-                Instruction::PushNull => ACONST_NULL.write_to(writer)?,
-                Instruction::Push(OrDynamic::Static(Constant::I32(0))) => ICONST_0.write_to(writer)?,
-                Instruction::Push(OrDynamic::Static(Constant::I32(1))) => ICONST_1.write_to(writer)?,
-                Instruction::Push(OrDynamic::Static(Constant::I32(2))) => ICONST_2.write_to(writer)?,
-                Instruction::Push(OrDynamic::Static(Constant::I32(3))) => ICONST_3.write_to(writer)?,
-                Instruction::Push(OrDynamic::Static(Constant::I32(4))) => ICONST_4.write_to(writer)?,
-                Instruction::Push(OrDynamic::Static(Constant::I32(5))) => ICONST_5.write_to(writer)?,
-                Instruction::Push(OrDynamic::Static(Constant::I32(-1))) => ICONST_M1.write_to(writer)?,
-                Instruction::Push(OrDynamic::Static(Constant::I64(0))) => LCONST_0.write_to(writer)?,
-                Instruction::Push(OrDynamic::Static(Constant::I64(1))) => LCONST_1.write_to(writer)?,
+                Instruction::NoOp => NOP.write_to(&mut cursor)?,
+                Instruction::PushNull => ACONST_NULL.write_to(&mut cursor)?,
+                Instruction::Push(OrDynamic::Static(Constant::I32(0))) => ICONST_0.write_to(&mut cursor)?,
+                Instruction::Push(OrDynamic::Static(Constant::I32(1))) => ICONST_1.write_to(&mut cursor)?,
+                Instruction::Push(OrDynamic::Static(Constant::I32(2))) => ICONST_2.write_to(&mut cursor)?,
+                Instruction::Push(OrDynamic::Static(Constant::I32(3))) => ICONST_3.write_to(&mut cursor)?,
+                Instruction::Push(OrDynamic::Static(Constant::I32(4))) => ICONST_4.write_to(&mut cursor)?,
+                Instruction::Push(OrDynamic::Static(Constant::I32(5))) => ICONST_5.write_to(&mut cursor)?,
+                Instruction::Push(OrDynamic::Static(Constant::I32(-1))) => ICONST_M1.write_to(&mut cursor)?,
+                Instruction::Push(OrDynamic::Static(Constant::I64(0))) => LCONST_0.write_to(&mut cursor)?,
+                Instruction::Push(OrDynamic::Static(Constant::I64(1))) => LCONST_1.write_to(&mut cursor)?,
                 Instruction::Push(OrDynamic::Static(Constant::I32(i @ -128..=127))) => {
-                    BIPUSH.write_to(writer)?;
-                    (*i as i8).write_to(writer)?;
+                    BIPUSH.write_to(&mut cursor)?;
+                    (*i as i8).write_to(&mut cursor)?;
                 }
                 Instruction::Push(OrDynamic::Static(Constant::I32(i @ -32768..=32767))) => {
-                    SIPUSH.write_to(writer)?;
-                    (*i as i16).write_to(writer)?;
+                    SIPUSH.write_to(&mut cursor)?;
+                    (*i as i16).write_to(&mut cursor)?;
                 }
 
-                Instruction::Push(OrDynamic::Static(Constant::F32(f))) if f.eq(&0.0) => FCONST_0.write_to(writer)?,
-                Instruction::Push(OrDynamic::Static(Constant::F32(f))) if f.eq(&1.0) => FCONST_1.write_to(writer)?,
-                Instruction::Push(OrDynamic::Static(Constant::F32(f))) if f.eq(&2.0) => FCONST_2.write_to(writer)?,
-                Instruction::Push(OrDynamic::Static(Constant::F64(f))) if f.eq(&0.0) => DCONST_0.write_to(writer)?,
-                Instruction::Push(OrDynamic::Static(Constant::F64(f))) if f.eq(&1.0) => DCONST_1.write_to(writer)?,
+                Instruction::Push(OrDynamic::Static(Constant::F32(f))) if f.eq(&0.0) => FCONST_0.write_to(&mut cursor)?,
+                Instruction::Push(OrDynamic::Static(Constant::F32(f))) if f.eq(&1.0) => FCONST_1.write_to(&mut cursor)?,
+                Instruction::Push(OrDynamic::Static(Constant::F32(f))) if f.eq(&2.0) => FCONST_2.write_to(&mut cursor)?,
+                Instruction::Push(OrDynamic::Static(Constant::F64(f))) if f.eq(&0.0) => DCONST_0.write_to(&mut cursor)?,
+                Instruction::Push(OrDynamic::Static(Constant::F64(f))) if f.eq(&1.0) => DCONST_1.write_to(&mut cursor)?,
                 Instruction::Push(c) => {
                     let idx = cp.insert_ordynamic(c.clone(), C::insert_constant);
                     let wide = match c {
@@ -1000,30 +1020,30 @@ impl ConstantPoolReadWrite for Code {
                         OrDynamic::Static(c) => c.is_wide()
                     };
                     if wide {
-                        LDC2_W.write_to(writer)?;
-                        idx.write_to(writer)?;
+                        LDC2_W.write_to(&mut cursor)?;
+                        idx.write_to(&mut cursor)?;
                     } else if let Ok(idx) = u8::try_from(idx) {
-                        LDC.write_to(writer)?;
-                        idx.write_to(writer)?;
+                        LDC.write_to(&mut cursor)?;
+                        idx.write_to(&mut cursor)?;
                     } else {
-                        LDC_W.write_to(writer)?;
-                        idx.write_to(writer)?;
+                        LDC_W.write_to(&mut cursor)?;
+                        idx.write_to(&mut cursor)?;
                     }
                 }
 
-                Instruction::Duplicate(StackValueType::One, None) => DUP.write_to(writer)?,
-                Instruction::Duplicate(StackValueType::One, Some(StackValueType::One)) => DUP_X1.write_to(writer)?,
-                Instruction::Duplicate(StackValueType::One, Some(StackValueType::Two)) => DUP_X2.write_to(writer)?,
-                Instruction::Duplicate(StackValueType::Two, None) => DUP2.write_to(writer)?,
-                Instruction::Duplicate(StackValueType::Two, Some(StackValueType::One)) => DUP2_X1.write_to(writer)?,
-                Instruction::Duplicate(StackValueType::Two, Some(StackValueType::Two)) => DUP2_X2.write_to(writer)?,
-                Instruction::Pop(StackValueType::One) => POP.write_to(writer)?,
-                Instruction::Pop(StackValueType::Two) => POP2.write_to(writer)?,
-                Instruction::CompareLongs => LCMP.write_to(writer)?,
-                Instruction::CompareFloats(FloatType::Float, NaNBehavior::ReturnsOne) => FCMPG.write_to(writer)?,
-                Instruction::CompareFloats(FloatType::Float, NaNBehavior::ReturnsNegativeOne) => FCMPL.write_to(writer)?,
-                Instruction::CompareFloats(FloatType::Double, NaNBehavior::ReturnsOne) => DCMPG.write_to(writer)?,
-                Instruction::CompareFloats(FloatType::Double, NaNBehavior::ReturnsNegativeOne) => DCMPL.write_to(writer)?,
+                Instruction::Duplicate(StackValueType::One, None) => DUP.write_to(&mut cursor)?,
+                Instruction::Duplicate(StackValueType::One, Some(StackValueType::One)) => DUP_X1.write_to(&mut cursor)?,
+                Instruction::Duplicate(StackValueType::One, Some(StackValueType::Two)) => DUP_X2.write_to(&mut cursor)?,
+                Instruction::Duplicate(StackValueType::Two, None) => DUP2.write_to(&mut cursor)?,
+                Instruction::Duplicate(StackValueType::Two, Some(StackValueType::One)) => DUP2_X1.write_to(&mut cursor)?,
+                Instruction::Duplicate(StackValueType::Two, Some(StackValueType::Two)) => DUP2_X2.write_to(&mut cursor)?,
+                Instruction::Pop(StackValueType::One) => POP.write_to(&mut cursor)?,
+                Instruction::Pop(StackValueType::Two) => POP2.write_to(&mut cursor)?,
+                Instruction::CompareLongs => LCMP.write_to(&mut cursor)?,
+                Instruction::CompareFloats(FloatType::Float, NaNBehavior::ReturnsOne) => FCMPG.write_to(&mut cursor)?,
+                Instruction::CompareFloats(FloatType::Float, NaNBehavior::ReturnsNegativeOne) => FCMPL.write_to(&mut cursor)?,
+                Instruction::CompareFloats(FloatType::Double, NaNBehavior::ReturnsOne) => DCMPG.write_to(&mut cursor)?,
+                Instruction::CompareFloats(FloatType::Double, NaNBehavior::ReturnsNegativeOne) => DCMPL.write_to(&mut cursor)?,
                 Instruction::LocalVariable(t, ty, l) => {
                     let op = match (t, ty) {
                         (LoadOrStore::Load, LocalType::Int) => ILOAD,
@@ -1039,139 +1059,139 @@ impl ConstantPoolReadWrite for Code {
                     };
                     wide_or_normal!(op, l => u8);
                 }
-                Instruction::Array(LoadOrStore::Load, ArrayType::Int) => IALOAD.write_to(writer)?,
-                Instruction::Array(LoadOrStore::Load, ArrayType::ByteOrBool) => BALOAD.write_to(writer)?,
-                Instruction::Array(LoadOrStore::Load, ArrayType::Short) => SALOAD.write_to(writer)?,
-                Instruction::Array(LoadOrStore::Load, ArrayType::Char) => CALOAD.write_to(writer)?,
-                Instruction::Array(LoadOrStore::Load, ArrayType::Float) => FALOAD.write_to(writer)?,
-                Instruction::Array(LoadOrStore::Load, ArrayType::Long) => LALOAD.write_to(writer)?,
-                Instruction::Array(LoadOrStore::Load, ArrayType::Double) => DALOAD.write_to(writer)?,
-                Instruction::Array(LoadOrStore::Load, ArrayType::Reference) => AALOAD.write_to(writer)?,
-                Instruction::Array(LoadOrStore::Store, ArrayType::Int) => IASTORE.write_to(writer)?,
-                Instruction::Array(LoadOrStore::Store, ArrayType::ByteOrBool) => BASTORE.write_to(writer)?,
-                Instruction::Array(LoadOrStore::Store, ArrayType::Short) => SASTORE.write_to(writer)?,
-                Instruction::Array(LoadOrStore::Store, ArrayType::Char) => CASTORE.write_to(writer)?,
-                Instruction::Array(LoadOrStore::Store, ArrayType::Float) => FASTORE.write_to(writer)?,
-                Instruction::Array(LoadOrStore::Store, ArrayType::Long) => LASTORE.write_to(writer)?,
-                Instruction::Array(LoadOrStore::Store, ArrayType::Double) => DASTORE.write_to(writer)?,
-                Instruction::Array(LoadOrStore::Store, ArrayType::Reference) => AASTORE.write_to(writer)?,
+                Instruction::Array(LoadOrStore::Load, ArrayType::Int) => IALOAD.write_to(&mut cursor)?,
+                Instruction::Array(LoadOrStore::Load, ArrayType::ByteOrBool) => BALOAD.write_to(&mut cursor)?,
+                Instruction::Array(LoadOrStore::Load, ArrayType::Short) => SALOAD.write_to(&mut cursor)?,
+                Instruction::Array(LoadOrStore::Load, ArrayType::Char) => CALOAD.write_to(&mut cursor)?,
+                Instruction::Array(LoadOrStore::Load, ArrayType::Float) => FALOAD.write_to(&mut cursor)?,
+                Instruction::Array(LoadOrStore::Load, ArrayType::Long) => LALOAD.write_to(&mut cursor)?,
+                Instruction::Array(LoadOrStore::Load, ArrayType::Double) => DALOAD.write_to(&mut cursor)?,
+                Instruction::Array(LoadOrStore::Load, ArrayType::Reference) => AALOAD.write_to(&mut cursor)?,
+                Instruction::Array(LoadOrStore::Store, ArrayType::Int) => IASTORE.write_to(&mut cursor)?,
+                Instruction::Array(LoadOrStore::Store, ArrayType::ByteOrBool) => BASTORE.write_to(&mut cursor)?,
+                Instruction::Array(LoadOrStore::Store, ArrayType::Short) => SASTORE.write_to(&mut cursor)?,
+                Instruction::Array(LoadOrStore::Store, ArrayType::Char) => CASTORE.write_to(&mut cursor)?,
+                Instruction::Array(LoadOrStore::Store, ArrayType::Float) => FASTORE.write_to(&mut cursor)?,
+                Instruction::Array(LoadOrStore::Store, ArrayType::Long) => LASTORE.write_to(&mut cursor)?,
+                Instruction::Array(LoadOrStore::Store, ArrayType::Double) => DASTORE.write_to(&mut cursor)?,
+                Instruction::Array(LoadOrStore::Store, ArrayType::Reference) => AASTORE.write_to(&mut cursor)?,
 
-                Instruction::ArrayLength => ARRAYLENGTH.write_to(writer)?,
-                Instruction::IntOperation(IntType::Int, IntOperation::Subtract) => ISUB.write_to(writer)?,
-                Instruction::IntOperation(IntType::Int, IntOperation::Add) => IADD.write_to(writer)?,
-                Instruction::IntOperation(IntType::Int, IntOperation::Multiply) => IMUL.write_to(writer)?,
-                Instruction::IntOperation(IntType::Int, IntOperation::Divide) => IDIV.write_to(writer)?,
-                Instruction::IntOperation(IntType::Int, IntOperation::Remainder) => IREM.write_to(writer)?,
-                Instruction::IntOperation(IntType::Int, IntOperation::Negate) => INEG.write_to(writer)?,
-                Instruction::IntOperation(IntType::Int, IntOperation::ShiftRight) => ISHR.write_to(writer)?,
-                Instruction::IntOperation(IntType::Int, IntOperation::ShiftLeft) => ISHL.write_to(writer)?,
-                Instruction::IntOperation(IntType::Int, IntOperation::UnsignedShiftRight) => IUSHR.write_to(writer)?,
-                Instruction::IntOperation(IntType::Int, IntOperation::Or) => IOR.write_to(writer)?,
-                Instruction::IntOperation(IntType::Int, IntOperation::ExclusiveOr) => IXOR.write_to(writer)?,
-                Instruction::IntOperation(IntType::Int, IntOperation::And) => IAND.write_to(writer)?,
-                Instruction::IntOperation(IntType::Long, IntOperation::Subtract) => LSUB.write_to(writer)?,
-                Instruction::IntOperation(IntType::Long, IntOperation::Add) => LADD.write_to(writer)?,
-                Instruction::IntOperation(IntType::Long, IntOperation::Multiply) => LMUL.write_to(writer)?,
-                Instruction::IntOperation(IntType::Long, IntOperation::Divide) => LDIV.write_to(writer)?,
-                Instruction::IntOperation(IntType::Long, IntOperation::Remainder) => LREM.write_to(writer)?,
-                Instruction::IntOperation(IntType::Long, IntOperation::Negate) => LNEG.write_to(writer)?,
-                Instruction::IntOperation(IntType::Long, IntOperation::ShiftRight) => LSHR.write_to(writer)?,
-                Instruction::IntOperation(IntType::Long, IntOperation::ShiftLeft) => LSHL.write_to(writer)?,
-                Instruction::IntOperation(IntType::Long, IntOperation::UnsignedShiftRight) => LUSHR.write_to(writer)?,
-                Instruction::IntOperation(IntType::Long, IntOperation::Or) => LOR.write_to(writer)?,
-                Instruction::IntOperation(IntType::Long, IntOperation::ExclusiveOr) => LXOR.write_to(writer)?,
-                Instruction::IntOperation(IntType::Long, IntOperation::And) => LAND.write_to(writer)?,
+                Instruction::ArrayLength => ARRAYLENGTH.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Int, IntOperation::Subtract) => ISUB.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Int, IntOperation::Add) => IADD.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Int, IntOperation::Multiply) => IMUL.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Int, IntOperation::Divide) => IDIV.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Int, IntOperation::Remainder) => IREM.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Int, IntOperation::Negate) => INEG.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Int, IntOperation::ShiftRight) => ISHR.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Int, IntOperation::ShiftLeft) => ISHL.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Int, IntOperation::UnsignedShiftRight) => IUSHR.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Int, IntOperation::Or) => IOR.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Int, IntOperation::ExclusiveOr) => IXOR.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Int, IntOperation::And) => IAND.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Long, IntOperation::Subtract) => LSUB.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Long, IntOperation::Add) => LADD.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Long, IntOperation::Multiply) => LMUL.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Long, IntOperation::Divide) => LDIV.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Long, IntOperation::Remainder) => LREM.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Long, IntOperation::Negate) => LNEG.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Long, IntOperation::ShiftRight) => LSHR.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Long, IntOperation::ShiftLeft) => LSHL.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Long, IntOperation::UnsignedShiftRight) => LUSHR.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Long, IntOperation::Or) => LOR.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Long, IntOperation::ExclusiveOr) => LXOR.write_to(&mut cursor)?,
+                Instruction::IntOperation(IntType::Long, IntOperation::And) => LAND.write_to(&mut cursor)?,
 
-                Instruction::FloatOperation(FloatType::Float, FloatOperation::Subtract) => FSUB.write_to(writer)?,
-                Instruction::FloatOperation(FloatType::Float, FloatOperation::Negate) => FNEG.write_to(writer)?,
-                Instruction::FloatOperation(FloatType::Float, FloatOperation::Add) => FADD.write_to(writer)?,
-                Instruction::FloatOperation(FloatType::Float, FloatOperation::Multiply) => FMUL.write_to(writer)?,
-                Instruction::FloatOperation(FloatType::Float, FloatOperation::Divide) => FDIV.write_to(writer)?,
-                Instruction::FloatOperation(FloatType::Float, FloatOperation::Remainder) => FREM.write_to(writer)?,
-                Instruction::FloatOperation(FloatType::Double, FloatOperation::Subtract) => DSUB.write_to(writer)?,
-                Instruction::FloatOperation(FloatType::Double, FloatOperation::Negate) => DNEG.write_to(writer)?,
-                Instruction::FloatOperation(FloatType::Double, FloatOperation::Add) => DADD.write_to(writer)?,
-                Instruction::FloatOperation(FloatType::Double, FloatOperation::Multiply) => DMUL.write_to(writer)?,
-                Instruction::FloatOperation(FloatType::Double, FloatOperation::Divide) => DDIV.write_to(writer)?,
-                Instruction::FloatOperation(FloatType::Double, FloatOperation::Remainder) => DREM.write_to(writer)?,
-                Instruction::Throw => ATHROW.write_to(writer)?,
+                Instruction::FloatOperation(FloatType::Float, FloatOperation::Subtract) => FSUB.write_to(&mut cursor)?,
+                Instruction::FloatOperation(FloatType::Float, FloatOperation::Negate) => FNEG.write_to(&mut cursor)?,
+                Instruction::FloatOperation(FloatType::Float, FloatOperation::Add) => FADD.write_to(&mut cursor)?,
+                Instruction::FloatOperation(FloatType::Float, FloatOperation::Multiply) => FMUL.write_to(&mut cursor)?,
+                Instruction::FloatOperation(FloatType::Float, FloatOperation::Divide) => FDIV.write_to(&mut cursor)?,
+                Instruction::FloatOperation(FloatType::Float, FloatOperation::Remainder) => FREM.write_to(&mut cursor)?,
+                Instruction::FloatOperation(FloatType::Double, FloatOperation::Subtract) => DSUB.write_to(&mut cursor)?,
+                Instruction::FloatOperation(FloatType::Double, FloatOperation::Negate) => DNEG.write_to(&mut cursor)?,
+                Instruction::FloatOperation(FloatType::Double, FloatOperation::Add) => DADD.write_to(&mut cursor)?,
+                Instruction::FloatOperation(FloatType::Double, FloatOperation::Multiply) => DMUL.write_to(&mut cursor)?,
+                Instruction::FloatOperation(FloatType::Double, FloatOperation::Divide) => DDIV.write_to(&mut cursor)?,
+                Instruction::FloatOperation(FloatType::Double, FloatOperation::Remainder) => DREM.write_to(&mut cursor)?,
+                Instruction::Throw => ATHROW.write_to(&mut cursor)?,
                 Instruction::InstanceOf(ty) => {
-                    INSTANCEOF.write_to(writer)?;
+                    INSTANCEOF.write_to(&mut cursor)?;
                     cp.insert_ordynamic(ty.clone(), C::insert_class);
                 }
                 Instruction::CheckCast(ty) => {
-                    CHECKCAST.write_to(writer)?;
+                    CHECKCAST.write_to(&mut cursor)?;
                     cp.insert_ordynamic(ty.clone(), C::insert_class);
                 }
                 Instruction::New(ty) => {
-                    NEW.write_to(writer)?;
+                    NEW.write_to(&mut cursor)?;
                     cp.insert_ordynamic(ty.clone(), C::insert_class);
                 }
                 Instruction::NewArray(_, _) => {}
-                Instruction::Monitor(MonitorOperation::Enter) => MONITORENTER.write_to(writer)?,
-                Instruction::Monitor(MonitorOperation::Exit) => MONITOREXIT.write_to(writer)?,
-                Instruction::Conversion(NumberType::Long, NumberType::Int) => L2I.write_to(writer)?,
-                Instruction::Conversion(NumberType::Long, NumberType::Float) => L2F.write_to(writer)?,
-                Instruction::Conversion(NumberType::Long, NumberType::Double) => L2D.write_to(writer)?,
-                Instruction::Conversion(NumberType::Double, NumberType::Float) => D2F.write_to(writer)?,
-                Instruction::Conversion(NumberType::Double, NumberType::Int) => D2I.write_to(writer)?,
-                Instruction::Conversion(NumberType::Double, NumberType::Long) => D2L.write_to(writer)?,
-                Instruction::Conversion(NumberType::Int, NumberType::Double) => I2D.write_to(writer)?,
-                Instruction::Conversion(NumberType::Int, NumberType::Float) => I2F.write_to(writer)?,
-                Instruction::Conversion(NumberType::Int, NumberType::Long) => I2L.write_to(writer)?,
-                Instruction::Conversion(NumberType::Float, NumberType::Double) => F2D.write_to(writer)?,
-                Instruction::Conversion(NumberType::Float, NumberType::Int) => F2I.write_to(writer)?,
-                Instruction::Conversion(NumberType::Float, NumberType::Long) => F2L.write_to(writer)?,
+                Instruction::Monitor(MonitorOperation::Enter) => MONITORENTER.write_to(&mut cursor)?,
+                Instruction::Monitor(MonitorOperation::Exit) => MONITOREXIT.write_to(&mut cursor)?,
+                Instruction::Conversion(NumberType::Long, NumberType::Int) => L2I.write_to(&mut cursor)?,
+                Instruction::Conversion(NumberType::Long, NumberType::Float) => L2F.write_to(&mut cursor)?,
+                Instruction::Conversion(NumberType::Long, NumberType::Double) => L2D.write_to(&mut cursor)?,
+                Instruction::Conversion(NumberType::Double, NumberType::Float) => D2F.write_to(&mut cursor)?,
+                Instruction::Conversion(NumberType::Double, NumberType::Int) => D2I.write_to(&mut cursor)?,
+                Instruction::Conversion(NumberType::Double, NumberType::Long) => D2L.write_to(&mut cursor)?,
+                Instruction::Conversion(NumberType::Int, NumberType::Double) => I2D.write_to(&mut cursor)?,
+                Instruction::Conversion(NumberType::Int, NumberType::Float) => I2F.write_to(&mut cursor)?,
+                Instruction::Conversion(NumberType::Int, NumberType::Long) => I2L.write_to(&mut cursor)?,
+                Instruction::Conversion(NumberType::Float, NumberType::Double) => F2D.write_to(&mut cursor)?,
+                Instruction::Conversion(NumberType::Float, NumberType::Int) => F2I.write_to(&mut cursor)?,
+                Instruction::Conversion(NumberType::Float, NumberType::Long) => F2L.write_to(&mut cursor)?,
 
                 Instruction::Conversion(_, _) => {}
                 Instruction::ConvertInt(BitType::Int) => {} // Redundant conversions
 
-                Instruction::ConvertInt(BitType::Long) => I2L.write_to(writer)?,
-                Instruction::ConvertInt(BitType::Short) => I2S.write_to(writer)?,
-                Instruction::ConvertInt(BitType::Byte) => I2B.write_to(writer)?,
-                Instruction::ConvertInt(BitType::Char) => I2C.write_to(writer)?,
-                Instruction::ConvertInt(BitType::Double) => I2D.write_to(writer)?,
-                Instruction::ConvertInt(BitType::Float) => I2F.write_to(writer)?,
-                Instruction::Return(None) => RETURN.write_to(writer)?,
-                Instruction::Return(Some(LocalType::Reference)) => ARETURN.write_to(writer)?,
-                Instruction::Return(Some(LocalType::Long)) => LRETURN.write_to(writer)?,
-                Instruction::Return(Some(LocalType::Int)) => IRETURN.write_to(writer)?,
-                Instruction::Return(Some(LocalType::Double)) => DRETURN.write_to(writer)?,
-                Instruction::Return(Some(LocalType::Float)) => FRETURN.write_to(writer)?,
+                Instruction::ConvertInt(BitType::Long) => I2L.write_to(&mut cursor)?,
+                Instruction::ConvertInt(BitType::Short) => I2S.write_to(&mut cursor)?,
+                Instruction::ConvertInt(BitType::Byte) => I2B.write_to(&mut cursor)?,
+                Instruction::ConvertInt(BitType::Char) => I2C.write_to(&mut cursor)?,
+                Instruction::ConvertInt(BitType::Double) => I2D.write_to(&mut cursor)?,
+                Instruction::ConvertInt(BitType::Float) => I2F.write_to(&mut cursor)?,
+                Instruction::Return(None) => RETURN.write_to(&mut cursor)?,
+                Instruction::Return(Some(LocalType::Reference)) => ARETURN.write_to(&mut cursor)?,
+                Instruction::Return(Some(LocalType::Long)) => LRETURN.write_to(&mut cursor)?,
+                Instruction::Return(Some(LocalType::Int)) => IRETURN.write_to(&mut cursor)?,
+                Instruction::Return(Some(LocalType::Double)) => DRETURN.write_to(&mut cursor)?,
+                Instruction::Return(Some(LocalType::Float)) => FRETURN.write_to(&mut cursor)?,
                 Instruction::Field(op, memty, mem) => {
                     match (op, memty) {
                         (GetOrPut::Get, MemberType::Virtual) => GETFIELD,
                         (GetOrPut::Put, MemberType::Virtual) => PUTFIELD,
                         (GetOrPut::Get, MemberType::Static) => GETSTATIC,
                         (GetOrPut::Put, MemberType::Static) => GETSTATIC,
-                    }.write_to(writer)?;
+                    }.write_to(&mut cursor)?;
                     cp.insert_ordynamic(mem.clone(), C::insert_member);
                 }
                 Instruction::InvokeExact(memty, mem) => {
                     match memty {
                         MemberType::Static => INVOKESTATIC,
                         MemberType::Virtual => INVOKEVIRTUAL
-                    }.write_to(writer)?;
+                    }.write_to(&mut cursor)?;
                     cp.insert_ordynamic(mem.clone(), C::insert_member);
                 }
                 Instruction::InvokeSpecial(mem) => {
-                    INVOKESPECIAL.write_to(writer)?;
+                    INVOKESPECIAL.write_to(&mut cursor)?;
                     cp.insert_ordynamic(mem.clone(), C::insert_member);
                 }
                 Instruction::InvokeDynamic(dy) => {
-                    INVOKEDYNAMIC.write_to(writer)?;
+                    INVOKEDYNAMIC.write_to(&mut cursor)?;
                     cp.insert_dynamic(dy.clone());
-                    writer.write_all(&[0, 0])?;
+                    cursor.write_all(&[0, 0])?;
                 }
                 Instruction::InvokeInterface(mem, count) => {
-                    INVOKEINTERFACE.write_to(writer)?;
+                    INVOKEINTERFACE.write_to(&mut cursor)?;
                     cp.insert_ordynamic(mem.clone(), C::insert_member);
-                    count.write_to(writer)?;
-                    writer.write_all(&[0])?;
+                    count.write_to(&mut cursor)?;
+                    cursor.write_all(&[0])?;
                 }
 
                 Instruction::Ret(i) => wide_or_normal!(RET, i => u8),
-                Instruction::Swap => SWAP.write_to(writer)?,
+                Instruction::Swap => SWAP.write_to(&mut cursor)?,
                 Instruction::IntIncrement(l, inc) => wide_or_normal!(RET, l => u8, inc => i8),
                 Instruction::LineNumber(ln) => {
                     line_numbers.insert(cursor.position() as usize, *ln);
@@ -1190,7 +1210,7 @@ impl ConstantPoolReadWrite for Code {
         let mut index_hints = Vec::new();
         let mut last_max_index = 0usize;
         let mut buf_iter = buf.iter();
-        // Get minimum/maximum starting index of the next buffer, that is: index_hints[n] is max/min of buf[n + 1] resulting index.
+        // Get minimum/maximum starting index of the next buffer, that is: index_hints[n] is max of buf[n + 1] resulting index.
         for j in &jumps {
             let this_size_max = 1 + match *j {
                 Instruction::LookupSwitch { default: _, table } => 11 + table.len() * 8,
@@ -1218,9 +1238,10 @@ impl ConstantPoolReadWrite for Code {
         let mut actual_indices = Vec::new();
         let mut last_idx = 0;
         buf_iter = buf.iter();
+        let mut actual_sizes = Vec::new();
         for j in &jumps {
             last_idx += buf_iter.next().unwrap().len();
-            last_idx += 1 + match *j {
+            let actual_size = 1 + match *j {
                 Instruction::LookupSwitch { default: _, table } => (4 - (last_idx & 3)) + 8 + table.len() * 8,
                 Instruction::TableSwitch { default: _, low: _, offsets } => (4 - (last_idx & 3)) + 12 + offsets.len() * 4,
                 Instruction::Jsr(target) | Instruction::Jump(JumpCondition::Always, target) => {
@@ -1244,17 +1265,16 @@ impl ConstantPoolReadWrite for Code {
                 // SAFETY: other variants are not inserted
                 _ => unsafe { std::hint::unreachable_unchecked() }
             };
+            last_idx += actual_size;
+            actual_sizes.push(actual_size);
             actual_indices.push(last_idx);
         }
-        let code_len = (buf_iter.next().unwrap().len() + last_idx) as u32;
-        #[cfg(test)] {
-            println!("{}", code_len)
-        }
+        let code_len = (buf_iter.next().unwrap().len() + last_idx - 1) as u32;
         code_len.write_to(writer)?;
         let mut jumps_iter = jumps.into_iter();
         let mut buf_iter = buf.into_iter();
         writer.write_all(&buf_iter.next().unwrap())?;
-        for ((i, bytes), idx) in buf_iter.enumerate().zip(actual_indices.iter()) {
+        for ((i, bytes), (idx, act)) in buf_iter.enumerate().zip(actual_indices.iter().zip(actual_sizes.iter())) {
             macro_rules! resolve_label {
                 ($label: expr) => ({
                     let (buf_off, inner_off) = get_label!($label);
@@ -1263,7 +1283,7 @@ impl ConstantPoolReadWrite for Code {
                     } else {
                         actual_indices[buf_off - 1] as u32
                     }) + (inner_off as u32);
-                    (that_off as i32).wrapping_sub(*idx as i32)
+                    (that_off as i32).wrapping_sub(*idx as i32) + *act as i32 - 1
                 });
             }
 
@@ -1450,47 +1470,26 @@ impl ConstantPoolReadWrite for RawFrame {
             251 => RawFrame::Same(u16::read_from(reader)?),
             252..=254 => RawFrame::Append(u16::read_from(reader)?, {
                 let mut vec = Vec::with_capacity((tag - 251) as usize);
-                let mut i = 251;
-                while i < tag {
-                    let veri = VerificationType::read_from(cp, reader)?;
-                    i += if let VerificationType::Double | VerificationType::Long = veri {
-                        2
-                    } else {
-                        1
-                    };
-                    vec.push(veri);
+                for _ in 251..tag {
+                    vec.push(VerificationType::read_from(cp, reader)?)
                 }
                 vec
             }),
             _ => RawFrame::Full(u16::read_from(reader)?, {
                 let locals = u16::read_from(reader)?;
-                let mut local = Vec::with_capacity((tag - 251) as usize);
-                let mut i = 0;
-                while i < locals {
-                    let veri = VerificationType::read_from(cp, reader)?;
-                    i += if let VerificationType::Double | VerificationType::Long = veri {
-                        2
-                    } else {
-                        1
-                    };
-                    local.push(veri);
+                let mut local = Vec::with_capacity(locals as usize);
+                for _ in 0..locals {
+                    local.push(VerificationType::read_from(cp, reader)?);
                 }
                 local
             }, {
-                                    let stacks = u16::read_from(reader)?;
-                                    let mut stack = Vec::with_capacity((tag - 251) as usize);
-                                    let mut i = 0;
-                                    while i < stacks {
-                                        let veri = VerificationType::read_from(cp, reader)?;
-                                        i += if let VerificationType::Double | VerificationType::Long = veri {
-                                            2
-                                        } else {
-                                            1
-                                        };
-                                        stack.push(veri);
-                                    }
-                                    stack
-                                })
+                let stacks = u16::read_from(reader)?;
+                let mut stack = Vec::with_capacity(stacks as usize);
+                for _ in 0..stacks {
+                    stack.push(VerificationType::read_from(cp, reader)?);
+                }
+                stack
+            })
         })
     }
 

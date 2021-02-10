@@ -43,6 +43,7 @@ pub enum Throws {
 pub enum TypeArgument {
     Extends(RefTypeSignature),
     Super(RefTypeSignature),
+    Exact(RefTypeSignature),
     Any
 }
 
@@ -73,7 +74,7 @@ pub(super) fn unexpected_end<T>() -> crate::Result<T> {
     Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Unexpected end of string").into())
 }
 
-use nom::{take, one_of, IResult, take_until1, many0, char, complete, peek, alt, take_until, take_till1, do_parse, terminated, switch, opt};
+use nom::{take, one_of, IResult, take_until1, many0, char, complete, peek, alt, take_till1, do_parse, terminated, switch, opt, named};
 use crate::ConstantPoolReadWrite;
 
 fn type_sig(i: &str) -> IResult<&str, TypeSignature> {
@@ -91,6 +92,7 @@ fn type_sig(i: &str) -> IResult<&str, TypeSignature> {
     }))
 }
 fn ref_type_sig(i: &str) -> IResult<&str, RefTypeSignature> {
+    dbg!(i);
     let (newi, c) = one_of!(i, "[TL")?;
     match c {
         '[' => {
@@ -126,39 +128,70 @@ fn throws(i: &str) -> IResult<&str, Throws> {
 
 // TODO Error when encountering illegal characters
 fn class_type_sig(i: &str) -> IResult<&str, ClassTypeSignature> {
+    println!("{}", i);
     do_parse!(i,
     char!('L') >>
     package: packages >>
     name: simple_type_sig >>
-    suffix: terminated!(many0!(do_parse!(char!('.') >>
-    sig: simple_type_sig >> (sig))), char!(';')) >>
+    suffix: terminated!(many0!(complete!(do_parse!(char!('.') >>
+    sig: simple_type_sig >> (sig)))), char!(';')) >>
     (ClassTypeSignature { package, name, suffix }))
 }
 
 fn packages(i: &str) -> IResult<&str, Vec<Cow<'static, str>>> {
-    let (i, o) = many0!(i, take_until!("/"))?;
-    Ok((i, o.into_iter().map(ToOwned::to_owned).map(Into::into).collect()))
+    let bytes = i.as_bytes();
+    let mut vec = vec![];
+    let mut n = 0;
+    let mut str = Vec::new();
+    let mut last = usize::MAX;
+    loop {
+        match bytes.get(n) {
+            Some(b'/') => {
+                unsafe { vec.push(Cow::Owned(String::from_utf8_unchecked(str))); } // the parameter is &str, so it must be valid utf-8.
+                str = Vec::new();
+                last = n;
+            }
+            Some(b';') | Some(b'<') | Some(b'.') => break if last == usize::MAX {
+                    Ok((i, vec))
+                } else {
+                    Ok((&i[(last + 1)..i.len()], vec))
+                },
+            Some(b) => str.push(*b),
+            None => break Err(nom::Err::Incomplete(nom::Needed::Unknown))
+        }
+        n += 1;
+    }
 }
 
 fn type_arg(i: &str) -> IResult<&str, TypeArgument> {
-    let (i, o) = one_of!(i, "-+*")?;
+    let (newi, o) = one_of!(i, "-+*TL[")?;
     Ok(match o {
-        '*' => { (i, TypeArgument::Any) }
+        '*' => { (newi, TypeArgument::Any) }
         '-' => {
-            let (i, o) = ref_type_sig(i)?;
+            let (i, o) = ref_type_sig(newi)?;
             (i, TypeArgument::Super(o))
         }
         '+' => {
-            let (i, o) = ref_type_sig(i)?;
+            let (i, o) = ref_type_sig(newi)?;
             (i, TypeArgument::Extends(o))
         }
-        _ => { unsafe { std::hint::unreachable_unchecked() } }
+        _ => {
+            let (i, o) = ref_type_sig(i)?;
+            (i, TypeArgument::Exact(o))
+        }
     })
 }
 
+fn type_args(i: &str) -> IResult<&str, Vec<TypeArgument>> {
+    dbg!(i);
+    let (i, o) = opt!(i, complete!(do_parse!(char!('<') >> res: many0!(complete!(type_arg)) >> char!('>') >> (res))))?;
+    Ok((i, o.unwrap_or_default()))
+}
+
 fn simple_type_sig(i: &str) -> IResult<&str, SimpleClassTypeSignature> {
-    fn type_var_start(c: char) -> bool { c == '<' }
-    do_parse!(i, name: take_till1!(type_var_start) >> type_arguments: opt!(do_parse!(char!('<') >> res: many0!(type_arg) >> char!('>') >> (res))) >> (SimpleClassTypeSignature { name: name.to_owned().into(), type_arguments: type_arguments.unwrap_or_default() }))
+    fn type_var_start(c: char) -> bool { c == '<' || c == '.' || c == ';' }
+    dbg!(i);
+    do_parse!(i, name: take_till1!(type_var_start) >> type_arguments: type_args >> (SimpleClassTypeSignature { name: name.to_owned().into(), type_arguments }))
 }
 
 fn type_parameter(i: &str) -> IResult<&str, TypeParameter> {
@@ -166,7 +199,7 @@ fn type_parameter(i: &str) -> IResult<&str, TypeParameter> {
 }
 
 fn type_parameters(i: &str) -> IResult<&str, Vec<TypeParameter>> {
-    do_parse!(i, res: opt!(do_parse!(char!('<') >> res: many0!(type_parameter) >> char!('>') >> (res))) >> (res.unwrap_or_default()))
+    do_parse!(i, res: opt!(complete!(do_parse!(char!('<') >> res: many0!(type_parameter) >> char!('>') >> (res)))) >> (res.unwrap_or_default()))
 }
 
 fn method_sig(i: &str) -> IResult<&str, MethodSignature> {
@@ -272,6 +305,9 @@ impl Display for TypeArgument {
             }
             TypeArgument::Any => {
                 f.write_str("*")
+            }
+            TypeArgument::Exact(ref t) => {
+                t.fmt(f)
             }
         }
     }

@@ -1,5 +1,5 @@
 [package]
-name = "coffer-proc-macros"
+name = "coffer-macros"
 version = "1.0.0"
 authors = ["Deadbeef"]
 edition = "2018"
