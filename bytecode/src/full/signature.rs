@@ -74,7 +74,7 @@ pub(super) fn unexpected_end<T>() -> crate::Result<T> {
     Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Unexpected end of string").into())
 }
 
-use nom::{take, one_of, IResult, take_until1, many0, char, complete, peek, alt, take_till1, do_parse, terminated, switch, opt, named};
+use nom::{take, one_of, IResult, take_until1, many0, char, complete, peek, alt, take_till1, do_parse, terminated, switch, opt};
 use crate::ConstantPoolReadWrite;
 
 fn type_sig(i: &str) -> IResult<&str, TypeSignature> {

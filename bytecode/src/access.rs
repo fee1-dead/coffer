@@ -50,5 +50,5 @@ bitflags! {
 
 impl ReadWrite for AccessFlags {
     fn read_from<T: Read>(reader: &mut T) -> Result<AccessFlags> { Ok(AccessFlags::from_bits(u16::read_from(reader)?).unwrap()) }
-    fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> { Ok(self.bits().write_to(writer)?) }
+    fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> { self.bits().write_to(writer) }
 }

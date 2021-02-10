@@ -48,13 +48,19 @@ struct TableSwitch {
 impl Parse for TableSwitch {
     fn parse(input: ParseStream) -> Result<Self> {
         let content;
+        let start = input.parse()?;
+        let to = input.parse()?;
+        let end = input.parse()?;
+        let brace = braced!(content in input);
+        let labels = content.parse_terminated(Lifetime::parse)?;
+        let default = input.parse()?;
         Ok(TableSwitch {
-            start: input.parse()?,
-            to: input.parse()?,
-            end: input.parse()?,
-            brace: braced!(content in input),
-            labels: content.parse_terminated(Lifetime::parse)?,
-            default: input.parse()?,
+            start,
+            to,
+            end,
+            brace,
+            labels,
+            default
         })
     }
 }
