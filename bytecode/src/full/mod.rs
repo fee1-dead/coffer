@@ -38,6 +38,9 @@ mod signature;
 pub mod cp;
 mod code;
 
+/// A method handle. It can be loaded on to the stack from the constant pool directly.
+///
+/// There are some restrictions of its kind and its member, one can use [`check`](MethodHandle::check) to check the validity.
 #[derive(Clone, PartialEq, Hash, Debug)]
 pub struct MethodHandle {
     pub kind: MethodHandleKind,
@@ -45,6 +48,15 @@ pub struct MethodHandle {
 }
 
 impl MethodHandle {
+    /// Checks if this methodhandle is valid. Returns `Ok(())` if it is, returns `Err` with a detailed message if it is not.
+    ///
+    /// Rules:
+    ///  - Handles with types [`GetField`](MethodHandleKind::GetField), [`GetStatic`](MethodHandleKind::GetStatic), [`PutField`](MethodHandleKind::PutField) and [`PutStatic`](MethodHandleKind::PutStatic) should have a `MemberRef` with a field type descriptor.
+    ///  - Handles with types [`InvokeInterface`](MethodHandleKind::InvokeInterface), [`InvokeSpecial`](MethodHandleKind::InvokeSpecial), [`InvokeStatic`](MethodHandleKind::InvokeStatic), [`InvokeVirtual`](MethodHandleKind::InvokeVirtual) and [`NewInvokeSpecial`](MethodHandleKind::NewInvokeSpecial) should have a `MemberRef` with a method type descriptor.
+    ///  - Handles cannot refer to static initializers, i.e. `MemberRef` with a name of `<clinit>`
+    ///  - Handles with type [`NewInvokeSpecial`](MethodHandleKind::NewInvokeSpecial) must refer to a constructor method, i.e. `MemberRef` with a name of `<init>`
+    ///  - Handles whose types are not [`NewInvokeSpecial`](MethodHandleKind::NewInvokeSpecial) cannot refer to a constructor method.
+    ///
     pub fn check(&self) -> Result<()> {
         macro_rules! should_not_be_method {
             ($($kind: path),*) => {
@@ -84,7 +96,16 @@ impl MethodHandle {
         }
         should_not_be_method! { MethodHandleKind::GetField, MethodHandleKind::GetStatic, MethodHandleKind::PutField, MethodHandleKind::PutStatic }
         should_be_method! { MethodHandleKind::InvokeInterface, MethodHandleKind::InvokeSpecial, MethodHandleKind::InvokeStatic, MethodHandleKind::InvokeVirtual, MethodHandleKind::NewInvokeSpecial }
-        Ok(())
+        match self.kind {
+            MethodHandleKind::InvokeVirtual |
+            MethodHandleKind::InvokeStatic |
+            MethodHandleKind::InvokeSpecial |
+            MethodHandleKind::InvokeInterface if self.member.name == "<init>" || self.member.name == "<clinit>" =>
+                Err(Error::Invalid("MethodHandle", Cow::Borrowed("name must not be <init> or <clinit>"))),
+            MethodHandleKind::NewInvokeSpecial if self.member.name != "<init>" =>
+                Err(Error::Invalid("MethodHandle", Cow::Borrowed("name for NewInvokeSpecial must be <init>"))),
+            _ => Ok(())
+        }
     }
 }
 impl ConstantPoolReadWrite for MethodHandle {
@@ -99,17 +120,9 @@ impl ConstantPoolReadWrite for MethodHandle {
     }
 
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<(), Error> {
+        self.check()?;
         self.kind.write_to(writer)?;
-        match self.kind {
-            MethodHandleKind::InvokeVirtual |
-            MethodHandleKind::InvokeStatic |
-            MethodHandleKind::InvokeSpecial |
-            MethodHandleKind::InvokeInterface if self.member.name == "<init>" || self.member.name == "<clinit>" =>
-                Err(Error::Invalid("MethodHandle", Cow::Borrowed("name must not be <init> or <clinit>"))),
-            MethodHandleKind::NewInvokeSpecial if self.member.name != "<init>" =>
-                Err(Error::Invalid("MethodHandle", Cow::Borrowed("name for NewInvokeSpecial must be <init>"))),
-            _ => self.member.write_to(cp, writer)
-        }
+        self.member.write_to(cp, writer)
     }
 }
 

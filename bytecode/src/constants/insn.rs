@@ -14,6 +14,12 @@
     You should have received a copy of the GNU Lesser General Public License
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
+#![allow(missing_docs)]
+//! Instruction opcodes.
+//! It is helpful to consult The Java® Virtual Machine Specification. [Chapter 6] is all about these instruction codes.
+//!
+//! [Chapter 6]: https://docs.oracle.com/javase/specs/jvms/se15/html/jvms-6.html
+
 pub const NOP: u8 = 0x00;
 pub const ACONST_NULL: u8 = 0x01;
 pub const ICONST_M1: u8 = 0x02;

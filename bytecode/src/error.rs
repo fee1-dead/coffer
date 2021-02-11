@@ -107,14 +107,17 @@ mod backtrace {
 
 /// The error type.
 ///
-/// When the `backtrace` feature is enabled, `ErrorTrace` is use instead of `ErrorBase`.
+/// When the `backtrace` feature is enabled, `ErrorTrace` is used instead of `ErrorBase`.
 #[cfg(any(feature = "backtrace", test))]
 pub type Error = backtrace::ErrorTrace;
 
 /// The error type.
 ///
-/// When the `backtrace` feature is enabled, `ErrorTrace` is use instead of `ErrorBase`.
+/// When the `backtrace` feature is enabled, `ErrorTrace` is used instead of `ErrorBase`.
 #[cfg(not(any(feature = "backtrace", test)))]
 pub type Error = ErrorBase;
 
+/// The Result type. The default error type is [`crate::Error`].
+///
+/// [`crate::Error`]: crate::Error
 pub type Result<T, E = Error> = std::result::Result<T, E>;

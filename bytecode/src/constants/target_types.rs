@@ -1,3 +1,4 @@
+//! Target type values for Type Annotations.
 // Needs help for the naming of these variables
 
 /// type parameter declaration of generic class or interface, the relative `target_info` item is `type_parameter_target`

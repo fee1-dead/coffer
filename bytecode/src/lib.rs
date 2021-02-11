@@ -14,7 +14,22 @@
  *     You should have received a copy of the GNU Lesser General Public License
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
+//! # Coffer
+//! Coffer is a lightweight and fast library for reading and writing Java classes.
+//!
+//! Read and write functions are exposed via the traits [`ReadWrite`] and [`ConstantPoolReadWrite`] when the information from the constant pool is needed to get the information.
+//!
+//! [`ReadWrite`] uses instances of `Read` and `Write`, and [`ConstantPoolReadWrite`] uses additional parameters: instances of [`ConstantPoolWriter`] and [`ConstantPoolReader`].
+//! These traits represent read and write access to the constant pool.
+//!
+//! Many implementors of [`ReadWrite`] and [`ConstantPoolReadWrite`] uses a derive macro internally to avoid repeating implementation for structures that just calls the trait functions of its fields.
+//!
+//! [`ReadWrite`]: crate::ReadWrite
+//! [`ConstantPoolReadWrite`]: crate::ConstantPoolReadWrite
+//! [`ConstantPoolWriter`]: crate::ConstantPoolWriter
+//! [`ConstantPoolReader`]: crate::ConstantPoolReader
 #![cfg_attr(any(feature = "backtrace", test), feature(backtrace))]
+#![warn(missing_docs)]
 
 #[macro_use]
 extern crate bitflags;
