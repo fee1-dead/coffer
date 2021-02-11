@@ -21,7 +21,7 @@ use indexmap::map::IndexMap;
 use nom::lib::std::borrow::Cow;
 
 use crate::{ConstantPoolReader, ConstantPoolReadWrite, ConstantPoolWriter, Error, ReadWrite, try_cp_read, try_cp_read_idx, read_from};
-use crate::access::AccessFlags;
+use crate::access::ExOpFlags;
 use crate::full::{BootstrapMethod, Constant, FieldSignature, MemberRef, RawAttribute, To, Type, VerificationType};
 use crate::full::annotation::{CodeTypeAnnotation};
 use std::str::FromStr;
@@ -1544,25 +1544,28 @@ pub struct Export {
     #[str_type(Package)]
     pub package: Cow<'static, str>,
     #[use_normal_rw]
-    pub flags: AccessFlags,
-    /// not exported; use the function to get the strings.
+    pub flags: ExOpFlags,
     #[vec_len_type(u16)]
-    pub to: Vec<To>,
+    to: Vec<To>,
 }
 
 impl Export {
-    pub fn new<ToStr: Into<Cow<'static, str>>>(pkg: ToStr, flags: AccessFlags, to: Vec<Cow<'static, str>>) -> Self {
+    /// Creates a new instance of [`Export`].
+    ///
+    /// [`Export`]: Export
+    pub fn new<ToStr: Into<Cow<'static, str>>, ToOp: Into<ExOpFlags>>(pkg: ToStr, flags: ToOp, to: Vec<Cow<'static, str>>) -> Self {
         unsafe {
             Self {
                 package: pkg.into(),
-                flags,
+                flags: flags.into(),
                 to: std::mem::transmute(to),
             }
         }
     }
-    pub fn to(&self) -> &Vec<Cow<'static, str>> {
-        // SAFETY: `To` is equivalent to a Cow<'static, str>, so it is safe to cast the pointer.
-        unsafe { &*(&self.to as *const std::vec::Vec<To> as *const std::vec::Vec<std::borrow::Cow<str>>) }
+    /// Get modules that this module exports to.
+    pub fn to(&self) -> &[Cow<'static, str>] {
+        // SAFETY: `To` is #[repr(transparent)] with (Cow<'static, str>) so this is guaranteed safe.
+        unsafe { &*(self.to.as_slice() as *const [To] as *const [Cow<str>]) }
     }
 }
 
@@ -1571,13 +1574,13 @@ pub struct Open {
     #[str_type(Package)]
     pub package: Cow<'static, str>,
     #[use_normal_rw]
-    pub flags: AccessFlags,
+    pub flags: ExOpFlags,
     #[vec_len_type(u16)]
     pub to: Vec<To>,
 }
 
 impl Open {
-    pub fn new<ToStr: Into<Cow<'static, str>>>(pkg: ToStr, flags: AccessFlags, to: Vec<Cow<'static, str>>) -> Self {
+    pub fn new<ToStr: Into<Cow<'static, str>>>(pkg: ToStr, flags: ExOpFlags, to: Vec<Cow<'static, str>>) -> Self {
         unsafe {
             Self {
                 package: pkg.into(),
@@ -1587,7 +1590,7 @@ impl Open {
         }
     }
     pub fn to(&self) -> &Vec<Cow<'static, str>> {
-        // SAFETY: `To` is equivalent to a Cow<'static, str>, so it is safe to cast the pointer.
+        // SAFETY: `To` is #[repr(transparent)] with (Cow<'static, str>) so this is guaranteed safe.
         unsafe { &*(&self.to as *const std::vec::Vec<To> as *const std::vec::Vec<std::borrow::Cow<str>>) }
     }
 }

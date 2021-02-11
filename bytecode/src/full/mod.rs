@@ -27,7 +27,7 @@ pub use code::*;
 pub use signature::*;
 
 use crate::{ConstantPoolReader, ConstantPoolReadWrite, ConstantPoolWriter, Error, read_from, ReadWrite, Result, try_cp_read};
-use crate::access::AccessFlags;
+use crate::access::{FieldFlags, MethodParameterFlags, MethodFlags, InnerClassFlags, RequireFlags, ModuleFlags, ClassFlags};
 use crate::full::annotation::{AnnotationValue, FieldTypeAnnotation, MethodTypeAnnotation};
 use crate::full::version::JavaVersion;
 
@@ -436,7 +436,7 @@ pub enum FieldAttribute {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Field {
-    pub access: AccessFlags,
+    pub access: FieldFlags,
     pub name: Cow<'static, str>,
     pub descriptor: Type,
     pub attrs: Vec<FieldAttribute>
@@ -464,7 +464,7 @@ pub struct MethodParameter {
     #[str_optional]
     name: Option<Cow<'static, str>>,
     #[use_normal_rw]
-    access: AccessFlags
+    access: MethodParameterFlags
 }
 
 #[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
@@ -489,7 +489,7 @@ pub enum MethodAttribute {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Method {
-    pub access: AccessFlags,
+    pub access: MethodFlags,
     pub name: Cow<'static, str>,
     pub descriptor: Type,
     pub attributes: Vec<MethodAttribute>
@@ -520,7 +520,7 @@ pub struct InnerClass {
     #[str_optional]
     pub inner_name: Option<Cow<'static, str>>,
     #[use_normal_rw]
-    pub inner_access: AccessFlags
+    pub inner_access: InnerClassFlags
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
@@ -528,7 +528,7 @@ pub struct Require {
     #[str_type(Module)]
     pub module: Cow<'static, str>,
     #[use_normal_rw]
-    pub flags: AccessFlags,
+    pub flags: RequireFlags,
     #[str_optional]
     pub version: Option<Cow<'static, str>>
 }
@@ -554,7 +554,7 @@ pub struct Module {
     #[str_type(Module)]
     pub name: Cow<'static, str>,
     #[use_normal_rw]
-    pub flags: AccessFlags,
+    pub flags: ModuleFlags,
     #[str_optional]
     pub version: Option<Cow<'static, str>>,
     #[vec_len_type(u16)]
@@ -590,7 +590,7 @@ pub struct BootstrapMethod {
 #[derive(PartialEq, Debug, Clone)]
 pub struct Class {
     pub version: JavaVersion,
-    pub access: AccessFlags,
+    pub access: ClassFlags,
     pub name: Cow<'static, str>,
     /// java/lang/Object has no superclass.
     pub super_name: Option<Cow<'static, str>>,
