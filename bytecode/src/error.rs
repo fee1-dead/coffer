@@ -81,7 +81,7 @@ mod backtrace {
     macro_rules! functions {
         ($($i: ident($($arg_i: ident: $ty: ty),*)),*) => {
             $(
-                #[inline(always)] // Don't want this function to be captured
+                #[inline]
                 #[allow(non_snake_case)]
                 pub fn $i($($arg_i: $ty),*) -> ErrorTrace {
                     ErrorTrace {
