@@ -32,8 +32,8 @@ pub enum ErrorBase {
     #[error("Attribute length mismatch: actual length ({0} bytes) is greater than length consumed ({1} bytes)")]
     AttributeLength(u32, u32),
 
-    #[error("Conversion overflows")]
-    ArithmeticOverflow(), // This is not unit variant because it has to look like a function call for `backtrace` to work.
+    //#[error("Conversion overflows")]
+    //ArithmeticOverflow(), // This is not unit variant because it has to look like a function call for `backtrace` to work.
 
     #[error(transparent)]
     Custom(#[from] Box<dyn std::error::Error>)
@@ -99,7 +99,6 @@ mod backtrace {
             Invalid(st: &'static str, cow: Cow<'static, str>),
             MUTF(e: crate::mod_utf8::MUTFError),
             AttributeLength(act: u32, exp: u32),
-            ArithmeticOverflow(),
             Custom(b: Box<dyn std::error::Error>)
         );
     }

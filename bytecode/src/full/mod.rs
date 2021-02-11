@@ -262,7 +262,7 @@ impl FromStr for Type {
                     let mut dim: u8 = 1;
                     while let Some('[') = c.as_str().chars().next() {
                         c.next();
-                        dim = dim.checked_add(1).ok_or_else(crate::error::Error::ArithmeticOverflow)?;
+                        dim += 1;
                     }
                     let r = get_type(c, st)?;
                     Type::ArrayRef(dim, Box::new(r))
