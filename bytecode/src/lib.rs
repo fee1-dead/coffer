@@ -14,7 +14,6 @@
  *     You should have received a copy of the GNU Lesser General Public License
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
-//! # Coffer
 //! Coffer is a lightweight and fast library for reading and writing Java classes.
 //!
 //! Read and write functions are exposed via the traits [`ReadWrite`] and [`ConstantPoolReadWrite`] when the information from the constant pool is needed to get the information.
@@ -55,10 +54,12 @@ pub mod error;
 pub mod mod_utf8;
 pub mod full;
 pub mod access;
+pub mod member;
 
 #[cfg(test)]
 mod tests;
 pub(crate) mod insn;
+
 
 /// The generic read and write trait. This indicates a structure can be read without additional contextual information.
 ///

@@ -43,7 +43,9 @@ mod code;
 /// There are some restrictions of its kind and its member, one can use [`check`](MethodHandle::check) to check the validity.
 #[derive(Clone, PartialEq, Hash, Debug)]
 pub struct MethodHandle {
+    /// The kind of the handle.
     pub kind: MethodHandleKind,
+    /// The member that this handle points to.
     pub member: MemberRef
 }
 
@@ -126,16 +128,26 @@ impl ConstantPoolReadWrite for MethodHandle {
     }
 }
 
+/// A constant value that is located in the constant pool which can be loaded onto the stack.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Constant {
+    /// A 32 bit integer.
     I32(i32),
+    /// A single-precision floating-point number.
     F32(f32),
+    /// A 64 bit integer.
     I64(i64),
+    /// A double-precision floating-point number.
     F64(f64),
+    /// A String.
     String(Cow<'static, str>),
+    /// A class. The packages are seperated by `/` instead of `.` i.e. `java/lang/String` instead of `java.lang.String`.
     Class(Cow<'static, str>),
+    /// A member, can be a field or a method.
     Member(MemberRef),
+    /// A method descriptor.
     MethodType(Type),
+    /// A method handle.
     MethodHandle(MethodHandle)
 }
 

@@ -20,21 +20,28 @@ use std::borrow::Cow;
 /// The base error type.
 #[derive(Debug, Error)]
 pub enum ErrorBase {
+    /// I/O error. This indicates the underlying `Read`/`Write` instance has raised an error.
     #[error(transparent)]
     IO(#[from] std::io::Error),
 
+    /// Error when it encountered invalid data. This can be an invalid tag for an enum (which is raised from the derive macro).
     #[error("Invalid {0}: {1}")]
     Invalid(&'static str, Cow<'static, str>),
 
+    /// Error raised from the [`mod_utf8`] module.
+    ///
+    /// [`mod_utf8`]: crate::mod_utf8
     #[error(transparent)]
     MUTF(#[from] crate::mod_utf8::MUTFError),
 
+    /// This error indicates that when reading the attribute, the data didn't conform to the set of the fields,
+    /// therefore resulting in parts of the data not transformed to actual information.
+    ///
+    /// This error is raised from the derive macro.
     #[error("Attribute length mismatch: actual length ({0} bytes) is greater than length consumed ({1} bytes)")]
     AttributeLength(u32, u32),
 
-    //#[error("Conversion overflows")]
-    //ArithmeticOverflow(), // This is not unit variant because it has to look like a function call for `backtrace` to work.
-
+    /// A custom error type.
     #[error(transparent)]
     Custom(#[from] Box<dyn std::error::Error>)
 }
@@ -57,6 +64,7 @@ mod backtrace {
         }
     }
 
+    /// The error type, but contains a backtrace. Useful when debugging.
     #[derive(Debug)]
     pub struct ErrorTrace {
         pub inner: ErrorBase,
