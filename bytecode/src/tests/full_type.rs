@@ -1,4 +1,4 @@
-use crate::full::Type;
+use crate::prelude::Type;
 #[test]
 fn type_method_to_str() {
     assert_eq!(

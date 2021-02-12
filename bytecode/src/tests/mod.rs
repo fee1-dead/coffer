@@ -19,13 +19,14 @@ mod mutf8;
 mod full_type;
 mod insn;
 mod code {
-    use crate::full::{Code, BootstrapMethod, OrDynamic, Constant};
+    use crate::full::{Code, BootstrapMethod, OrDynamic};
     use crate::{ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite};
     use crate::full::cp::RawConstantEntry;
     use std::io::{Cursor, Read, Seek, SeekFrom, Write};
     use crate::full::Instruction::*;
     use crate::full::StackValueType::One;
     use crate::full::LocalType::Reference;
+    use crate::prelude::*;
     use std::borrow::Cow;
     use std::collections::HashMap;
 
