@@ -14,15 +14,27 @@
  *     You should have received a copy of the GNU Lesser General Public License
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
-
+//! Members of a java class
+//!
+//! They can be fields or methods.
 use crate::prelude::*;
 
 /// A reference to a member.
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct MemberRef {
+    /// The class holding this member.
     pub owner: Cow<'static, str>,
+    /// The name of this member.
     pub name: Cow<'static, str>,
+    /// The descriptor of this member.
+    ///
+    /// Can be a field descriptor or a method descriptor.
+    ///
+    /// This field is used to determine whether this member is a field or a method.
     pub descriptor: Type,
+    /// Determines whether the owner is an interface.
+    ///
+    /// This field is only applicable to methods, and if this member is a field this field will be ignored.
     pub itfs: bool,
 }
 

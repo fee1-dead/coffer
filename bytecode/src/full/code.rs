@@ -261,19 +261,7 @@ pub enum MonitorOperation {
     Exit,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, ReadWrite)]
-#[tag_type(u8)]
-pub enum MethodHandleKind {
-    GetField = 1,
-    GetStatic,
-    PutField,
-    PutStatic,
-    InvokeVirtual,
-    InvokeStatic,
-    InvokeSpecial,
-    NewInvokeSpecial,
-    InvokeInterface,
-}
+
 
 /// Note: dynamic computed constants are syntactically allowed to refer to themselves via the bootstrap method table but it will fail during resolution.
 /// Rust ownership rules prevent us from doing so.

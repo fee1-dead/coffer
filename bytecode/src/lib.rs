@@ -45,7 +45,7 @@ use std::io::{Read, Write};
 
 pub use crate::error::Error;
 pub use crate::error::Result;
-use crate::full::{BootstrapMethod, Constant, Catch, Dynamic, Label, OrDynamic, MethodHandleKind};
+use crate::full::{BootstrapMethod, Catch, Dynamic, Label, OrDynamic};
 use crate::full::cp::RawConstantEntry;
 use lazycell::LazyCell;
 use std::rc::Rc;
@@ -60,6 +60,7 @@ pub mod member;
 pub mod prelude;
 pub mod ty;
 pub mod signature;
+pub mod loadable;
 
 #[cfg(test)]
 mod tests;
