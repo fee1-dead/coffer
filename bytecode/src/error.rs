@@ -14,6 +14,8 @@
     You should have received a copy of the GNU Lesser General Public License
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
+//! The error module contains errors that may be raised when invalid data is encountered.
+
 use thiserror::Error;
 use std::borrow::Cow;
 
@@ -46,8 +48,9 @@ pub enum ErrorBase {
     Custom(#[from] Box<dyn std::error::Error>)
 }
 
-#[cfg(any(feature = "backtrace", test))]
-mod backtrace {
+/// The backtrace module containing an error type that holds a backtrace.
+#[cfg(any(feature = "backtrace", test, doc))]
+pub mod backtrace {
     use std::backtrace::Backtrace;
     use std::borrow::Cow;
     use crate::error::ErrorBase;
@@ -67,6 +70,7 @@ mod backtrace {
     /// The error type, but contains a backtrace. Useful when debugging.
     #[derive(Debug)]
     pub struct ErrorTrace {
+        /// The inner error.
         pub inner: ErrorBase,
         trace: Backtrace
     }
@@ -87,8 +91,9 @@ mod backtrace {
         }
     }
     macro_rules! functions {
-        ($($i: ident($($arg_i: ident: $ty: ty),*)),*) => {
+        ($($(#[$doc:meta])* $i: ident($($arg_i: ident: $ty: ty),*)),*) => {
             $(
+                $(#[$doc])*
                 #[inline]
                 #[allow(non_snake_case)]
                 pub fn $i($($arg_i: $ty),*) -> ErrorTrace {
@@ -103,10 +108,40 @@ mod backtrace {
 
     impl ErrorTrace {
         functions!(
+            /// Creates a new instance of [`ErrorTrace`].
+            ///
+            /// This is intentionally named the same as the [ErrorBase enum variant] so one can use `Error::IO` in any context.
+            ///
+            /// [`ErrorTrace`]: ErrorTrace
+            /// [ErrorBase enum variant]: ErrorBase::IO
             IO(e: std::io::Error),
+            /// Creates a new instance of [`ErrorTrace`].
+            ///
+            /// This is intentionally named the same as the [ErrorBase enum variant] so one can use `Error::Invalid` in any context.
+            ///
+            /// [`ErrorTrace`]: ErrorTrace
+            /// [ErrorBase enum variant]: ErrorBase::Invalid
             Invalid(st: &'static str, cow: Cow<'static, str>),
+            /// Creates a new instance of [`ErrorTrace`].
+            ///
+            /// This is intentionally named the same as the [ErrorBase enum variant] so one can use `Error::MUTF` in any context.
+            ///
+            /// [`ErrorTrace`]: ErrorTrace
+            /// [ErrorBase enum variant]: ErrorBase::MUTF
             MUTF(e: crate::mod_utf8::MUTFError),
+            /// Creates a new instance of [`ErrorTrace`].
+            ///
+            /// This is intentionally named the same as the [ErrorBase enum variant] so one can use `Error::AttributeLength` in any context.
+            ///
+            /// [`ErrorTrace`]: ErrorTrace
+            /// [ErrorBase enum variant]: ErrorBase::AttributeLength
             AttributeLength(act: u32, exp: u32),
+            /// Creates a new instance of [`ErrorTrace`].
+            ///
+            /// This is intentionally named the same as the [ErrorBase enum variant] so one can use `Error::Custom` in any context.
+            ///
+            /// [`ErrorTrace`]: ErrorTrace
+            /// [ErrorBase enum variant]: ErrorBase::Custom
             Custom(b: Box<dyn std::error::Error>)
         );
     }
@@ -115,13 +150,13 @@ mod backtrace {
 /// The error type.
 ///
 /// When the `backtrace` feature is enabled, `ErrorTrace` is used instead of `ErrorBase`.
-#[cfg(any(feature = "backtrace", test))]
+#[cfg(any(feature = "backtrace", test, doc))]
 pub type Error = backtrace::ErrorTrace;
 
 /// The error type.
 ///
 /// When the `backtrace` feature is enabled, `ErrorTrace` is used instead of `ErrorBase`.
-#[cfg(not(any(feature = "backtrace", test)))]
+#[cfg(not(any(feature = "backtrace", test, doc)))]
 pub type Error = ErrorBase;
 
 /// The Result type. The default error type is [`crate::Error`].

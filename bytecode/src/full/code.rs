@@ -14,15 +14,15 @@
  *     You should have received a copy of the GNU Lesser General Public License
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
-
+use crate::prelude::*;
 use std::io::{Read, Write, Cursor};
 
 use indexmap::map::IndexMap;
 use nom::lib::std::borrow::Cow;
 
 use crate::{ConstantPoolReader, ConstantPoolReadWrite, ConstantPoolWriter, Error, ReadWrite, try_cp_read, try_cp_read_idx, read_from};
-use crate::access::ExOpFlags;
-use crate::full::{BootstrapMethod, Constant, FieldSignature, MemberRef, RawAttribute, To, Type, VerificationType};
+use crate::flags::ExOpFlags;
+use crate::full::{BootstrapMethod, Constant, RawAttribute, To, Type, VerificationType};
 use crate::full::annotation::{CodeTypeAnnotation};
 use std::str::FromStr;
 use std::collections::HashMap;

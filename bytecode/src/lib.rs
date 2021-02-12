@@ -36,6 +36,8 @@ extern crate bitflags;
 #[macro_use]
 extern crate coffer_macros;
 
+use prelude::*;
+
 pub use coffer_macros::*;
 
 use std::borrow::Cow;
@@ -43,7 +45,7 @@ use std::io::{Read, Write};
 
 pub use crate::error::Error;
 pub use crate::error::Result;
-use crate::full::{BootstrapMethod, Constant, MemberRef, Type, Catch, Dynamic, Label, OrDynamic, MethodHandleKind};
+use crate::full::{BootstrapMethod, Constant, Catch, Dynamic, Label, OrDynamic, MethodHandleKind};
 use crate::full::cp::RawConstantEntry;
 use lazycell::LazyCell;
 use std::rc::Rc;
@@ -53,12 +55,16 @@ pub mod error;
 
 pub mod mod_utf8;
 pub mod full;
-pub mod access;
+pub mod flags;
 pub mod member;
+pub mod prelude;
+pub mod ty;
+pub mod signature;
 
 #[cfg(test)]
 mod tests;
 pub(crate) mod insn;
+
 
 
 /// The generic read and write trait. This indicates a structure can be read without additional contextual information.
@@ -153,8 +159,8 @@ pub trait ConstantPoolWriter {
     }
     fn insert_member(&mut self, mem: MemberRef) -> u16 {
         let entry = match (&mem.descriptor, mem.itfs) {
-            (Type::Method(..), true) => RawConstantEntry::InterfaceMethod,
-            (Type::Method(..), false) => RawConstantEntry::Method,
+            (Type::Method { .. }, true) => RawConstantEntry::InterfaceMethod,
+            (Type::Method { .. }, false) => RawConstantEntry::Method,
             _ => RawConstantEntry::Field
         }(self.insert_class(mem.owner), self.insert_nameandtype(mem.name, mem.descriptor));
         self.insert_raw(entry)

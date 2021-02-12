@@ -16,25 +16,21 @@
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
 use std::borrow::Cow;
-use std::fmt::Display;
-use std::fmt::Formatter;
 use std::hash::{Hash, Hasher};
 use std::io::{Read, Write};
-use std::str::FromStr;
 
 use annotation::Annotation;
+use crate::prelude::*;
 pub use code::*;
-pub use signature::*;
 
-use crate::{ConstantPoolReader, ConstantPoolReadWrite, ConstantPoolWriter, Error, read_from, ReadWrite, Result, try_cp_read};
-use crate::access::{FieldFlags, MethodParameterFlags, MethodFlags, InnerClassFlags, RequireFlags, ModuleFlags, ClassFlags};
+use crate::{ConstantPoolReader, ConstantPoolReadWrite, ConstantPoolWriter, Error, read_from, ReadWrite, Result, MemberRef};
+use crate::flags::{FieldFlags, MethodParameterFlags, MethodFlags, InnerClassFlags, RequireFlags, ModuleFlags, ClassFlags};
 use crate::full::annotation::{AnnotationValue, FieldTypeAnnotation, MethodTypeAnnotation};
 use crate::full::version::JavaVersion;
 
 pub mod annotation;
 pub mod version;
 
-mod signature;
 pub mod cp;
 mod code;
 
@@ -67,7 +63,7 @@ impl MethodHandle {
                         MethodHandle {
                             kind: $kind,
                             member: MemberRef {
-                                descriptor: Type::Method(..),
+                                descriptor: Type::Method { .. },
                                 ..
                             }
                         } => return Err(Error::Invalid("MethodHandle", concat!("kind is ", stringify!($kind), "but descriptor is method").into())),
@@ -83,7 +79,7 @@ impl MethodHandle {
                         MethodHandle {
                             kind: $kind,
                             member: MemberRef {
-                                descriptor: Type::Method(..),
+                                descriptor: Type::Method { .. },
                                 ..
                             }
                         } => {},
@@ -193,203 +189,6 @@ impl Hash for Constant {
     }
 }
 
-
-#[derive(Clone, Eq, PartialEq, Debug, Hash)]
-pub enum Type {
-    Byte, Char, Double, Float, Int, Long, Boolean, Short, Ref(Cow<'static, str>), ArrayRef(u8, Box<Type>),
-    /// The Method type. First is the parameter list and second is the return type. If the return type is `None`, it represents a `void` return type.
-    ///
-    /// It is invalid if any of the parameter types and the return type is a method type.
-    Method(Vec<Type>, Option<Box<Type>>)
-}
-
-impl Type {
-    /// returns `true` if this type is `Long` or `Double`.
-    #[inline]
-    pub fn is_wide(&self) -> bool {
-        matches!(self, Type::Long | Type::Double)
-    }
-
-    #[inline]
-    pub fn is_method(&self) -> bool { matches!(self, Type::Method(..)) }
-}
-
-impl From<Type> for Cow<'static, str> {
-    fn from(t: Type) -> Self {
-        match t {
-            Type::Byte => "B".into(),
-            Type::Char => "C".into(),
-            Type::Double => "D".into(),
-            Type::Float => "F".into(),
-            Type::Int => "I".into(),
-            Type::Long => "J".into(),
-            Type::Boolean => "Z".into(),
-            Type::Short => "S".into(),
-            Type::Ref(t) => format!("L{};", t).into(),
-            Type::ArrayRef(dim, t) => format!("{}{}", "[".repeat(dim as usize), t).into(),
-            Type::Method(ty, ret) => {
-                let mut s = String::from('(');
-                for t in ty {
-                    s.push_str(Cow::from(t).as_ref());
-                }
-                s.push(')');
-                if let Some(t) = ret {
-                    s.push_str(Cow::from(*t).as_ref());
-                } else {
-                    s.push('V');
-                }
-                s.into()
-            }
-        }
-    }
-}
-
-impl FromStr for Type {
-    type Err = crate::error::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        fn get_type(c: &mut std::str::Chars, st: &str) -> Result<Type, crate::error::Error> {
-            let next_char = c.next();
-            Ok(match next_char {
-                Some('B') => Type::Byte,
-                Some('C') => Type::Char,
-                Some('D') => Type::Double,
-                Some('F') => Type::Float,
-                Some('I') => Type::Int,
-                Some('J') => Type::Long,
-                Some('Z') => Type::Boolean,
-                Some('S') => Type::Short,
-                Some('L') => {
-                    let mut st = String::new();
-                    while c.as_str().chars().next().unwrap_or(';') != ';' {
-                        st.push(c.next().unwrap())
-                    }
-                    if c.next().is_none() {
-                        return unexpected_end()
-                    } else {
-                        Type::Ref(Cow::Owned(st))
-                    }
-                }
-                Some('[') => {
-                    let mut dim: u8 = 1;
-                    while let Some('[') = c.as_str().chars().next() {
-                        c.next();
-                        dim += 1;
-                    }
-                    let r = get_type(c, st)?;
-                    Type::ArrayRef(dim, Box::new(r))
-                }
-                Some('(') => {
-                    let mut types = Vec::new();
-                    while c.as_str().chars().next().unwrap_or(')') != ')' {
-                        types.push(get_type(c, st)?)
-                    }
-                    if c.next().is_none() {
-                        return unexpected_end()
-                    } else {
-                        Type::Method(types, if let Some('V') = c.as_str().chars().next() {
-                            None
-                        } else {
-                            Some(Box::new(get_type(c, st)?))
-                        })
-                    }
-                }
-                Some(ch) => {
-                    return Err(crate::error::Error::Invalid("type character", ch.to_string().into()))
-                }
-                None => {
-                    return unexpected_end()
-                }
-            })
-        }
-        get_type(&mut s.chars(), s)
-    }
-}
-impl ConstantPoolReadWrite for Cow<'static, str> {
-    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self> {
-        let idx = ReadWrite::read_from(reader)?;
-        cp.read_utf8(idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", idx.to_string().into())).map(Into::into)
-    }
-
-    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()> {
-        cp.insert_utf8(self.clone()).write_to(writer)
-    }
-}
-impl ConstantPoolReadWrite for Type {
-    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self> {
-        crate::try_cp_read!(cp, reader, read_utf8)?.parse()
-    }
-
-    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()> {
-        cp.insert_utf8(self.to_string()).write_to(writer)
-    }
-}
-
-impl Display for Type {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        use std::fmt::Write;
-        match self {
-            Type::Byte => { f.write_char('B') }
-            Type::Char => { f.write_char('C') }
-            Type::Double => { f.write_char('D') }
-            Type::Float => { f.write_char('F') }
-            Type::Int => { f.write_char('I') }
-            Type::Long => { f.write_char('J') }
-            Type::Boolean => { f.write_char('Z') }
-            Type::Short => { f.write_char('S') }
-            Type::Ref(s) => { write!(f, "L{};", s) }
-            Type::ArrayRef(dim, t) => {
-                "[".repeat(*dim as usize).fmt(f)?;
-                t.fmt(f)
-            }
-            Type::Method(params, ret) => {
-                f.write_char('(')?;
-                for t in params {
-                    t.fmt(f)?;
-                }
-                f.write_char(')')?;
-                if let Some(ref t) = ret {
-                    t.fmt(f)?;
-                } else {
-                    f.write_char('V')?;
-                }
-                Ok(())
-            }
-        }
-    }
-}
-
-impl Type {
-    #[inline]
-    pub fn method<P: Into<Vec<Type>>>(params: P, ret: Option<Type>) -> Type {
-        Type::Method(params.into(), ret.map(Box::new))
-    }
-    #[inline]
-    pub fn reference<S>(str: S) -> Type where S: Into<Cow<'static, str>> {
-        Type::Ref(str.into())
-    }
-    pub fn array(dim: u8, t: Type) -> Type {
-        Type::ArrayRef(dim, Box::new(t))
-    }
-}
-
-#[derive(Debug, Clone, Eq, Hash, PartialEq)]
-pub struct MemberRef {
-    pub owner: Cow<'static, str>,
-    pub name: Cow<'static, str>,
-    pub descriptor: Type,
-    pub itfs: bool,
-}
-
-impl ConstantPoolReadWrite for MemberRef {
-    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self, Error> {
-        try_cp_read!(cp, reader, read_member)
-    }
-
-    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<(), Error> {
-        cp.insert_member(self.clone()).write_to(writer)
-    }
-}
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct RawAttribute {

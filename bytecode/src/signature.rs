@@ -1,69 +1,137 @@
+//! In java, signatures are additional information encoded for type arguments in classes and methods.
+//!
+//! It also reports the bounds or the explicit type for type arguments of a field. For example, the signatures of these fields are recorded:
+//!
+//! ```ignore
+//! SomeGenericClass<T> field1 = ...; // referring type parameter of the class holding this field
+//! SomeGenericClass<Foo> field2 = ...; // Explicit type parameter
+//! SomeGenericClass<? implements AInterface> // type bound on type parameter
+//! ```
 use std::fmt::{Display, Formatter, Write};
 use std::borrow::Cow;
 use std::str::FromStr;
 
+/// A type signature represents either a reference type or a primitive type.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TypeSignature {
-    Byte, Char, Double, Float, Int, Long, Boolean, Short, Ref(RefTypeSignature)
+    /// A type signature representing the primitive `byte`. In Java, `byte`s are signed 8-bit integers.
+    Byte,
+    /// A type signature representing the primitive `char`. In Java, `char`s are UTF-16 code points.
+    Char,
+    /// A type signature representing the primitive `double`. In Java, `double`s are double-precision floating-point numbers (64-bit).
+    Double,
+    /// A type signature representing the primitive `float`. In Java, `float`s are single-precision floating-point numbers (32-bit).
+    Float,
+    /// A type signature representing the primitive `int`. In Java, `int`s are signed 32-bit integers.
+    Int,
+    /// A type signature representing the primitive `long`. In Java, `long`s are signed 64-bit integers.
+    Long,
+    /// A type signature representing the primitive `boolean`.
+    Boolean,
+    /// A type signature representing the primitive `short`. In Java, `byte`s are signed 16-bit integers.
+    Short,
+    /// A type signature representing a reference.
+    Ref(RefTypeSignature)
 }
 
+/// Signature for a field. It must be a reference type as primitive types do not have type parameters.
 #[repr(transparent)]
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FieldSignature(RefTypeSignature);
 
+/// Signature for classes.
+///
+/// It contains information about its type parameters (bounds), super class type parameters (bounds), interface type parameters (bounds).
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ClassSignature {
+    /// The type parameters for this class.
     pub type_parameters: Vec<TypeParameter>,
+    /// The signature for the super class.
     pub super_class: ClassTypeSignature,
+    /// Signature for interfaces/
     pub interfaces: Vec<ClassTypeSignature>
 }
 
+/// Signature for methods.
+///
+/// It contains information about its type parameters, arguments, return type, and exceptions.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct MethodSignature {
+    /// Signature for type parameters of this method.
     pub type_parameters: Vec<TypeParameter>,
+    /// Information about the parameters/arguments of this method.
     pub parameters: Vec<TypeSignature>,
+    /// Information about the return type of this method.
     pub return_type: Option<TypeSignature>,
+    /// Information about the exceptions of this method.
     pub throws: Vec<Throws>
 }
 
+/// A type parameter for a class.
+///
+/// A type parameter may have a class bound and some interface bounds.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TypeParameter {
+    /// The name of the type parameter. Most of the time it is `T`.
     pub name: Cow<'static, str>,
+    /// The class bound of the type parameter.
+    ///
+    /// Specifically, that this type parameter must be a child of the bound. If `None`, then there is no restriction.
     pub class_bound: Option<RefTypeSignature>,
+    /// Interface bounds restrict that types must implement `I` for `I` in the list of interface bounds.
     pub interface_bounds: Vec<RefTypeSignature>
 }
 
+/// Signature for exception that a method can throw.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Throws {
+    /// Throws a type parameter.
     TypeParameter(Cow<'static, str>),
+    /// Throws an explicit class.
     Class(ClassTypeSignature)
 }
 
+/// A type argument.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TypeArgument {
+    /// Specifies that the type argument is some type extending this type.
     Extends(RefTypeSignature),
+    /// Specifies that the type argument is a parent of this type.
     Super(RefTypeSignature),
+    /// Specifies that the type argument is exactly this type.
     Exact(RefTypeSignature),
+    /// Specifies that the type argument can be any type.
     Any
 }
 
+/// A simple class type signature. Has the simple name and type arguments.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SimpleClassTypeSignature {
+    /// The simple name of this class.
     pub name: Cow<'static, str>,
+    /// The type arguments for this class.
     pub type_arguments: Vec<TypeArgument>
 }
 
+/// A class type signature, contains package directives, a simple type signature, and suffixes (inner classes).
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ClassTypeSignature {
+    /// The package directives for this class.
     pub package: Vec<Cow<'static, str>>,
+    /// The simple type signature of this class.
     pub name: SimpleClassTypeSignature,
+    /// Inner classes names with arguments.
     pub suffix: Vec<SimpleClassTypeSignature>
 }
 
+/// A reference type.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum RefTypeSignature {
+    /// References a type variable with name.
     TypeVariable(Cow<'static, str>),
+    /// References an array type.
     ArrayRef(u8, Box<TypeSignature>),
+    /// References a class type.
     ClassType(ClassTypeSignature)
 }
 
