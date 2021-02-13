@@ -18,9 +18,11 @@
 
 pub use std::borrow::Cow;
 pub use std::io::{Read, Write};
-pub use crate::{ConstantPoolReader, ConstantPoolWriter, ConstantPoolReadWrite, ReadWrite, try_cp_read, read_from, Result, Error};
+pub use crate::{ConstantPoolReader, ConstantPoolWriter, ConstantPoolReadWrite, ReadWrite, try_cp_read, read_from, write_to, Result, Error};
 pub use crate::member::*;
 pub use crate::ty::*;
 pub use crate::signature::*;
 pub use crate::loadable::*;
+pub use crate::attr::*;
+pub use crate::version::*;
 pub use coffer_macros::*;

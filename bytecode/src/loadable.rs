@@ -21,6 +21,7 @@ pub use crate::ty::Type;
 
 use crate::prelude::*;
 use std::hash::{Hash, Hasher};
+use std::convert::TryFrom;
 
 /// The kind of a method handle. It generally represents an instruction related to a member with one exception.
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, ReadWrite)]
@@ -44,6 +45,19 @@ pub enum MethodHandleKind {
     NewInvokeSpecial,
     /// A method handle invoking an interface method.
     InvokeInterface,
+}
+
+impl TryFrom<u8> for MethodHandleKind {
+    type Error = u8;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        use MethodHandleKind::*;
+        Ok(match value {
+            1 => GetField, 2 => GetStatic, 3 => PutField, 4 => PutStatic, 5 => InvokeVirtual,
+            6 => InvokeStatic, 7 => InvokeSpecial, 8 => NewInvokeSpecial, 9 => InvokeInterface,
+            v => return Err(v)
+        })
+    }
 }
 
 /// A method handle. It can be loaded on to the stack from the constant pool directly.

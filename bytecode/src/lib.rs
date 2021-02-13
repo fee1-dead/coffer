@@ -49,6 +49,7 @@ use crate::full::{BootstrapMethod, Catch, Dynamic, Label, OrDynamic};
 use crate::full::cp::RawConstantEntry;
 use lazycell::LazyCell;
 use std::rc::Rc;
+use std::convert::TryFrom;
 
 pub mod constants;
 pub mod error;
@@ -61,6 +62,8 @@ pub mod prelude;
 pub mod ty;
 pub mod signature;
 pub mod loadable;
+pub mod attr;
+pub mod version;
 
 #[cfg(test)]
 mod tests;
@@ -146,6 +149,10 @@ pub trait ConstantPoolWriter {
         let idx = self.insert_utf8(c);
         self.insert_raw(RawConstantEntry::Class(idx))
     }
+    fn insert_package<T: Into<Cow<'static, str>>>(&mut self, c: T) -> u16 {
+        let idx = self.insert_utf8(c);
+        self.insert_raw(RawConstantEntry::Package(idx))
+    }
     fn insert_int(&mut self, i: i32) -> u16 {
         self.insert_raw(RawConstantEntry::Int(i))
     }
@@ -165,6 +172,10 @@ pub trait ConstantPoolWriter {
             _ => RawConstantEntry::Field
         }(self.insert_class(mem.owner), self.insert_nameandtype(mem.name, mem.descriptor));
         self.insert_raw(entry)
+    }
+    fn insert_method_handle(&mut self, handle: MethodHandle) -> u16 {
+        let mem = self.insert_member(handle.member);
+        self.insert_raw(RawConstantEntry::MethodHandle(handle.kind as u8, mem))
     }
     /// map a label to the actual offset in the code array.
     /// this is not implemented by default, and it will be defined in a wrapper type in implementation of ConstantPoolReadWrite for `Code`.
@@ -288,6 +299,21 @@ pub trait ConstantPoolReader {
                     name, descriptor
                 })
             },
+            _ => None
+        }
+    }
+    fn read_method_handle(&mut self, idx: u16) -> Option<MethodHandle> {
+        match self.read_raw(idx) {
+            Some(RawConstantEntry::MethodHandle(kind, idx)) => {
+                if let (Some(m), Ok(k)) = (self.read_member(idx), MethodHandleKind::try_from(kind)) {
+                    Some(MethodHandle {
+                        kind: k,
+                        member: m
+                    })
+                } else {
+                    None
+                }
+            }
             _ => None
         }
     }

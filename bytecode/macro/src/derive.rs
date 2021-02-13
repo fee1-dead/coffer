@@ -127,7 +127,7 @@ pub(crate) fn attr_enum(input: DeriveInput) -> Result<TokenStream2> {
                                         let byte_size = u32::read_from(reader)?;
                                         let mut bytes = vec![0; byte_size as usize];
                                         reader.read_exact(&mut bytes)?;
-                                        let raw_attr = crate::full::RawAttribute::__new(attribute_name, bytes);
+                                        let raw_attr = crate::prelude::RawAttribute::__new(attribute_name, bytes);
                                         Ok(Self::#raw_variant(raw_attr))
                         }
                     }
