@@ -14,23 +14,24 @@
  *     You should have received a copy of the GNU Lesser General Public License
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::prelude::*;
-use std::io::{Read, Write, Cursor};
-
-use indexmap::map::IndexMap;
-use nom::lib::std::borrow::Cow;
-
-use crate::{ConstantPoolReader, ConstantPoolReadWrite, ConstantPoolWriter, Error, ReadWrite, try_cp_read, try_cp_read_idx, read_from};
-use crate::flags::ExOpFlags;
-use crate::full::{BootstrapMethod, Constant, RawAttribute, To, Type, VerificationType};
-use crate::full::annotation::{CodeTypeAnnotation};
-use std::str::FromStr;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use crate::full::cp::RawConstantEntry;
-use lazycell::LazyCell;
 use std::hash::{Hash, Hasher};
+use std::io::{Cursor, Read, Write};
 use std::rc::Rc;
+use std::str::FromStr;
+
+use indexmap::map::IndexMap;
+use lazycell::LazyCell;
+use nom::lib::std::borrow::Cow;
+
+use crate::{ConstantPoolReader, ConstantPoolReadWrite, ConstantPoolWriter, Error, read_from, ReadWrite, try_cp_read, try_cp_read_idx};
+use crate::flags::ExOpFlags;
+use crate::full::{BootstrapMethod, Constant, RawAttribute, Type, VerificationType};
+use crate::full::annotation::CodeTypeAnnotation;
+use crate::full::cp::RawConstantEntry;
+use crate::prelude::*;
+use crate::rw::To;
 
 /// Acts as a unique identifier to the code. Labels should be treated carefully because when labels become invalid (i.e. removed from the code array) it will become an error.
 #[derive(Debug, Eq, PartialOrd, PartialEq, Ord, Hash, Copy, Clone)]
@@ -942,7 +943,6 @@ impl ConstantPoolReadWrite for Code {
 
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<(), Error> {
         use crate::constants::insn::*;
-        use crate::write_to;
         self.max_stack.write_to(writer)?;
         self.max_locals.write_to(writer)?;
         let mut buf: Vec<Vec<u8>> = Vec::new();

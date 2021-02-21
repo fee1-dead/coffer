@@ -141,7 +141,7 @@ pub(crate) fn attr_enum(input: DeriveInput) -> Result<TokenStream2> {
                                 Ok(())
                             }
                         )*
-                        Self::#raw_variant(crate::full::RawAttribute { keep: true, ref name, ref inner }) => {
+                        Self::#raw_variant(crate::prelude::RawAttribute { keep: true, ref name, ref inner }) => {
                             u16::write_to(&cp.insert_utf8(name.clone()), writer)?;
                             crate::write_to!(&(inner.len() as u32), writer)?;
                             writer.write_all(inner)?;

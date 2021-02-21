@@ -19,6 +19,7 @@
 pub use crate::member::MemberRef;
 pub use crate::ty::Type;
 
+use crate::read_from;
 use crate::prelude::*;
 use std::hash::{Hash, Hasher};
 use std::convert::TryFrom;

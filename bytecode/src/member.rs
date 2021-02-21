@@ -17,7 +17,10 @@
 //! Members of a java class
 //!
 //! They can be fields or methods.
+use crate::full::{Code, ParameterAnnotations};
+use crate::full::annotation::{Annotation, AnnotationValue, FieldTypeAnnotation, MethodTypeAnnotation};
 use crate::prelude::*;
+use crate::rw::Clazz;
 
 /// A reference to a member.
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
@@ -46,4 +49,68 @@ impl ConstantPoolReadWrite for MemberRef {
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<(), Error> {
         cp.insert_member(self.clone()).write_to(writer)
     }
+}
+
+/// Completed
+#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
+#[attr_enum]
+pub enum FieldAttribute {
+    Deprecated,
+    Synthetic,
+    Signature(FieldSignature),
+    ConstantValue(Constant),
+    RuntimeVisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),
+    RuntimeInvisibleAnnotations(#[vec_len_type(u16)]Vec<Annotation>),
+    RuntimeVisibleTypeAnnotations(#[vec_len_type(u16)] Vec<FieldTypeAnnotation>),
+    RuntimeInvisibleTypeAnnotations(#[vec_len_type(u16)] Vec<FieldTypeAnnotation>),
+    #[raw_variant]
+    Raw(RawAttribute)
+}
+
+#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
+pub struct Field {
+    #[use_normal_rw]
+    pub access: FieldFlags,
+    pub name: Cow<'static, str>,
+    pub descriptor: Type,
+    #[vec_len_type(u16)]
+    pub attrs: Vec<FieldAttribute>
+}
+
+#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
+pub struct MethodParameter {
+    #[str_optional]
+    name: Option<Cow<'static, str>>,
+    #[use_normal_rw]
+    access: MethodParameterFlags
+}
+
+#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
+#[attr_enum]
+pub enum MethodAttribute {
+    Code(Code),
+    Deprecated,
+    Synthetic,
+    Signature(MethodSignature),
+    RuntimeVisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),
+    RuntimeInvisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),
+    RuntimeVisibleTypeAnnotations(#[vec_len_type(u16)] Vec<MethodTypeAnnotation>),
+    RuntimeInvisibleTypeAnnotations(#[vec_len_type(u16)] Vec<MethodTypeAnnotation>),
+    RuntimeVisibleParameterAnnotations(#[vec_len_type(u8)] Vec<ParameterAnnotations>),
+    RuntimeInvisibleParameterAnnotations(#[vec_len_type(u8)] Vec<ParameterAnnotations>),
+    Exceptions(#[vec_len_type(u8)] Vec<Clazz>),
+    AnnotationDefault(AnnotationValue),
+    MethodParameters(#[vec_len_type(u8)] Vec<MethodParameter>),
+    #[raw_variant]
+    Raw(RawAttribute),
+}
+
+#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
+pub struct Method {
+    #[use_normal_rw]
+    pub access: MethodFlags,
+    pub name: Cow<'static, str>,
+    pub descriptor: Type,
+    #[vec_len_type(u16)]
+    pub attributes: Vec<MethodAttribute>
 }
