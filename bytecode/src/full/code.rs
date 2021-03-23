@@ -22,14 +22,12 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 use indexmap::map::IndexMap;
-use lazycell::LazyCell;
 use nom::lib::std::borrow::Cow;
 
 use crate::{ConstantPoolReader, ConstantPoolReadWrite, ConstantPoolWriter, Error, read_from, ReadWrite, try_cp_read, try_cp_read_idx};
 use crate::flags::ExOpFlags;
 use crate::full::{BootstrapMethod, Constant, RawAttribute, Type, VerificationType};
 use crate::full::annotation::CodeTypeAnnotation;
-use crate::full::cp::RawConstantEntry;
 use crate::prelude::*;
 use crate::rw::To;
 
@@ -264,59 +262,6 @@ pub enum MonitorOperation {
 
 
 
-/// Note: dynamic computed constants are syntactically allowed to refer to themselves via the bootstrap method table but it will fail during resolution.
-/// Rust ownership rules prevent us from doing so.
-#[derive(Debug, Clone)]
-pub struct Dynamic {
-    pub bsm: Rc<LazyCell<BootstrapMethod>>, // This is very sad.
-    pub name: Cow<'static, str>,
-    pub descriptor: Type,
-}
-
-impl PartialEq for Dynamic {
-    fn eq(&self, other: &Self) -> bool {
-        self.bsm.borrow().eq(&other.bsm.borrow()) &&
-            self.name.eq(&other.name) &&
-            self.descriptor.eq(&other.descriptor)
-    }
-}
-
-impl Hash for Dynamic {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.bsm.borrow().hash(state);
-        self.name.hash(state);
-        self.descriptor.hash(state);
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Hash)]
-pub enum OrDynamic<T> {
-    Dynamic(Dynamic),
-    Static(T),
-}
-
-impl<T> OrDynamic<T> {
-    fn map<F, N>(self, f: F) -> OrDynamic<N> where F: FnOnce(T) -> N {
-        match self {
-            Self::Dynamic(d) => OrDynamic::Dynamic(d),
-            Self::Static(t) => OrDynamic::Static(f(t))
-        }
-    }
-}
-
-impl<T> From<Dynamic> for OrDynamic<T> {
-    #[inline]
-    fn from(d: Dynamic) -> Self {
-        OrDynamic::Dynamic(d)
-    }
-}
-
-impl From<Constant> for OrDynamic<Constant> {
-    #[inline]
-    fn from(t: Constant) -> Self {
-        OrDynamic::Static(t)
-    }
-}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ClassType {
@@ -510,8 +455,12 @@ impl ConstantPoolReadWrite for Code {
                 self.inner.read_raw(idx)
             }
 
-            fn resolve_later(&mut self, bsm_idx: u16, ptr: Rc<LazyCell<BootstrapMethod>>) {
-                self.inner.resolve_later(bsm_idx, ptr)
+            fn resolve_later(&mut self, bsm_idx: u16, bsm: Rc<LazyBsm>) {
+                self.inner.resolve_later(bsm_idx, bsm)
+            }
+
+            fn bootstrap_methods(&mut self, bsms: Vec<BootstrapMethod>) {
+                self.inner.bootstrap_methods(bsms)
             }
 
             fn get_label(&mut self, idx: u32) -> crate::full::Label {
@@ -816,8 +765,8 @@ impl ConstantPoolReadWrite for Code {
                 I::NewArray(11) => NewArray(OrDynamic::Static(Type::Long), 1),
                 I::NewArray(n) => return Err(Error::Invalid("NewArray type", n.to_string().into())),
 
-                I::ANewArray(r) => NewArray(try_cp_read!(r, labeler.read_or_dynamic(r, ConstantPoolReader::read_class))?.map(|c| c.parse().unwrap_or(Type::Ref(c))), 1),
-                I::MultiANewArray(r, dim) => NewArray(try_cp_read!(r, labeler.read_or_dynamic(r, ConstantPoolReader::read_class))?.map(|c| c.parse().unwrap_or(Type::Ref(c))), dim),
+                I::ANewArray(r) => NewArray(try_cp_read!(r, labeler.read_or_dynamic(r, ConstantPoolReader::read_class))?.map_static(|c| c.parse().unwrap_or(Type::Ref(c))), 1),
+                I::MultiANewArray(r, dim) => NewArray(try_cp_read!(r, labeler.read_or_dynamic(r, ConstantPoolReader::read_class))?.map_static(|c| c.parse().unwrap_or(Type::Ref(c))), dim),
                 I::CheckCast(r) => CheckCast(try_cp_read!(r, labeler.read_or_dynamic(r, ConstantPoolReader::read_class)).and_then(|t|
                     match t {
                         OrDynamic::Static(c) => Ok(OrDynamic::Static(

@@ -27,4 +27,6 @@ pub use crate::attr::*;
 pub use crate::version::*;
 pub use crate::flags::*;
 pub use crate::rw::*;
+pub use crate::cp::*;
+pub use crate::dynamic::*;
 pub use coffer_macros::*;

@@ -16,13 +16,9 @@
  */
 
 use std::convert::TryFrom;
-use std::rc::Rc;
-
-use lazycell::LazyCell;
-
 use crate::full::*;
-use crate::full::cp::*;
 use crate::prelude::*;
+use std::rc::Rc;
 
 /// The generic read and write trait. This indicates a structure can be read without additional contextual information.
 ///
@@ -64,7 +60,7 @@ pub trait ConstantPoolWriter {
     fn insert_bsm(&mut self, bsm: BootstrapMethod) -> u16;
     /// InvokeDynamic and Dynamic is distinguished by the [Type](crate::Type) enum.
     fn insert_dynamic(&mut self, d: Dynamic) -> u16 {
-        let bsm = self.insert_bsm(std::rc::Rc::try_unwrap(d.bsm).unwrap().into_inner().unwrap());
+        let bsm = self.insert_bsm(Rc::try_unwrap(d.bsm).unwrap().into_inner().unwrap());
         let e = if d.descriptor.is_method() {
             RawConstantEntry::InvokeDynamic
         } else {
@@ -155,8 +151,13 @@ pub trait ConstantPoolWriter {
 }
 
 /// A trait for reading constant pool entries.
+///
+/// Receivers are mutable to support implementations that lazily populate their content. (which might become immutable in the future if this doesn't work)
 pub trait ConstantPoolReader {
-    fn read_raw(&mut self, idx: u16) -> Option<crate::full::cp::RawConstantEntry>;
+    /// Reads a raw entry.
+    fn read_raw(&mut self, idx: u16) -> Option<RawConstantEntry>;
+
+    /// Reads a name and type tuple.
     fn read_nameandtype(&mut self, idx: u16) -> Option<(Cow<'static, str>, Type)> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::NameAndType(n, t)) => self.read_utf8(n).and_then(|n| self.read_utf8(t).as_deref().map(str::parse).and_then(Result::ok).map(|t| (n, t))),
@@ -230,11 +231,11 @@ pub trait ConstantPoolReader {
     fn read_invokedynamic(&mut self, idx: u16) -> Option<Dynamic> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::InvokeDynamic(s, a)) =>  {
-                let ptr = Rc::new(LazyCell::new());
+                let mut cell = Rc::new(LazyBsm::new());
                 let (name, descriptor) = self.read_nameandtype(a)?;
-                self.resolve_later(s, ptr.clone());
+                self.resolve_later(s, cell.clone());
                 Some(Dynamic {
-                    bsm: ptr,
+                    bsm: cell,
                     name, descriptor
                 })
             },
@@ -244,7 +245,7 @@ pub trait ConstantPoolReader {
     fn read_dynamic(&mut self, idx: u16) -> Option<Dynamic> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::Dynamic(s, a)) =>  {
-                let cell = Rc::new(LazyCell::new());
+                let mut cell = Rc::new(LazyBsm::new());
                 let (name, descriptor) = self.read_nameandtype(a)?;
                 self.resolve_later(s, cell.clone());
                 Some(Dynamic {
@@ -288,9 +289,11 @@ pub trait ConstantPoolReader {
         }
     }
 
+    /// Registers a bootstrap method to be resolved.
+    fn resolve_later(&mut self, bsm_idx: u16, bsm: Rc<LazyBsm>);
 
-    fn resolve_later(&mut self, bsm_idx: u16, ptr: Rc<LazyCell<BootstrapMethod>>);
-
+    /// Attempts to complete resolution of bootstrap methods by providing a list of bootstrap methods.
+    fn bootstrap_methods(&mut self, bsms: Vec<BootstrapMethod>);
     // Implementations from Code
 
     /// get a uniquely identified label from an actual offset of the code array.
@@ -300,7 +303,7 @@ pub trait ConstantPoolReader {
         #[cfg(debug_assertions)]
         unimplemented!();
         #[cfg(not(debug_assertions))]
-            unsafe {
+        unsafe {
             core::hint::unreachable_unchecked();
         }
     }
@@ -311,7 +314,7 @@ pub trait ConstantPoolReader {
         #[cfg(debug_assertions)]
         unimplemented!();
         #[cfg(not(debug_assertions))]
-            unsafe {
+        unsafe {
             core::hint::unreachable_unchecked();
         }
     }

@@ -42,6 +42,7 @@ pub use coffer_macros::*;
 
 use std::borrow::Cow;
 use std::io::{Read, Write};
+use std::collections::HashMap;
 
 pub use crate::error::Error;
 pub use crate::error::Result;
@@ -61,6 +62,8 @@ pub mod attr;
 pub mod version;
 pub mod rw;
 pub mod module;
+pub mod cp;
+pub mod dynamic;
 
 #[cfg(test)]
 mod tests;

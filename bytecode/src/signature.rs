@@ -160,7 +160,6 @@ fn type_sig(i: &str) -> IResult<&str, TypeSignature> {
     }))
 }
 fn ref_type_sig(i: &str) -> IResult<&str, RefTypeSignature> {
-    dbg!(i);
     let (newi, c) = one_of!(i, "[TL")?;
     match c {
         '[' => {
@@ -251,14 +250,12 @@ fn type_arg(i: &str) -> IResult<&str, TypeArgument> {
 }
 
 fn type_args(i: &str) -> IResult<&str, Vec<TypeArgument>> {
-    dbg!(i);
     let (i, o) = opt!(i, complete!(do_parse!(char!('<') >> res: many0!(complete!(type_arg)) >> char!('>') >> (res))))?;
     Ok((i, o.unwrap_or_default()))
 }
 
 fn simple_type_sig(i: &str) -> IResult<&str, SimpleClassTypeSignature> {
     fn type_var_start(c: char) -> bool { c == '<' || c == '.' || c == ';' }
-    dbg!(i);
     do_parse!(i, name: take_till1!(type_var_start) >> type_arguments: type_args >> (SimpleClassTypeSignature { name: name.to_owned().into(), type_arguments }))
 }
 

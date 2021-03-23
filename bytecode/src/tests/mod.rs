@@ -19,9 +19,8 @@ mod mutf8;
 mod full_type;
 mod insn;
 mod code {
-    use crate::full::{Code, BootstrapMethod, OrDynamic};
+    use crate::full::{Code};
     use crate::{ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite};
-    use crate::full::cp::RawConstantEntry;
     use std::io::{Cursor, Read, Seek, SeekFrom, Write};
     use crate::full::Instruction::*;
     use crate::full::StackValueType::One;
@@ -38,7 +37,11 @@ mod code {
             self.0.get(idx as usize - 1).cloned()
         }
 
-        fn resolve_later(&mut self, _bsm_idx: u16, _ptr: Rc<LazyCell<BootstrapMethod>>) {
+        fn resolve_later(&mut self, _bsm_idx: u16, _ptr: Rc<LazyBsm>) {
+            unimplemented!()
+        }
+
+        fn bootstrap_methods(&mut self, _bsms: Vec<BootstrapMethod>) {
             unimplemented!()
         }
     }
@@ -59,16 +62,20 @@ mod code {
     }
 
     #[derive(Debug, Clone, Default)]
-    struct MapCp(HashMap<u16, RawConstantEntry>, Vec<Rc<LazyCell<BootstrapMethod>>>);
+    struct MapCp(HashMap<u16, RawConstantEntry>, Vec<Rc<LazyBsm>>);
 
     impl ConstantPoolReader for MapCp {
         fn read_raw(&mut self, idx: u16) -> Option<RawConstantEntry> {
             self.0.get(&idx).cloned()
         }
 
-        fn resolve_later(&mut self, _bsm_idx: u16, ptr: Rc<LazyCell<BootstrapMethod>>) {
+        fn resolve_later(&mut self, _bsm_idx: u16, ptr: Rc<LazyBsm>) {
             self.1.push(ptr);
-        } // we are using this for testing, so we don't panic here in case a bsm was referenced.
+        }
+
+        fn bootstrap_methods(&mut self, bsms: Vec<BootstrapMethod>) {
+
+        } // we are using these for testing, so we don't panic here in case a bsm was referenced.
     }
 
     impl MapCp {
@@ -92,7 +99,6 @@ mod code {
 
     use lazy_static::lazy_static;
     use std::fs::File;
-    use lazycell::LazyCell;
     use std::rc::Rc;
     lazy_static! {
         static ref SAMPLE: Vec<(String, Vec<u8>)> = class_sample::get_sample_name_bytes(2 * 1024);
@@ -154,9 +160,9 @@ mod code {
     }
     #[test]
     fn code_writing() {
-        let lbl1 = crate::Label(0);
-        let lbl2 = crate::Label(1);
-        let lbl3 = crate::Label(2);
+        let lbl1 = crate::full::Label(0);
+        let lbl2 = crate::full::Label(1);
+        let lbl3 = crate::full::Label(2);
         let mut buffer = Cursor::new(Vec::new());
         let mut cp = arr_cp([].as_ref());
         Code {
@@ -222,9 +228,9 @@ mod code {
             0, 0,
             0, 0
         ];
-        let lbl1 = crate::Label(0);
-        let lbl2 = crate::Label(1);
-        let lbl3 = crate::Label(2);
+        let lbl1 = crate::full::Label(0);
+        let lbl2 = crate::full::Label(1);
+        let lbl3 = crate::full::Label(2);
         assert_eq!(Code::read_from(&mut cp, &mut Cursor::new(bytes)).unwrap(), Code {
             max_stack: 255,
             max_locals: 254,

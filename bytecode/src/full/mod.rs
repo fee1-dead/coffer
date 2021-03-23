@@ -28,8 +28,6 @@ use crate::full::annotation::{AnnotationValue, FieldTypeAnnotation, MethodTypeAn
 use crate::prelude::*;
 
 pub mod annotation;
-
-pub mod cp;
 mod code;
 
 
@@ -76,34 +74,4 @@ pub struct InnerClass {
     pub inner_name: Option<Cow<'static, str>>,
     #[use_normal_rw]
     pub inner_access: InnerClassFlags
-}
-
-#[derive(Debug, Clone, PartialEq, Hash)]
-pub struct BootstrapMethod {
-    pub handle: MethodHandle,
-    pub arguments: Vec<OrDynamic<Constant>>
-}
-
-impl ConstantPoolReadWrite for BootstrapMethod {
-    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self, Error> {
-        let handle = try_cp_read!(cp, reader, read_method_handle)?;
-        let num_arguments = u16::read_from(reader)?;
-        let mut arguments = Vec::with_capacity(num_arguments as usize);
-        for _ in 0..num_arguments {
-            let idx = u16::read_from(reader)?;
-            arguments.push(try_cp_read!(idx, cp.read_or_dynamic(idx, ConstantPoolReader::read_constant))?)
-        }
-        Ok(BootstrapMethod {
-            handle, arguments
-        })
-    }
-
-    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<(), Error> {
-        cp.insert_method_handle(self.handle.clone()).write_to(writer)?;
-        (self.arguments.len() as u16).write_to(writer)?;
-        for arg in self.arguments.iter().cloned() {
-            cp.insert_ordynamic(arg, ConstantPoolWriter::insert_constant).write_to(writer)?;
-        }
-        Ok(())
-    }
 }
