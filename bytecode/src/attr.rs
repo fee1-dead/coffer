@@ -18,7 +18,7 @@ use crate::full::*;
 use crate::module::Module;
 use crate::prelude::*;
 
-/// A unrecognized, unknown raw attribute.
+/// An unrecognized, unknown raw attribute.
 #[derive(Clone, PartialEq, Debug)]
 pub struct RawAttribute {
     /// Whether to keep this attribute upon writing.
@@ -50,13 +50,6 @@ impl RawAttribute {
         }
     }
 }
-
-#[repr(transparent)]
-#[derive(Eq, PartialEq, Debug, Clone, ConstantPoolReadWrite)]
-pub struct Package(#[str_type(Package)] pub Cow<'static, str>);
-
-#[derive(Eq, PartialEq, Debug, Clone)]
-pub struct NameAndType(pub Cow<'static, str>, pub Type);
 
 impl ConstantPoolReadWrite for Option<(Cow<'static,str>, Type)> {
     fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self, Error> {
