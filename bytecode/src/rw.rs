@@ -31,7 +31,14 @@ pub trait ReadWrite where Self: Sized {
 
 /// A trait for writing constant pool entries.
 pub trait ConstantPoolWriter {
+    /// Inserts a raw constant pool entry to the constant pool.
+    ///
+    /// Returns an index that points to the inserted entry.
     fn insert_raw(&mut self, value: RawConstantEntry) -> u16;
+
+    /// Inserts a constant entry to the constant pool.
+    ///
+    /// Returns an index that points to the inserted entry.
     fn insert_constant(&mut self, value: Constant) -> u16 {
         match value {
             Constant::I32(i) => self.insert_int(i),
@@ -57,8 +64,15 @@ pub trait ConstantPoolWriter {
             OrDynamic::Static(t) => f(self, t)
         }
     }
+
     fn insert_bsm(&mut self, bsm: BootstrapMethod) -> u16;
-    /// InvokeDynamic and Dynamic is distinguished by the [Type](crate::Type) enum.
+
+    /// Inserts a dynamic computed constant/callsite.
+    ///
+    /// When the type of the dynamic is a method descriptor, an InvokeDynamic entry is inserted.
+    /// Otherwise, a dynamic entry is inserted.
+    ///
+    /// Returns an index that points to the inserted entry.
     fn insert_dynamic(&mut self, d: Dynamic) -> u16 {
         let bsm = self.insert_bsm(Rc::try_unwrap(d.bsm).unwrap().into_inner().unwrap());
         let e = if d.descriptor.is_method() {
@@ -126,8 +140,11 @@ pub trait ConstantPoolWriter {
         let mem = self.insert_member(handle.member);
         self.insert_raw(RawConstantEntry::MethodHandle(handle.kind as u8, mem))
     }
-    /// map a label to the actual offset in the code array.
-    /// this is not implemented by default, and it will be defined in a wrapper type in implementation of ConstantPoolReadWrite for `Code`.
+
+    /// Map a label to the actual offset in the code array.
+    ///
+    /// This does not need to be implemented because it is used internally,
+    /// however a wrapper type should always delagate this function to their inner impl.
     #[inline]
     fn label(&mut self, _lbl: &Label) -> u16 {
         #[cfg(debug_assertions)]
@@ -138,7 +155,10 @@ pub trait ConstantPoolWriter {
         }
     }
 
-    /// Get the index of the catch.
+    /// Find the index of a catch.
+    ///
+    /// This does not need to be implemented because it is used internally,
+    /// however a wrapper type should always delagate this function to their inner impl.
     #[inline]
     fn catch(&mut self, _catch: &Catch) -> Option<u16> {
         #[cfg(debug_assertions)]

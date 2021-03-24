@@ -80,19 +80,21 @@ impl RawConstantEntry {
 }
 
 /// A simple constant pool implementation using hashmaps for constant entries and bootstrap methods.
-pub struct ConstantPool(pub HashMap<u16, RawConstantEntry>, HashMap<u16, Vec<Rc<LazyBsm>>>);
+///
+/// This structure may only be read and not written.
+pub struct ReadOnlyConstantPool(pub HashMap<u16, RawConstantEntry>, HashMap<u16, Vec<Rc<LazyBsm>>>);
 
-impl<'a> ReadWrite for ConstantPool {
+impl<'a> ReadWrite for ReadOnlyConstantPool {
     fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
         unimplemented!()
     }
 
     fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
-        unimplemented!()
+        panic!("Cannot write ReadOnlyConstantPool")
     }
 }
 
-impl<'a> ConstantPoolReader for ConstantPool {
+impl<'a> ConstantPoolReader for ReadOnlyConstantPool {
     fn read_raw(&mut self, idx: u16) -> Option<RawConstantEntry> {
         self.0.get(&idx).cloned()
     }
@@ -112,7 +114,7 @@ impl<'a> ConstantPoolReader for ConstantPool {
     }
 }
 
-impl<'a> ConstantPoolWriter for ConstantPool {
+impl<'a> ConstantPoolWriter for ReadOnlyConstantPool {
     fn insert_raw(&mut self, value: RawConstantEntry) -> u16 {
         unimplemented!()
     }
