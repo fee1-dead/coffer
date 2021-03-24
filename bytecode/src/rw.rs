@@ -58,6 +58,12 @@ pub trait ConstantPoolWriter {
             }
         }
     }
+
+    /// Inserts an value that could be dynamically computed.
+    ///
+    /// This needs a closure which would insert the static variant to the constant pool.
+    ///
+    /// Returns an index that points to the inserted entry.
     fn insert_ordynamic<T, F>(&mut self, or_dyn: OrDynamic<T>, f: F) -> u16 where F: FnOnce(&mut Self, T) -> u16 {
         match or_dyn {
             OrDynamic::Dynamic(d) => self.insert_dynamic(d),
@@ -65,6 +71,14 @@ pub trait ConstantPoolWriter {
         }
     }
 
+    /// Inserts a bootstrap method.
+    ///
+    /// Because dynamic entries refer to an index in the bootstrap methods
+    /// attribute entry, this must be present in a constant pool writer as
+    /// inserting a dynamic entry would require an index to the bootstrap method.
+    ///
+    /// Returns an index to the bootstrap method in the BootstrapMethods attribute
+    /// of the class file.
     fn insert_bsm(&mut self, bsm: BootstrapMethod) -> u16;
 
     /// Inserts a dynamic computed constant/callsite.
