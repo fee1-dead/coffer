@@ -482,7 +482,7 @@ cprw_impls!((i32, read_int, insert_int), (i64, read_long, insert_long), (f32, re
 /// Helper structure for reading an indirect string. This represents the name of a module.
 #[repr(transparent)]
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
-pub struct To(#[str_type(Module)] pub Cow<'static, str>);
+pub struct Module(#[str_type(Module)] pub Cow<'static, str>);
 
 /// Helper structure for reading an indirect string. This represents the name of a class.
 #[repr(transparent)]

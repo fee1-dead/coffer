@@ -29,7 +29,7 @@ use crate::flags::ExOpFlags;
 use crate::full::{BootstrapMethod, Constant, RawAttribute, Type, VerificationType};
 use crate::full::annotation::CodeTypeAnnotation;
 use crate::prelude::*;
-use crate::rw::To;
+use crate::rw::Module;
 
 /// Acts as a unique identifier to the code. Labels should be treated carefully because when labels become invalid (i.e. removed from the code array) it will become an error.
 #[derive(Debug, Eq, PartialOrd, PartialEq, Ord, Hash, Copy, Clone)]
@@ -1483,7 +1483,7 @@ pub struct Export {
     #[use_normal_rw]
     pub flags: ExOpFlags,
     #[vec_len_type(u16)]
-    to: Vec<To>,
+    to: Vec<Module>,
 }
 
 impl Export {
@@ -1502,7 +1502,7 @@ impl Export {
     /// Get modules that this module exports to.
     pub fn to(&self) -> &[Cow<'static, str>] {
         // SAFETY: `To` is #[repr(transparent)] with (Cow<'static, str>) so this is guaranteed safe.
-        unsafe { &*(self.to.as_slice() as *const [To] as *const [Cow<str>]) }
+        unsafe { &*(self.to.as_slice() as *const [Module] as *const [Cow<str>]) }
     }
 }
 
@@ -1513,7 +1513,7 @@ pub struct Open {
     #[use_normal_rw]
     pub flags: ExOpFlags,
     #[vec_len_type(u16)]
-    pub to: Vec<To>,
+    pub to: Vec<Module>,
 }
 
 impl Open {
@@ -1528,7 +1528,7 @@ impl Open {
     }
     pub fn to(&self) -> &Vec<Cow<'static, str>> {
         // SAFETY: `To` is #[repr(transparent)] with (Cow<'static, str>) so this is guaranteed safe.
-        unsafe { &*(&self.to as *const std::vec::Vec<To> as *const std::vec::Vec<std::borrow::Cow<str>>) }
+        unsafe { &*(&self.to as *const std::vec::Vec<Module> as *const std::vec::Vec<std::borrow::Cow<str>>) }
     }
 }
 
