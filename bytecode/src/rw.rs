@@ -478,18 +478,3 @@ macro_rules! cprw_impls {
 }
 
 cprw_impls!((i32, read_int, insert_int), (i64, read_long, insert_long), (f32, read_float, insert_float), (f64, read_double, insert_double));
-
-/// Helper structure for reading an indirect string. This represents the name of a module.
-#[repr(transparent)]
-#[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
-pub struct Module(#[str_type(Module)] pub Cow<'static, str>);
-
-/// Helper structure for reading an indirect string. This represents the name of a class.
-#[repr(transparent)]
-#[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
-pub struct Clazz(#[str_type(Class)] pub Cow<'static, str>);
-
-/// Helper structure for reading an indirect string. This represents the name of a package.
-#[repr(transparent)]
-#[derive(Eq, PartialEq, Debug, Clone, ConstantPoolReadWrite)]
-pub struct Package(#[str_type(Package)] pub Cow<'static, str>);

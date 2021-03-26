@@ -19,7 +19,6 @@
 //! Modules exist for Java 9+, to make your class recognized as a module, the module bit must be set
 //! and the class must have an Module attribute.
 
-use crate::Clazz;
 use crate::flags::{ModuleFlags, RequireFlags};
 use crate::full::{Export, Open};
 use crate::prelude::*;
@@ -39,7 +38,8 @@ pub struct Provide {
     #[str_type(Class)]
     pub class: Cow<'static, str>,
     #[vec_len_type(u16)]
-    pub with: Vec<Clazz>
+    #[str_type(Class)]
+    pub with: Vec<Cow<'static, str>>
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, ConstantPoolReadWrite)]
@@ -57,7 +57,8 @@ pub struct Module {
     #[vec_len_type(u16)]
     pub opens: Vec<Open>,
     #[vec_len_type(u16)]
-    pub uses: Vec<Clazz>,
+    #[str_type(Class)]
+    pub uses: Vec<Cow<'static, str>>,
     #[vec_len_type(u16)]
     pub provides: Vec<Provide>
 }

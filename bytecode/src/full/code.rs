@@ -29,7 +29,6 @@ use crate::flags::ExOpFlags;
 use crate::full::{BootstrapMethod, Constant, RawAttribute, Type, VerificationType};
 use crate::full::annotation::CodeTypeAnnotation;
 use crate::prelude::*;
-use crate::rw::Module;
 
 /// Acts as a unique identifier to the code. Labels should be treated carefully because when labels become invalid (i.e. removed from the code array) it will become an error.
 #[derive(Debug, Eq, PartialOrd, PartialEq, Ord, Hash, Copy, Clone)]
@@ -1483,26 +1482,20 @@ pub struct Export {
     #[use_normal_rw]
     pub flags: ExOpFlags,
     #[vec_len_type(u16)]
-    to: Vec<Module>,
+    #[str_type(Module)]
+    pub to: Vec<Cow<'static, str>>,
 }
 
 impl Export {
     /// Creates a new instance of [`Export`].
     ///
     /// [`Export`]: Export
-    pub fn new<ToStr: Into<Cow<'static, str>>, ToOp: Into<ExOpFlags>>(pkg: ToStr, flags: ToOp, to: Vec<Cow<'static, str>>) -> Self {
-        unsafe {
-            Self {
-                package: pkg.into(),
-                flags: flags.into(),
-                to: std::mem::transmute(to),
-            }
+    pub fn new<ToStr: Into<Cow<'static, str>>, ToOp: Into<ExOpFlags>, ToVec: Into<Vec<Cow<'static, str>>>>(pkg: ToStr, flags: ToOp, to: ToVec) -> Self {
+        Self {
+            package: pkg.into(),
+            flags: flags.into(),
+            to: to.into()
         }
-    }
-    /// Get modules that this module exports to.
-    pub fn to(&self) -> &[Cow<'static, str>] {
-        // SAFETY: `To` is #[repr(transparent)] with (Cow<'static, str>) so this is guaranteed safe.
-        unsafe { &*(self.to.as_slice() as *const [Module] as *const [Cow<str>]) }
     }
 }
 
@@ -1513,22 +1506,6 @@ pub struct Open {
     #[use_normal_rw]
     pub flags: ExOpFlags,
     #[vec_len_type(u16)]
-    pub to: Vec<Module>,
+    #[str_type(Module)]
+    pub to: Vec<Cow<'static, str>>,
 }
-
-impl Open {
-    pub fn new<ToStr: Into<Cow<'static, str>>>(pkg: ToStr, flags: ExOpFlags, to: Vec<Cow<'static, str>>) -> Self {
-        unsafe {
-            Self {
-                package: pkg.into(),
-                flags,
-                to: std::mem::transmute(to),
-            }
-        }
-    }
-    pub fn to(&self) -> &Vec<Cow<'static, str>> {
-        // SAFETY: `To` is #[repr(transparent)] with (Cow<'static, str>) so this is guaranteed safe.
-        unsafe { &*(&self.to as *const std::vec::Vec<Module> as *const std::vec::Vec<std::borrow::Cow<str>>) }
-    }
-}
-

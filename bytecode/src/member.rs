@@ -20,7 +20,6 @@
 use crate::full::{Code, ParameterAnnotations};
 use crate::full::annotation::{Annotation, AnnotationValue, FieldTypeAnnotation, MethodTypeAnnotation};
 use crate::prelude::*;
-use crate::rw::Clazz;
 
 /// A reference to a member.
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
@@ -98,7 +97,7 @@ pub enum MethodAttribute {
     RuntimeInvisibleTypeAnnotations(#[vec_len_type(u16)] Vec<MethodTypeAnnotation>),
     RuntimeVisibleParameterAnnotations(#[vec_len_type(u8)] Vec<ParameterAnnotations>),
     RuntimeInvisibleParameterAnnotations(#[vec_len_type(u8)] Vec<ParameterAnnotations>),
-    Exceptions(#[vec_len_type(u8)] Vec<Clazz>),
+    Exceptions(#[vec_len_type(u8)] #[str_type(Class)] Vec<Cow<'static, str>>),
     AnnotationDefault(AnnotationValue),
     MethodParameters(#[vec_len_type(u8)] Vec<MethodParameter>),
     #[raw_variant]

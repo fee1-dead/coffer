@@ -69,9 +69,7 @@ pub mod dynamic;
 mod tests;
 pub(crate) mod insn;
 
-
 pub use rw::*;
-use rw::Clazz;
 
 #[derive(Debug, Clone)]
 pub struct Class {
@@ -96,7 +94,8 @@ struct ClassWrapper {
     #[str_type(Class)]
     pub super_name: Option<Cow<'static, str>>,
     #[vec_len_type(u16)]
-    pub interfaces: Vec<Clazz>,
+    #[str_type(Class)]
+    pub interfaces: Vec<Cow<'static, str>>,
     #[vec_len_type(u16)]
     pub fields: Vec<Field>,
     #[vec_len_type(u16)]

@@ -227,7 +227,7 @@ pub(crate) fn add_one(litint: LitInt) -> LitInt {
         LitInt::new(&str, litint.span())
     }
 }
-pub(crate) fn gen_read_and_write<T: ToTokens>(f: &Field, reciever: &T, mut trait_type: TokenStream2, mut additional_fields_r: TokenStream2, mut additional_fields_w: TokenStream2) -> Result<(TokenStream2, TokenStream2)> {
+pub(crate) fn gen_read_and_write<T: ToTokens>(f: &Field, receiver: &T, mut trait_type: TokenStream2, mut additional_fields_r: TokenStream2, mut additional_fields_w: TokenStream2) -> Result<(TokenStream2, TokenStream2)> {
     #[inline]
     pub(crate) fn rw_fncalls<T: ToTokens + Spanned>(ty: &T, traitty: TokenStream2) -> (TokenStream2, TokenStream2) {
         let sp = ty.span();
@@ -268,92 +268,102 @@ pub(crate) fn gen_read_and_write<T: ToTokens>(f: &Field, reciever: &T, mut trait
     }
 
 
+    let rw = |receiver: TokenStream2, ty: &Type|{
+        let (read_fn, write_fn) = rw_fncalls(ty, trait_type);
+        match (str_optional, str_type) {
+            (true, None) => Ok((quote! {{
+            let idx = u16::read_from(reader)?;
+            if idx == 0 {
+                None
+            } else {
+                Some(cp.read_utf8(idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", Into::into(idx.to_string())))?)
+            }}}, quote! {
+                if let Some(s) = #receiver {
+                    cp.insert_utf8(s.clone()).write_to(writer)?;
+                } else {
+                    0u16.write_to(writer)?;
+                }
+            })),
+            (true, Some(t)) => {
+                let tag: u8 = match t.as_str() {
+                    "String" => 8,
+                    "Class" => 7,
+                    "Module" => 19,
+                    "Package" => 20,
+                    _ => {
+                        return Err(Error::new(f.span(), "Invalid String type"))
+                    }
+                };
+                Ok((quote! {{
+                    let idx = u16::read_from(reader)?;
+                    if idx == 0 {
+                        None
+                    } else {
+                        Some(cp.read_indirect_str(#tag, idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", Into::into(idx.to_string())))?)
+                    }
+                }}, quote! {
+                    if let Some(s) = #receiver {
+                        cp.insert_indirect_str(#tag, s.clone()).write_to(writer)?;
+                    } else {
+                        0u16.write_to(writer)?;
+                    }
+                }))
+            }
+            (false, Some(t)) => {
+                let tag: u8 = match t.as_str() {
+                    "String" => 8,
+                    "Class" => 7,
+                    "Module" => 19,
+                    "Package" => 20,
+                    _ => {
+                        return Err(Error::new(f.span(), "Invalid String type"))
+                    }
+                };
+                Ok((quote! {{
+                    let idx = u16::read_from(reader)?;
+                    cp.read_indirect_str(#tag, idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", Into::into(idx.to_string())))?
+                }}, quote! {
+                    cp.insert_indirect_str(#tag, #receiver.clone()).write_to(writer)?;
+                }))
+            }
+            (false, None) => Ok((quote! { #read_fn(#additional_fields_r)? }, quote! { #write_fn(#receiver, #additional_fields_w)?; }))
+        }
+    };
     if let Type::Path(p) = ty {
         let segment_last = p.path.segments.last().unwrap();
         if segment_last.ident == "Vec" {
             if let PathArguments::AngleBracketed( AngleBracketedGenericArguments { colon2_token: _, lt_token: _, ref args, .. }) = segment_last.arguments {
                 if let Some(GenericArgument::Type(ty)) = args.first() {
+
                     let vec_len_ty = f.attrs
                         .iter()
                         .find(|a| a.path.to_token_stream().to_string() == "vec_len_type")
                         .ok_or_else(|| Error::new(span, "Missing vec_len_type attribute"))
                         .and_then(|attr| parse2::<Group>(attr.tokens.to_owned()))
                         .and_then(|g| parse2::<Ident>(g.stream()))?;
+
                     let (read_vec_len_fn, write_vec_len_fn) = rw_fncalls(&vec_len_ty, quote! { crate::ReadWrite });
-                    let (read_fn, write_fn) = rw_fncalls(ty, trait_type);
+                    let (read, write) = rw(quote!(it), ty)?;
                     return Ok((quote! {
                         {
                             let len = #read_vec_len_fn(#reader)?;
                             let mut vec = Vec::with_capacity(len as usize);
                             for _ in 0..len {
-                                vec.push(#read_fn(#additional_fields_r)?);
+                                vec.push(#read);
                             }
                             vec
                         }
                     }, quote! {
-                        #write_vec_len_fn(&(#reciever.len() as #vec_len_ty), #writer)?;
-                        for it in #reciever.iter() {
-                            #write_fn(&it, #additional_fields_w)?;
+                        #write_vec_len_fn(&(#receiver.len() as #vec_len_ty), #writer)?;
+                        for it in #receiver.iter() {
+                            #write
                         }
                     }))
                 }
             }
         }
     }
-    let (read_fn, write_fn) = rw_fncalls(ty, trait_type);
-    if str_optional && str_type.is_none() {
-        Ok((quote! {{
-            let idx = u16::read_from(reader)?;
-            if idx == 0 {
-                None
-            } else {
-                Some(cp.read_utf8(idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", Into::into(idx.to_string())))?)
-            }
-        }},quote! {
-            if let Some(s) = #reciever {
-                cp.insert_utf8(s.clone()).write_to(writer)?;
-            } else {
-                0u16.write_to(writer)?;
-            }
-        }))
-    } else if let Some(s) = str_type {
-        let tag: u8 = match s.as_str() {
-            "String" => 8,
-            "Class" => 7,
-            "Module" => 19,
-            "Package" => 20,
-            _ => {
-                return Err(Error::new(f.span(), "Invalid String type"))
-            }
-        };
-
-        Ok(if str_optional {
-            (quote! {{
-            let idx = u16::read_from(reader)?;
-                if idx == 0 {
-                    None
-                } else {
-                    Some(cp.read_indirect_str(#tag, idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", Into::into(idx.to_string())))?)
-                }
-            }},
-             quote! {
-                if let Some(s) = #reciever {
-                    cp.insert_indirect_str(#tag, s.clone()).write_to(writer)?;
-                } else {
-                    0u16.write_to(writer)?;
-                }
-            })
-        } else {
-            (quote! { {
-                let idx = u16::read_from(reader)?;
-                cp.read_indirect_str(#tag, idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", Into::into(idx.to_string())))?
-            } },
-             quote! { cp.insert_indirect_str(#tag, #reciever.clone()).write_to(writer)?; })
-        })
-    } else {
-        Ok((quote! { #read_fn(#additional_fields_r)? }, quote! { #write_fn(#reciever, #additional_fields_w)?; }))
-    }
-
+    rw(receiver.to_token_stream(), ty)
 }
 pub(crate) fn derive_readwrite_inner(mut input: DeriveInput, trait_ty: TokenStream2, fields_r: TokenStream2, fields_w: TokenStream2, rsig: TokenStream2, wsig: TokenStream2) -> Result<TokenStream2> {
     let (generics, where_c) = generics(&input);
