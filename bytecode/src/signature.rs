@@ -3,13 +3,15 @@
 //! It also reports the bounds or the explicit type for type arguments of a field. For example, the signatures of these fields are recorded:
 //!
 //! ```ignore
-//! SomeGenericClass<T> field1 = ...; // referring type parameter of the class holding this field
+//! SomeGenericClass<T> field1 = ...;
+//! // ^ referring type parameter of the class holding this field
 //! SomeGenericClass<Foo> field2 = ...; // Explicit type parameter
 //! SomeGenericClass<? implements AInterface> // type bound on type parameter
 //! ```
 use std::fmt::{Display, Formatter, Write};
 use std::borrow::Cow;
 use std::str::FromStr;
+use crate::Result;
 
 /// A type signature represents either a reference type or a primitive type.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -195,46 +197,72 @@ fn throws(i: &str) -> IResult<&str, Throws> {
     (res))
 }
 
-// TODO Error when encountering illegal characters
+// ClassTypeSignature:
+// L [PackageSpecifier] SimpleClassTypeSignature {ClassTypeSignatureSuffix} ;
+// ClassTypeSignatureSuffix:
+// . SimpleClassTypeSignature
 fn class_type_sig(i: &str) -> IResult<&str, ClassTypeSignature> {
-    do_parse!(i,
-    char!('L') >>
-    package: packages >>
-    name: simple_type_sig >>
-    suffix: terminated!(many0!(complete!(do_parse!(char!('.') >>
-    sig: simple_type_sig >> (sig)))), char!(';')) >>
-    (ClassTypeSignature { package, name, suffix }))
+    let (i, _) = char!(i, 'L')?;
+    let (i, package) = packages(i)?;
+    let (mut i, name) = simple_type_sig(i)?;
+    let mut suffix = vec![];
+    while i.as_bytes().get(0) == Some(&b'.') { // Safe way to do this because the nom macros looks confusing
+        let res = simple_type_sig(&i[1..])?; // Skip the dot here
+        i = res.0;
+        suffix.push(res.1);
+    }
+    Ok((i, ClassTypeSignature {
+        package,
+        name,
+        suffix
+    }))
 }
 
+// PackageSpecifier:
+// Identifier / {PackageSpecifier}
 fn packages(i: &str) -> IResult<&str, Vec<Cow<'static, str>>> {
     let bytes = i.as_bytes();
     let mut vec = vec![];
     let mut n = 0;
     let mut str = Vec::new();
+    // The index of the last slash.
     let mut last = usize::MAX;
     loop {
         match bytes.get(n) {
+            // If there is a slash, it is a package directive. Push to the vec and clear out the last string.
             Some(b'/') => {
                 unsafe { vec.push(Cow::Owned(String::from_utf8_unchecked(str))); } // the parameter is &str, so it must be valid utf-8.
                 str = Vec::new();
                 last = n;
             }
+            // These characters would mean that there is no more package directive and the string we've just built is used for other functions.
             Some(b';') | Some(b'<') | Some(b'.') => break if last == usize::MAX {
-                    Ok((i, vec))
-                } else {
-                    Ok((&i[(last + 1)..i.len()], vec))
-                },
+                // there were no slashes found so we just return the whole input string.
+                Ok((i, vec))
+            } else {
+                // Returns everything after the last slash.
+                Ok((&i[(last + 1)..], vec))
+            },
+            // Push this byte to build the string.
             Some(b) => str.push(*b),
+            // The string ended but we are still parsing the packages!
             None => break Err(nom::Err::Incomplete(nom::Needed::Unknown))
         }
         n += 1;
     }
 }
 
+// TypeArgument:
+// [WildcardIndicator] ReferenceTypeSignature
+// *
+// WildcardIndicator:
+// +
+// -
 fn type_arg(i: &str) -> IResult<&str, TypeArgument> {
+    // Matching the start of RefTypeSig and -+*.
     let (newi, o) = one_of!(i, "-+*TL[")?;
     Ok(match o {
-        '*' => { (newi, TypeArgument::Any) }
+        '*' => (newi, TypeArgument::Any),
         '-' => {
             let (i, o) = ref_type_sig(newi)?;
             (i, TypeArgument::Super(o))
@@ -243,6 +271,7 @@ fn type_arg(i: &str) -> IResult<&str, TypeArgument> {
             let (i, o) = ref_type_sig(newi)?;
             (i, TypeArgument::Extends(o))
         }
+        // Use the old `i` to parse the exact type.
         _ => {
             let (i, o) = ref_type_sig(i)?;
             (i, TypeArgument::Exact(o))
@@ -250,9 +279,19 @@ fn type_arg(i: &str) -> IResult<&str, TypeArgument> {
     })
 }
 
-fn type_args(i: &str) -> IResult<&str, Vec<TypeArgument>> {
-    let (i, o) = opt!(i, complete!(do_parse!(char!('<') >> res: many0!(complete!(type_arg)) >> char!('>') >> (res))))?;
-    Ok((i, o.unwrap_or_default()))
+fn type_args(mut i: &str) -> IResult<&str, Vec<TypeArgument>> {
+    let mut args = vec![];
+    if i.as_bytes().get(0) == Some(&b'<') {
+        while !i.is_empty() && i.as_bytes().get(0) != Some(&b'>') {
+            let res = type_arg(i)?;
+            i = res.0;
+            args.push(res.1);
+        }
+        let (i, _) = char!(i, '>')?;
+        Ok((i, args))
+    } else {
+        Ok((i, Vec::new()))
+    }
 }
 
 fn simple_type_sig(i: &str) -> IResult<&str, SimpleClassTypeSignature> {
