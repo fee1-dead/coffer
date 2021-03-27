@@ -458,7 +458,7 @@ impl ConstantPoolReadWrite for Code {
                 self.inner.resolve_later(bsm_idx, bsm)
             }
 
-            fn bootstrap_methods(&mut self, bsms: Vec<BootstrapMethod>) {
+            fn bootstrap_methods(&mut self, bsms: &[BootstrapMethod]) -> Result<()> {
                 self.inner.bootstrap_methods(bsms)
             }
 

@@ -1,3 +1,4 @@
+//! This module contains structures representing a constant pool and its entries.
 /*
  *     This file is part of Coffer.
  *
@@ -18,12 +19,12 @@
 use std::hash::{Hash, Hasher};
 use std::borrow::Cow;
 use std::collections::HashMap;
-use crate::{ReadWrite, ConstantPoolReader, ConstantPoolWriter};
+use crate::{ReadWrite, ConstantPoolReader, ConstantPoolWriter, Error};
 use crate::prelude::{Read, Write, Result, BootstrapMethod, LazyBsm};
-use std::mem::transmute;
 use std::rc::Rc;
 use std::collections::hash_map::Entry;
 
+/// A raw constant entry that has unresolved indices to other entries.
 #[derive(ReadWrite, Debug, Clone)]
 #[tag_type(u8)]
 pub enum RawConstantEntry {
@@ -57,8 +58,11 @@ impl Hash for RawConstantEntry {
             RawConstantEntry::Float(ref f) => { f.to_bits().hash(state) }
             RawConstantEntry::Long(ref l) => { l.hash(state) }
             RawConstantEntry::Double(ref d) => { d.to_bits().hash(state) }
-            RawConstantEntry::Class(ref u) | RawConstantEntry::String(ref u) | RawConstantEntry::MethodType(ref u) | RawConstantEntry::Module(ref u) | RawConstantEntry::Package(ref u) => { u.hash(state) }
-            RawConstantEntry::Field(ref u1, ref u2) | RawConstantEntry::Method(ref u1, ref u2) | RawConstantEntry::InterfaceMethod(ref u1, ref u2) | RawConstantEntry::NameAndType(ref u1, ref u2) | RawConstantEntry::Dynamic(ref u1, ref u2) | RawConstantEntry::InvokeDynamic(ref u1, ref u2) => {
+            RawConstantEntry::Class(ref u) | RawConstantEntry::String(ref u) | RawConstantEntry::MethodType(ref u) |
+            RawConstantEntry::Module(ref u) | RawConstantEntry::Package(ref u) => { u.hash(state) }
+            RawConstantEntry::Field(ref u1, ref u2) | RawConstantEntry::Method(ref u1, ref u2) |
+            RawConstantEntry::InterfaceMethod(ref u1, ref u2) | RawConstantEntry::NameAndType(ref u1, ref u2) |
+            RawConstantEntry::Dynamic(ref u1, ref u2) | RawConstantEntry::InvokeDynamic(ref u1, ref u2) => {
                 u1.hash(state);
                 u2.hash(state);
             }
@@ -72,54 +76,110 @@ impl Hash for RawConstantEntry {
 }
 
 impl RawConstantEntry {
+    /// returns the size that this entry takes.
+    #[inline]
+    pub const fn size(&self) -> u16 {
+        match self {
+            RawConstantEntry::Long(_) |
+            RawConstantEntry::Double(_) => 2,
+            _ => 1
+        }
+    }
     /// Returns `true` if this entry is a Long/Double constant, which takes 2 indices.
     #[inline]
-    pub fn is_wide(&self) -> bool {
+    pub const fn is_wide(&self) -> bool {
         matches!(self, RawConstantEntry::Long(_) | RawConstantEntry::Double(_))
     }
 }
 
-/// A simple constant pool implementation using hashmaps for constant entries and bootstrap methods.
-///
-/// This structure may only be read and not written.
-pub struct ReadOnlyConstantPool(pub HashMap<u16, RawConstantEntry>, HashMap<u16, Vec<Rc<LazyBsm>>>);
-
-impl<'a> ReadWrite for ReadOnlyConstantPool {
-    fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
-        unimplemented!()
-    }
-
-    fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
-        panic!("Cannot write ReadOnlyConstantPool")
-    }
+/// A simple constant pool implementation using hashmaps for constant entries and bootstrap method references.
+pub struct ConstantPool {
+    /// The entries of this constant pool, represented as a hashmap
+    /// as some entries may be absent when they are preceded by a double/long entry
+    pub entries: HashMap<u16, RawConstantEntry>,
+    refs: HashMap<u16, Vec<Rc<LazyBsm>>>,
+    /// Not actual len. (if e.wide 2 else 1 for e in entries) + 1 in pseudocode
+    len: u16,
+    pub(crate) bsm: Vec<BootstrapMethod>
 }
 
-impl<'a> ConstantPoolReader for ReadOnlyConstantPool {
-    fn read_raw(&mut self, idx: u16) -> Option<RawConstantEntry> {
-        self.0.get(&idx).cloned()
-    }
-
-    fn resolve_later(&mut self, bsm_idx: u16, bsm: Rc<LazyBsm>) {
-        self.1.entry(bsm_idx).or_default().push(bsm);
-    }
-
-    fn bootstrap_methods(&mut self, bsms: Vec<BootstrapMethod>) {
-        for (i, b) in bsms.into_iter().enumerate() {
-            if let Some(bsm) = self.1.get(&(i as _)) {
-                for reg in bsm {
-                    reg.fill(b.clone()).unwrap()
-                }
-            }
+impl ConstantPool {
+    /// Creates a new constant pool with no entries.
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            entries: HashMap::new(),
+            refs: HashMap::new(),
+            len: 1,
+            bsm: Vec::new()
         }
     }
 }
 
-impl<'a> ConstantPoolWriter for ReadOnlyConstantPool {
+impl Default for ConstantPool {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+
+impl ReadWrite for ConstantPool {
+    fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
+        let mut cp = ConstantPool::new();
+        let count = u16::read_from(reader)?;
+        while cp.len < count {
+            cp.insert_raw(RawConstantEntry::read_from(reader)?);
+        }
+        Ok(cp)
+    }
+
+    fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
+        self.len.write_to(writer)?;
+        for ent in self.entries.values() {
+            ent.write_to(writer)?;
+        }
+        Ok(())
+    }
+}
+
+impl ConstantPoolReader for ConstantPool {
+    fn read_raw(&mut self, idx: u16) -> Option<RawConstantEntry> {
+        self.entries.get(&idx).cloned()
+    }
+
+    fn resolve_later(&mut self, bsm_idx: u16, bsm: Rc<LazyBsm>) {
+        self.refs.entry(bsm_idx).or_default().push(bsm);
+    }
+
+    fn bootstrap_methods(&mut self, bsms: &[BootstrapMethod]) -> Result<()> {
+        for (i, b) in bsms.iter().enumerate() {
+            if let Entry::Occupied(bsm) = self.refs.entry(i as _) {
+                for reg in bsm.get() {
+                    reg.fill(b.clone()).unwrap()
+                }
+                bsm.remove();
+            }
+        }
+        if let Some((_, v)) = self.refs.iter().find(|(_, v)| !v.is_empty()) {
+            Err(Error::Invalid("reference(s) to bootstrap method", Cow::from(format!("{:?}", v))))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl<'a> ConstantPoolWriter for ConstantPool {
     fn insert_raw(&mut self, value: RawConstantEntry) -> u16 {
-        unimplemented!()
+        let idx = self.len;
+        self.len = idx + value.size();
+        self.entries.insert(idx, value);
+        idx
     }
 
     fn insert_bsm(&mut self, bsm: BootstrapMethod) -> u16 {
-        unimplemented!()
+        let ret = self.bsm.len() as u16;
+        self.bsm.push(bsm);
+        ret
     }
 }

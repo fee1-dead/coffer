@@ -142,12 +142,12 @@ pub(super) fn unexpected_end<T>() -> crate::Result<T> {
     Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Unexpected end of string").into())
 }
 
-use nom::{take, one_of, IResult, take_until1, many0, char, complete, peek, alt, take_till1, do_parse, terminated, switch, opt};
+use nom::{take, one_of, IResult, take_until1, many0, char, complete, peek, take_till1, do_parse, terminated, switch, opt};
 use crate::ConstantPoolReadWrite;
 
 fn type_sig(i: &str) -> IResult<&str, TypeSignature> {
-    let (i, c) = alt!(i, one_of!("BCDFIJSZ") | peek!(one_of!("[TL")))?;
-    Ok((i, match c {
+    let (i, c) = peek!(i, one_of!("BCDFIJSZTL["))?;
+    let o = match c {
         'B' => TypeSignature::Byte,
         'C' => TypeSignature::Char,
         'D' => TypeSignature::Double,
@@ -157,7 +157,9 @@ fn type_sig(i: &str) -> IResult<&str, TypeSignature> {
         'S' => TypeSignature::Short,
         'Z' => TypeSignature::Boolean,
         _ => { return ref_type_sig(i).map(|(i, r)| (i, TypeSignature::Ref(r))) }
-    }))
+    };
+
+    Ok((&i[1..], o))
 }
 fn ref_type_sig(i: &str) -> IResult<&str, RefTypeSignature> {
     let (newi, c) = one_of!(i, "[TL")?;
@@ -195,7 +197,6 @@ fn throws(i: &str) -> IResult<&str, Throws> {
 
 // TODO Error when encountering illegal characters
 fn class_type_sig(i: &str) -> IResult<&str, ClassTypeSignature> {
-    println!("{}", i);
     do_parse!(i,
     char!('L') >>
     package: packages >>

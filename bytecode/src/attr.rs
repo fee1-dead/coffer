@@ -17,6 +17,8 @@
 use crate::full::*;
 use crate::module::Module;
 use crate::prelude::*;
+use std::fs::read;
+use crate::mod_utf8::{modified_utf8_to_string, string_to_modified_utf8};
 
 /// An unrecognized, unknown raw attribute.
 #[derive(Clone, PartialEq, Debug)]
@@ -70,13 +72,32 @@ impl ConstantPoolReadWrite for Option<(Cow<'static,str>, Type)> {
     }
 }
 
+/// A raw string that holds extended debugging information that has no effect on the JVM.
+///
+/// The [`ReadWrite`] implementation for this just comsumes the whole reader.
+/// This works because the macro generates inner readers for attributes which are safe to consume.
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct SourceDebugExtension(pub Cow<'static, str>);
+
+impl ReadWrite for SourceDebugExtension {
+    fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
+        let mut buf = vec![];
+        reader.read_to_end(&mut buf)?;
+        Ok(SourceDebugExtension(modified_utf8_to_string(&buf)?.into()))
+    }
+
+    fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
+        writer.write_all(&string_to_modified_utf8(&self.0))?;
+        Ok(())
+    }
+}
 
 #[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
 #[attr_enum]
 pub enum ClassAttribute {
     Signature(ClassSignature),
     Synthetic, Deprecated, SourceFile(Cow<'static, str>), InnerClasses(#[vec_len_type(u16)] Vec<InnerClass>),
-    EnclosingMethod(#[str_type(Class)] Cow<'static, str>, Option<(Cow<'static,str>, Type)>), SourceDebugExtension(#[use_normal_rw] Cow<'static, str>),
+    EnclosingMethod(#[str_type(Class)] Cow<'static, str>, Option<(Cow<'static,str>, Type)>), SourceDebugExtension(#[use_normal_rw] SourceDebugExtension),
     BootstrapMethods(#[vec_len_type(u16)]  Vec<BootstrapMethod>), Module(Module), ModulePackages(#[vec_len_type(u16)] #[str_type(Package)] Vec<Cow<'static, str>>), ModuleMainClass(#[str_type(Class)] Cow<'static, str>),
     NestHost(#[str_type(Class)] Cow<'static, str>), NestMembers(#[vec_len_type(u16)] #[str_type(Class)] Vec<Cow<'static, str>>),
     #[raw_variant]

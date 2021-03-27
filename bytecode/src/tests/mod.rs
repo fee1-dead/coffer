@@ -20,7 +20,7 @@ mod full_type;
 mod insn;
 mod code {
     use crate::full::{Code};
-    use crate::{ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite};
+    use crate::{ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite, Class};
     use std::io::{Cursor, Read, Seek, SeekFrom, Write};
     use crate::full::Instruction::*;
     use crate::full::StackValueType::One;
@@ -38,11 +38,11 @@ mod code {
         }
 
         fn resolve_later(&mut self, _bsm_idx: u16, _ptr: Rc<LazyBsm>) {
-            unimplemented!()
+            unreachable!()
         }
 
-        fn bootstrap_methods(&mut self, _bsms: Vec<BootstrapMethod>) {
-            unimplemented!()
+        fn bootstrap_methods(&mut self, bsms: &[BootstrapMethod]) -> Result<()> {
+            unreachable!()
         }
     }
 
@@ -53,7 +53,7 @@ mod code {
         }
 
         fn insert_bsm(&mut self, _bsm: BootstrapMethod) -> u16 {
-            unimplemented!()
+            unreachable!()
         }
     }
 
@@ -73,8 +73,8 @@ mod code {
             self.1.push(ptr);
         }
 
-        fn bootstrap_methods(&mut self, bsms: Vec<BootstrapMethod>) {
-
+        fn bootstrap_methods(&mut self, bsms: &[BootstrapMethod]) -> Result<()> {
+            Ok(())
         } // we are using these for testing, so we don't panic here in case a bsm was referenced.
     }
 
@@ -108,46 +108,11 @@ mod code {
     fn code_reading_with_sample() {
         for (s, buf) in SAMPLE.iter().map(|(s, buf)| (s.as_str(), buf.clone())) {
             let mut reader = Cursor::new(buf);
-            if !u32::read_from(&mut reader).map(|h| h == 0xCAFEBABE).unwrap_or_default() {
-                // this is an invalid class, we will skip this.
-                continue
-            }
-            // skip versions
-            reader.seek(SeekFrom::Current(4)).unwrap();
-            let mut cp = MapCp::read_from(&mut reader).unwrap();
             #[inline]
-            fn inner(cp: &mut MapCp, reader: &mut Cursor<Vec<u8>>) -> crate::Result<()> {
-                reader.seek(SeekFrom::Current(6))?;
-                let interfaces = u16::read_from(reader)?;
-                reader.seek(SeekFrom::Current(interfaces as i64 * 2))?;
-                let fields = u16::read_from(reader)?;
-                for _ in 0..fields {
-                    reader.seek(SeekFrom::Current(6))?;
-                    let attrs = u16::read_from(reader)?;
-                    for _ in 0..attrs {
-                        reader.seek(SeekFrom::Current(2))?;
-                        let length = u32::read_from(reader)?;
-                        reader.set_position(reader.position() + length as u64);
-                    }
-                }
-                let methods = u16::read_from(reader)?;
-                for _ in 0..methods {
-                    reader.seek(SeekFrom::Current(6))?;
-                    let attrs = u16::read_from(reader)?;
-                    for _ in 0..attrs {
-                        let name: Cow<'static, str> = crate::read_from!(cp, reader)?;
-                        let length = u32::read_from(reader)?;
-                        if name.as_ref() == "Code" {
-                            Code::read_from(cp, reader)?;
-                        } else {
-                            reader.set_position(reader.position() + length as u64);
-                        }
-                    }
-                }
-                Ok(())
+            fn inner(reader: &mut Cursor<Vec<u8>>) -> crate::Result<Class> {
+                Class::read_from(reader)
             }
-            if let Err(e) = inner(&mut cp, &mut reader) {
-                println!("CP: {:?}", cp);
+            if let Err(e) = inner(&mut reader) {
                 let filename = s.split('/').last().unwrap();
                 let res = File::create(filename).and_then(|mut f| f.write_all(reader.get_ref().as_ref()));
                 let message = match res {

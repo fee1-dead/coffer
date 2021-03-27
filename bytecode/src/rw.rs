@@ -328,7 +328,7 @@ pub trait ConstantPoolReader {
     fn resolve_later(&mut self, bsm_idx: u16, bsm: Rc<LazyBsm>);
 
     /// Attempts to complete resolution of bootstrap methods by providing a list of bootstrap methods.
-    fn bootstrap_methods(&mut self, bsms: Vec<BootstrapMethod>);
+    fn bootstrap_methods(&mut self, bsms: &[BootstrapMethod]) -> Result<()>;
     // Implementations from Code
 
     /// get a uniquely identified label from an actual offset of the code array.

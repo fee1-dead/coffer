@@ -29,6 +29,7 @@
 //! [`ConstantPoolReader`]: crate::ConstantPoolReader
 #![cfg_attr(any(feature = "backtrace", test), feature(backtrace))]
 #![warn(missing_docs)]
+#![allow(missing_doc_code_examples)] // TODO Change these later to higher levels
 
 #[macro_use]
 extern crate bitflags;
@@ -42,7 +43,6 @@ pub use coffer_macros::*;
 
 use std::borrow::Cow;
 use std::io::{Read, Write};
-use std::collections::HashMap;
 
 pub use crate::error::Error;
 pub use crate::error::Result;
@@ -76,6 +76,10 @@ pub struct Class {
     pub version: JavaVersion,
     pub access: ClassFlags,
     pub name: Cow<'static, str>,
+    /// The name of the super class for this class.
+    /// when it is unspecifiedi in the source code, it is `"java/lang/Object"`.
+    ///
+    /// Although most java classes have their own superclasses,
     /// java/lang/Object has no superclass.
     pub super_name: Option<Cow<'static, str>>,
     pub interfaces: Vec<Cow<'static, str>>,
@@ -105,18 +109,78 @@ struct ClassWrapper {
 }
 
 impl ReadWrite for Class {
-    fn read_from<T: Read>(reader: &mut T) -> Result<Self, Error> {
+    fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
         match u32::read_from(reader)? {
             0xCAFEBABE => {
-                let ver = JavaVersion::read_from(reader)?;
-
-                unimplemented!()
+                let version = JavaVersion::read_from(reader)?;
+                let mut cp = ConstantPool::read_from(reader)?;
+                let c = ClassWrapper::read_from(&mut cp, reader)?;
+                for attr in &c.attributes {
+                    if let ClassAttribute::BootstrapMethods(b) = attr {
+                        cp.bootstrap_methods(b)?;
+                        break
+                    }
+                }
+                Ok(Class {
+                    version,
+                    access: c.access,
+                    name: c.name,
+                    super_name: c.super_name,
+                    interfaces: c.interfaces,
+                    fields: c.fields,
+                    methods: c.methods,
+                    attributes: c.attributes
+                })
             }
             n => Err(Error::Invalid("class header", n.to_string().into()))
         }
     }
 
-    fn write_to<T: Write>(&self, writer: &mut T) -> Result<(), Error> {
-        unimplemented!()
+    fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
+        0xCAFEBABEu32.write_to(writer)?;
+        self.version.write_to(writer)?;
+        let mut cp = ConstantPool::new();
+        let mut buf = vec![];
+        self.access.write_to(&mut buf)?;
+        cp.insert_class(self.name.clone()).write_to(&mut buf)?;
+        self.super_name.as_ref().map_or(0, |n| cp.insert_class(n.clone())).write_to(&mut buf)?;
+        (self.interfaces.len() as u16).write_to(&mut buf)?;
+        for i in &self.interfaces {
+            cp.insert_class(i.clone()).write_to(&mut buf)?;
+        }
+        (self.fields.len() as u16).write_to(&mut buf)?;
+        for f in &self.fields {
+            f.write_to(&mut cp, &mut buf)?;
+        }
+        (self.methods.len() as u16).write_to(&mut buf)?;
+        for m in &self.methods {
+            m.write_to(&mut cp, &mut buf)?;
+        }
+        (self.attributes.len() as u16).write_to(&mut buf)?;
+        let mut bsm = vec![];
+        for a in &self.attributes {
+            if let ClassAttribute::BootstrapMethods(b) = a {
+                bsm.extend_from_slice(b);
+            } else {
+                a.write_to(&mut cp, &mut buf)?;
+            }
+        }
+        let mut i: u16 = 0;
+        let mut buf2 = vec![];
+        while !cp.bsm.is_empty() {
+            let v = cp.bsm;
+            cp.bsm = vec![];
+            i += v.len() as u16;
+            for bsm in v {
+                bsm.write_to(&mut cp, &mut buf2)?;
+            }
+        }
+        write_to!(&Cow::Borrowed("BootstrapMethods"), &mut cp, &mut buf)?;
+        (buf2.len() as u32).write_to(&mut buf)?;
+        i.write_to(&mut buf)?;
+        buf.write_all(&buf2)?;
+        cp.write_to(writer)?;
+        writer.write_all(&buf)?;
+        Ok(())
     }
 }
