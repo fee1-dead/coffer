@@ -164,7 +164,6 @@ fn type_sig(i: &str) -> IResult<&str, TypeSignature> {
     Ok((&i[1..], o))
 }
 fn ref_type_sig(i: &str) -> IResult<&str, RefTypeSignature> {
-    dbg!(i);
     let (newi, c) = one_of!(i, "[TL")?;
     match c {
         '[' => {
@@ -174,11 +173,8 @@ fn ref_type_sig(i: &str) -> IResult<&str, RefTypeSignature> {
             Ok((i, RefTypeSignature::ArrayRef(dim as u8, Box::new(t))))
         }
         'T' => {
-            dbg!((newi, i));
             let (i, o) = take_until1!(newi, ";")?;
-            dbg!(i);
             let (i, _) = take!(i, 1)?;
-            dbg!(i);
             Ok((i, RefTypeSignature::TypeVariable(o.to_owned().into())))
         }
         'L' => {
@@ -190,7 +186,6 @@ fn ref_type_sig(i: &str) -> IResult<&str, RefTypeSignature> {
 }
 
 fn throws(i: &str) -> IResult<&str, Throws> {
-    dbg!(i);
     do_parse!(i,
         char!('^') >>
         res: switch!(peek!(take!(1)),
@@ -207,7 +202,6 @@ fn throws(i: &str) -> IResult<&str, Throws> {
 // ClassTypeSignatureSuffix:
 // . SimpleClassTypeSignature
 fn class_type_sig(i: &str) -> IResult<&str, ClassTypeSignature> {
-    dbg!(i);
     let (i, _) = char!(i, 'L')?;
     let (i, package) = packages(i)?;
     let (mut i, name) = simple_type_sig(i)?;
@@ -266,7 +260,6 @@ fn packages(i: &str) -> IResult<&str, Vec<Cow<'static, str>>> {
 // +
 // -
 fn type_arg(i: &str) -> IResult<&str, TypeArgument> {
-    dbg!(i);
     // Matching the start of RefTypeSig and -+*.
     let (newi, o) = one_of!(i, "-+*TL[")?;
     Ok(match o {
@@ -288,7 +281,6 @@ fn type_arg(i: &str) -> IResult<&str, TypeArgument> {
 }
 
 fn type_args(mut i: &str) -> IResult<&str, Vec<TypeArgument>> {
-    dbg!(i);
     let mut args = vec![];
     if i.as_bytes().get(0) == Some(&b'<') {
         i = &i[1..];
@@ -310,12 +302,10 @@ fn simple_type_sig(i: &str) -> IResult<&str, SimpleClassTypeSignature> {
 }
 
 fn type_parameter(i: &str) -> IResult<&str, TypeParameter> {
-    dbg!(i);
     do_parse!(i, ident: take_until1!(":") >> char!(':') >> class_bound: opt!(ref_type_sig) >> interface_bounds: many0!(do_parse!(char!(':') >> res: ref_type_sig >> (res))) >> (TypeParameter { name: ident.to_owned().into(), class_bound, interface_bounds }))
 }
 
 fn type_parameters(mut i: &str) -> IResult<&str, Vec<TypeParameter>> {
-    dbg!(i);
     let mut params = vec![];
     if i.as_bytes().get(0) == Some(&b'<') {
         i = &i[1..];
