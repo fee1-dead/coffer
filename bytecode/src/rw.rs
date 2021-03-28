@@ -207,6 +207,12 @@ pub trait ConstantPoolReader {
             Some(RawConstantEntry::Double(d)) => Some(Constant::F64(d)),
             Some(RawConstantEntry::String(s)) => self.read_utf8(s).map(Constant::String),
             Some(RawConstantEntry::Class(c)) => self.read_utf8(c).map(Constant::Class),
+            Some(RawConstantEntry::MethodType(m)) => self.read_utf8(m).as_deref().map(str::parse).and_then(Result::ok).map(Constant::MethodType),
+            Some(RawConstantEntry::MethodHandle(k, m)) => MethodHandleKind::try_from(k)
+                .ok()
+                .zip(self.read_member(m))
+                .map(|(kind, member)| MethodHandle { kind, member })
+                .map(Constant::MethodHandle),
             _ => self.read_member(idx).map(Constant::Member)
         }
     }

@@ -144,7 +144,7 @@ pub(super) fn unexpected_end<T>() -> crate::Result<T> {
     Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Unexpected end of string").into())
 }
 
-use nom::{take, one_of, IResult, take_until1, many0, char, complete, peek, take_till1, do_parse, terminated, switch, opt};
+use nom::{take, one_of, IResult, take_until1, many0, char, complete, peek, take_till1, do_parse, switch, opt};
 use crate::ConstantPoolReadWrite;
 
 fn type_sig(i: &str) -> IResult<&str, TypeSignature> {
@@ -207,6 +207,7 @@ fn throws(i: &str) -> IResult<&str, Throws> {
 // ClassTypeSignatureSuffix:
 // . SimpleClassTypeSignature
 fn class_type_sig(i: &str) -> IResult<&str, ClassTypeSignature> {
+    dbg!(i);
     let (i, _) = char!(i, 'L')?;
     let (i, package) = packages(i)?;
     let (mut i, name) = simple_type_sig(i)?;
@@ -317,8 +318,9 @@ fn type_parameters(mut i: &str) -> IResult<&str, Vec<TypeParameter>> {
     dbg!(i);
     let mut params = vec![];
     if i.as_bytes().get(0) == Some(&b'<') {
+        i = &i[1..];
         while !i.is_empty() && i.as_bytes().get(0) != Some(&b'>') {
-            let res = type_parameter(&i[1..])?;
+            let res = type_parameter(i)?;
             i = res.0;
             params.push(res.1);
         }
@@ -329,8 +331,16 @@ fn type_parameters(mut i: &str) -> IResult<&str, Vec<TypeParameter>> {
     }
 }
 
+fn ret(i: &str) -> IResult<&str, Option<TypeSignature>> {
+    Ok(if i.as_bytes().get(0) == Some(&b'V') {
+        (&i[1..], None)
+    } else {
+        type_sig(i).map(|(i, r)| (i, Some(r)))?
+    })
+}
+
 fn method_sig(i: &str) -> IResult<&str, MethodSignature> {
-    do_parse!(i, type_parameters: type_parameters >> char!('(') >> parameters: many0!(type_sig) >> char!(')') >> return_type: opt!(type_sig) >> throws: many0!(complete!(throws)) >> (MethodSignature { type_parameters, parameters, return_type, throws }))
+    do_parse!(i, type_parameters: type_parameters >> char!('(') >> parameters: many0!(type_sig) >> char!(')') >> return_type: ret >> throws: many0!(complete!(throws)) >> (MethodSignature { type_parameters, parameters, return_type, throws }))
 }
 
 fn class_sig(i: &str) -> IResult<&str, ClassSignature> {
