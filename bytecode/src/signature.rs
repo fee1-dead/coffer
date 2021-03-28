@@ -164,6 +164,7 @@ fn type_sig(i: &str) -> IResult<&str, TypeSignature> {
     Ok((&i[1..], o))
 }
 fn ref_type_sig(i: &str) -> IResult<&str, RefTypeSignature> {
+    dbg!(i);
     let (newi, c) = one_of!(i, "[TL")?;
     match c {
         '[' => {
@@ -173,8 +174,11 @@ fn ref_type_sig(i: &str) -> IResult<&str, RefTypeSignature> {
             Ok((i, RefTypeSignature::ArrayRef(dim as u8, Box::new(t))))
         }
         'T' => {
+            dbg!((newi, i));
             let (i, o) = take_until1!(newi, ";")?;
+            dbg!(i);
             let (i, _) = take!(i, 1)?;
+            dbg!(i);
             Ok((i, RefTypeSignature::TypeVariable(o.to_owned().into())))
         }
         'L' => {
@@ -186,6 +190,7 @@ fn ref_type_sig(i: &str) -> IResult<&str, RefTypeSignature> {
 }
 
 fn throws(i: &str) -> IResult<&str, Throws> {
+    dbg!(i);
     do_parse!(i,
         char!('^') >>
         res: switch!(peek!(take!(1)),
@@ -211,6 +216,7 @@ fn class_type_sig(i: &str) -> IResult<&str, ClassTypeSignature> {
         i = res.0;
         suffix.push(res.1);
     }
+    let (i, _) = char!(i, ';')?;
     Ok((i, ClassTypeSignature {
         package,
         name,
@@ -259,6 +265,7 @@ fn packages(i: &str) -> IResult<&str, Vec<Cow<'static, str>>> {
 // +
 // -
 fn type_arg(i: &str) -> IResult<&str, TypeArgument> {
+    dbg!(i);
     // Matching the start of RefTypeSig and -+*.
     let (newi, o) = one_of!(i, "-+*TL[")?;
     Ok(match o {
@@ -280,8 +287,10 @@ fn type_arg(i: &str) -> IResult<&str, TypeArgument> {
 }
 
 fn type_args(mut i: &str) -> IResult<&str, Vec<TypeArgument>> {
+    dbg!(i);
     let mut args = vec![];
     if i.as_bytes().get(0) == Some(&b'<') {
+        i = &i[1..];
         while !i.is_empty() && i.as_bytes().get(0) != Some(&b'>') {
             let res = type_arg(i)?;
             i = res.0;
@@ -300,19 +309,32 @@ fn simple_type_sig(i: &str) -> IResult<&str, SimpleClassTypeSignature> {
 }
 
 fn type_parameter(i: &str) -> IResult<&str, TypeParameter> {
+    dbg!(i);
     do_parse!(i, ident: take_until1!(":") >> char!(':') >> class_bound: opt!(ref_type_sig) >> interface_bounds: many0!(do_parse!(char!(':') >> res: ref_type_sig >> (res))) >> (TypeParameter { name: ident.to_owned().into(), class_bound, interface_bounds }))
 }
 
-fn type_parameters(i: &str) -> IResult<&str, Vec<TypeParameter>> {
-    do_parse!(i, res: opt!(complete!(do_parse!(char!('<') >> res: many0!(type_parameter) >> char!('>') >> (res)))) >> (res.unwrap_or_default()))
+fn type_parameters(mut i: &str) -> IResult<&str, Vec<TypeParameter>> {
+    dbg!(i);
+    let mut params = vec![];
+    if i.as_bytes().get(0) == Some(&b'<') {
+        while !i.is_empty() && i.as_bytes().get(0) != Some(&b'>') {
+            let res = type_parameter(&i[1..])?;
+            i = res.0;
+            params.push(res.1);
+        }
+        let (i, _) = char!(i, '>')?;
+        Ok((i, params))
+    } else {
+        Ok((i, Vec::new()))
+    }
 }
 
 fn method_sig(i: &str) -> IResult<&str, MethodSignature> {
-    do_parse!(i, type_parameters: type_parameters >> char!('(') >> parameters: many0!(type_sig) >> char!(')') >> return_type: opt!(type_sig) >> throws: many0!(throws) >> (MethodSignature { type_parameters, parameters, return_type, throws }))
+    do_parse!(i, type_parameters: type_parameters >> char!('(') >> parameters: many0!(type_sig) >> char!(')') >> return_type: opt!(type_sig) >> throws: many0!(complete!(throws)) >> (MethodSignature { type_parameters, parameters, return_type, throws }))
 }
 
 fn class_sig(i: &str) -> IResult<&str, ClassSignature> {
-    do_parse!(i, type_parameters: type_parameters >> super_class: class_type_sig >> interfaces: many0!(class_type_sig) >> (ClassSignature { type_parameters, super_class, interfaces }))
+    do_parse!(i, type_parameters: type_parameters >> super_class: class_type_sig >> interfaces: many0!(complete!(class_type_sig)) >> (ClassSignature { type_parameters, super_class, interfaces }))
 }
 
 macro_rules! convert_result {

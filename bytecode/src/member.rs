@@ -97,7 +97,7 @@ pub enum MethodAttribute {
     RuntimeInvisibleTypeAnnotations(#[vec_len_type(u16)] Vec<MethodTypeAnnotation>),
     RuntimeVisibleParameterAnnotations(#[vec_len_type(u8)] Vec<ParameterAnnotations>),
     RuntimeInvisibleParameterAnnotations(#[vec_len_type(u8)] Vec<ParameterAnnotations>),
-    Exceptions(#[vec_len_type(u8)] #[str_type(Class)] Vec<Cow<'static, str>>),
+    Exceptions(#[vec_len_type(u16)] #[str_type(Class)] Vec<Cow<'static, str>>),
     AnnotationDefault(AnnotationValue),
     MethodParameters(#[vec_len_type(u8)] Vec<MethodParameter>),
     #[raw_variant]

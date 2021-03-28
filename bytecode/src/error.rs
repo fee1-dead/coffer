@@ -40,8 +40,8 @@ pub enum ErrorBase {
     /// therefore resulting in parts of the data not transformed to actual information.
     ///
     /// This error is raised from the derive macro.
-    #[error("Attribute length mismatch: actual length ({0} bytes) is greater than length consumed ({1} bytes)")]
-    AttributeLength(u32, u32),
+    #[error("Attribute length mismatch: actual length ({0}) is greater than length consumed ({1}) for variant ${2}")]
+    AttributeLength(u32, u32, &'static str),
 
     /// A custom error type.
     #[error(transparent)]
@@ -124,7 +124,7 @@ pub mod backtrace {
             Invalid(st: &'static str, cow: Cow<'static, str>),
             /// Creates a new instance of [`ErrorTrace`].
             ///
-            /// This is intentionally named the same as the [ErrorBase enum variant] so one can use `Error::MUTF` in any context.
+            /// This is intentionally named the same as the [ErrorBase enum variant] so one can use [`Error::MUTF`] in any context.
             ///
             /// [`ErrorTrace`]: ErrorTrace
             /// [ErrorBase enum variant]: ErrorBase::MUTF
@@ -135,7 +135,7 @@ pub mod backtrace {
             ///
             /// [`ErrorTrace`]: ErrorTrace
             /// [ErrorBase enum variant]: ErrorBase::AttributeLength
-            AttributeLength(act: u32, exp: u32),
+            AttributeLength(act: u32, exp: u32, var: &'static str),
             /// Creates a new instance of [`ErrorTrace`].
             ///
             /// This is intentionally named the same as the [ErrorBase enum variant] so one can use `Error::Custom` in any context.

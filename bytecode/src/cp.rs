@@ -93,6 +93,7 @@ impl RawConstantEntry {
 }
 
 /// A simple constant pool implementation using hashmaps for constant entries and bootstrap method references.
+#[derive(Debug)]
 pub struct ConstantPool {
     /// The entries of this constant pool, represented as a hashmap
     /// as some entries may be absent when they are preceded by a double/long entry

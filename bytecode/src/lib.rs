@@ -114,6 +114,10 @@ impl ReadWrite for Class {
             0xCAFEBABE => {
                 let version = JavaVersion::read_from(reader)?;
                 let mut cp = ConstantPool::read_from(reader)?;
+                #[cfg(test)]
+                {
+                    println!("{:#?}", cp)
+                }
                 let c = ClassWrapper::read_from(&mut cp, reader)?;
                 for attr in &c.attributes {
                     if let ClassAttribute::BootstrapMethods(b) = attr {

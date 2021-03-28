@@ -98,7 +98,7 @@ pub(crate) fn attr_enum(input: DeriveInput) -> Result<TokenStream2> {
             variant_write_bodies.push(write);
         }
 
-        let variant_read_bodies = v_r.iter().zip(variant_fields_idents.iter()).map(|(r,i)| {
+        let variant_read_bodies = v_r.iter().zip(variant_fields_idents.iter()).zip(new_variants.iter().map(|v| &v.ident)).map(|((r,i), id)| {
             quote! {
                 let len = u32::read_from(reader)?;
                 let mut vec = vec![0; len as usize];
@@ -107,7 +107,7 @@ pub(crate) fn attr_enum(input: DeriveInput) -> Result<TokenStream2> {
                 let inner_reader = &mut __inner_reader;
                 #(let #i = #r;)*
                 if !inner_reader.is_empty() {
-                    return Err(crate::error::Error::AttributeLength(len, len - (inner_reader.len() as u32)))
+                    return Err(crate::error::Error::AttributeLength(len, len - (inner_reader.len() as u32), stringify!(#id)))
                 }
             }
         });
@@ -272,16 +272,16 @@ pub(crate) fn gen_read_and_write<T: ToTokens>(f: &Field, receiver: &T, mut trait
         let (read_fn, write_fn) = rw_fncalls(ty, trait_type);
         match (str_optional, str_type) {
             (true, None) => Ok((quote! {{
-            let idx = u16::read_from(reader)?;
+            let idx = u16::read_from(#reader)?;
             if idx == 0 {
                 None
             } else {
-                Some(cp.read_utf8(idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", Into::into(idx.to_string())))?)
+                Some(cp.read_utf8(idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index (expected UTF8)", Into::into(idx.to_string())))?)
             }}}, quote! {
                 if let Some(s) = #receiver {
-                    cp.insert_utf8(s.clone()).write_to(writer)?;
+                    cp.insert_utf8(s.clone()).write_to(#writer)?;
                 } else {
-                    0u16.write_to(writer)?;
+                    0u16.write_to(#writer)?;
                 }
             })),
             (true, Some(t)) => {
@@ -295,17 +295,17 @@ pub(crate) fn gen_read_and_write<T: ToTokens>(f: &Field, receiver: &T, mut trait
                     }
                 };
                 Ok((quote! {{
-                    let idx = u16::read_from(reader)?;
+                    let idx = u16::read_from(#reader)?;
                     if idx == 0 {
                         None
                     } else {
-                        Some(cp.read_indirect_str(#tag, idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", Into::into(idx.to_string())))?)
+                        Some(cp.read_indirect_str(#tag, idx).ok_or_else(|| crate::error::Error::Invalid(concat!("constant pool entry index (expected ", #t, ")"), Into::into(idx.to_string())))?)
                     }
                 }}, quote! {
                     if let Some(s) = #receiver {
-                        cp.insert_indirect_str(#tag, s.clone()).write_to(writer)?;
+                        cp.insert_indirect_str(#tag, s.clone()).write_to(#writer)?;
                     } else {
-                        0u16.write_to(writer)?;
+                        0u16.write_to(#writer)?;
                     }
                 }))
             }
@@ -320,10 +320,10 @@ pub(crate) fn gen_read_and_write<T: ToTokens>(f: &Field, receiver: &T, mut trait
                     }
                 };
                 Ok((quote! {{
-                    let idx = u16::read_from(reader)?;
-                    cp.read_indirect_str(#tag, idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", Into::into(idx.to_string())))?
+                    let idx = u16::read_from(#reader)?;
+                    cp.read_indirect_str(#tag, idx).ok_or_else(|| crate::error::Error::Invalid(concat!("constant pool entry index (expected ", #t, ")"), Into::into(idx.to_string())))?
                 }}, quote! {
-                    cp.insert_indirect_str(#tag, #receiver.clone()).write_to(writer)?;
+                    cp.insert_indirect_str(#tag, #receiver.clone()).write_to(#writer)?;
                 }))
             }
             (false, None) => Ok((quote! { #read_fn(#additional_fields_r)? }, quote! { #write_fn(#receiver, #additional_fields_w)?; }))
