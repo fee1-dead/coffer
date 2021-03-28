@@ -182,6 +182,12 @@ impl Constant {
     pub const fn is_wide(&self) -> bool {
         matches!(self, Constant::I64(_) | Constant::F64(_))
     }
+
+    /// Creates an instance of Constant that is a string.
+    #[inline]
+    pub fn string<T: Into<Cow<'static, str>>>(s: T) -> Self {
+        Self::String(s.into())
+    }
 }
 
 impl ConstantPoolReadWrite for Constant {

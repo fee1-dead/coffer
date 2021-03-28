@@ -18,6 +18,8 @@
 mod mutf8;
 mod full_type;
 mod insn;
+mod exec;
+
 mod code {
     use crate::full::{Code};
     use crate::{ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite, Class};
@@ -150,17 +152,17 @@ mod code {
         assert_eq!(buffer.into_inner(), vec![
             0, 255, // max_stack
             0, 254, // max_locals
-            0, 0, 0, 44, // code_length
+            0, 0, 0, 43, // code_length
             0, // NOP
             1, // null
             87, // pop
             crate::constants::insn::BIPUSH, 123,
-            170, 0, 0, // tableswitch with padding
-            0, 0, 0, 29, // default
+            170, 0, // tableswitch with padding
+            0, 0, 0, 28, // default
             0, 0, 0, 1,
             0, 0, 0, 2,
-            0, 0, 0, 33,
-            0, 0, 0, 37,
+            0, 0, 0, 32,
+            0, 0, 0, 36,
             0, 0, 0, 0,
             0, 0, 1, 176,
             0, 0, 1, 176,

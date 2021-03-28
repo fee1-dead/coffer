@@ -32,7 +32,7 @@ pub fn code_block(tokens: TokenStream) -> TokenStream {
 
 /// Grammar:
 ///
-/// ```ignore
+/// ```mygrammar
 /// +class ""
 /// +str ""
 /// +int 1

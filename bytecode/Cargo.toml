@@ -17,6 +17,7 @@ indexmap = "1.6.1"
 [dev-dependencies]
 class_sample = { git = "https://github.com/fee1-dead/class-sample-rs" }
 lazy_static = "1.4.0"
+tempfile = "3.2.0"
 
 [features]
 default = []

@@ -88,6 +88,8 @@ pub struct Class {
     pub attributes: Vec<ClassAttribute>
 }
 
+
+
 #[derive(ConstantPoolReadWrite)]
 struct ClassWrapper {
     #[use_normal_rw]
@@ -113,7 +115,7 @@ impl ReadWrite for Class {
         match u32::read_from(reader)? {
             0xCAFEBABE => {
                 let version = JavaVersion::read_from(reader)?;
-                let mut cp = ConstantPool::read_from(reader)?;
+                let mut cp = MapCp::read_from(reader)?;
                 let c = ClassWrapper::read_from(&mut cp, reader)?;
                 for attr in &c.attributes {
                     if let ClassAttribute::BootstrapMethods(b) = attr {
@@ -139,7 +141,7 @@ impl ReadWrite for Class {
     fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
         0xCAFEBABEu32.write_to(writer)?;
         self.version.write_to(writer)?;
-        let mut cp = ConstantPool::new();
+        let mut cp = VecCp::new();
         let mut buf = vec![];
         self.access.write_to(&mut buf)?;
         cp.insert_class(self.name.clone()).write_to(&mut buf)?;
@@ -165,20 +167,22 @@ impl ReadWrite for Class {
                 a.write_to(&mut cp, &mut buf)?;
             }
         }
-        let mut i: u16 = 0;
-        let mut buf2 = vec![];
-        while !cp.bsm.is_empty() {
-            let v = cp.bsm;
-            cp.bsm = vec![];
-            i += v.len() as u16;
-            for bsm in v {
-                bsm.write_to(&mut cp, &mut buf2)?;
+        if !bsm.is_empty() {
+            let mut i: u16 = 0;
+            let mut buf2 = vec![];
+            while !cp.bsm.is_empty() {
+                let v = cp.bsm;
+                cp.bsm = vec![];
+                i += v.len() as u16;
+                for bsm in v {
+                    bsm.write_to(&mut cp, &mut buf2)?;
+                }
             }
+            write_to!(&Cow::Borrowed("BootstrapMethods"), &mut cp, &mut buf)?;
+            (buf2.len() as u32).write_to(&mut buf)?;
+            i.write_to(&mut buf)?;
+            buf.write_all(&buf2)?;
         }
-        write_to!(&Cow::Borrowed("BootstrapMethods"), &mut cp, &mut buf)?;
-        (buf2.len() as u32).write_to(&mut buf)?;
-        i.write_to(&mut buf)?;
-        buf.write_all(&buf2)?;
         cp.write_to(writer)?;
         writer.write_all(&buf)?;
         Ok(())

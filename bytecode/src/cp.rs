@@ -92,32 +92,52 @@ impl RawConstantEntry {
     }
 }
 
-/// A simple constant pool implementation using hashmaps for constant entries and bootstrap method references.
+/// A simple constant pool reader implementation using hashmaps for constant entries and bootstrap method references.
 #[derive(Debug)]
-pub struct ConstantPool {
+pub struct MapCp {
     /// The entries of this constant pool, represented as a hashmap
     /// as some entries may be absent when they are preceded by a double/long entry
     pub entries: HashMap<u16, RawConstantEntry>,
     refs: HashMap<u16, Vec<Rc<LazyBsm>>>,
+}
+
+/// A constant pool writer implementation using a vector and a number for tracking entries.
+pub struct VecCp {
+    entries: Vec<RawConstantEntry>,
     /// Not actual len. (if e.wide 2 else 1 for e in entries) + 1 in pseudocode
     len: u16,
     pub(crate) bsm: Vec<BootstrapMethod>
 }
+impl VecCp {
+    /// Creates an empty constant pool.
+    #[inline]
+    pub const fn new() -> Self {
+        Self {
+            entries: vec![],
+            len: 1,
+            bsm: vec![]
+        }
+    }
+}
 
-impl ConstantPool {
+impl Default for VecCp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MapCp {
     /// Creates a new constant pool with no entries.
     #[inline]
     pub fn new() -> Self {
         Self {
             entries: HashMap::new(),
-            refs: HashMap::new(),
-            len: 1,
-            bsm: Vec::new()
+            refs: HashMap::new()
         }
     }
 }
 
-impl Default for ConstantPool {
+impl Default for MapCp {
     #[inline]
     fn default() -> Self {
         Self::new()
@@ -125,26 +145,26 @@ impl Default for ConstantPool {
 }
 
 
-impl ReadWrite for ConstantPool {
+impl ReadWrite for MapCp {
     fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
-        let mut cp = ConstantPool::new();
+        let mut cp = MapCp::new();
         let count = u16::read_from(reader)?;
-        while cp.len < count {
-            cp.insert_raw(RawConstantEntry::read_from(reader)?);
+        let mut i = 1;
+        while i < count {
+            let entry = RawConstantEntry::read_from(reader)?;
+            let idx = i;
+            i += entry.size();
+            cp.entries.insert(idx, entry);
         }
         Ok(cp)
     }
 
-    fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
-        self.len.write_to(writer)?;
-        for ent in self.entries.values() {
-            ent.write_to(writer)?;
-        }
-        Ok(())
+    fn write_to<T: Write>(&self, _writer: &mut T) -> Result<()> {
+        unimplemented!()
     }
 }
 
-impl ConstantPoolReader for ConstantPool {
+impl ConstantPoolReader for MapCp {
     fn read_raw(&mut self, idx: u16) -> Option<RawConstantEntry> {
         self.entries.get(&idx).cloned()
     }
@@ -170,11 +190,25 @@ impl ConstantPoolReader for ConstantPool {
     }
 }
 
-impl<'a> ConstantPoolWriter for ConstantPool {
+impl ReadWrite for VecCp {
+    fn read_from<T: Read>(_reader: &mut T) -> Result<Self> {
+        unimplemented!()
+    }
+
+    fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
+        self.len.write_to(writer)?;
+        for e in &self.entries {
+            e.write_to(writer)?;
+        }
+        Ok(())
+    }
+}
+
+impl ConstantPoolWriter for VecCp {
     fn insert_raw(&mut self, value: RawConstantEntry) -> u16 {
         let idx = self.len;
         self.len = idx + value.size();
-        self.entries.insert(idx, value);
+        self.entries.push(value);
         idx
     }
 
@@ -184,3 +218,4 @@ impl<'a> ConstantPoolWriter for ConstantPool {
         ret
     }
 }
+

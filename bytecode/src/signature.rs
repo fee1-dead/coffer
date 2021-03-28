@@ -2,7 +2,7 @@
 //!
 //! It also reports the bounds or the explicit type for type arguments of a field. For example, the signatures of these fields are recorded:
 //!
-//! ```ignore
+//! ```java
 //! SomeGenericClass<T> field1 = ...;
 //! // ^ referring type parameter of the class holding this field
 //! SomeGenericClass<Foo> field2 = ...; // Explicit type parameter

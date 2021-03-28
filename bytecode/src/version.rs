@@ -27,6 +27,13 @@ pub struct JavaVersion {
     pub major: MajorVersion
 }
 
+impl JavaVersion {
+    pub const J8: JavaVersion = JavaVersion {
+        minor: 0,
+        major: MajorVersion::J8
+    };
+}
+
 /// Major version of a java class.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, ReadWrite)]
 #[tag_type(u16)]

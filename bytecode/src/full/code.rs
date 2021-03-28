@@ -1053,15 +1053,15 @@ impl ConstantPoolReadWrite for Code {
                 Instruction::Throw => ATHROW.write_to(&mut cursor)?,
                 Instruction::InstanceOf(ty) => {
                     INSTANCEOF.write_to(&mut cursor)?;
-                    cp.insert_ordynamic(ty.clone(), C::insert_class);
+                    cp.insert_ordynamic(ty.clone(), C::insert_class).write_to(&mut cursor)?;
                 }
                 Instruction::CheckCast(ty) => {
                     CHECKCAST.write_to(&mut cursor)?;
-                    cp.insert_ordynamic(ty.clone(), C::insert_class);
+                    cp.insert_ordynamic(ty.clone(), C::insert_class).write_to(&mut cursor)?;
                 }
                 Instruction::New(ty) => {
                     NEW.write_to(&mut cursor)?;
-                    cp.insert_ordynamic(ty.clone(), C::insert_class);
+                    cp.insert_ordynamic(ty.clone(), C::insert_class).write_to(&mut cursor)?;
                 }
                 Instruction::NewArray(_, _) => {}
                 Instruction::Monitor(MonitorOperation::Enter) => MONITORENTER.write_to(&mut cursor)?,
@@ -1101,27 +1101,27 @@ impl ConstantPoolReadWrite for Code {
                         (GetOrPut::Get, MemberType::Static) => GETSTATIC,
                         (GetOrPut::Put, MemberType::Static) => GETSTATIC,
                     }.write_to(&mut cursor)?;
-                    cp.insert_ordynamic(mem.clone(), C::insert_member);
+                    cp.insert_ordynamic(mem.clone(), C::insert_member).write_to(&mut cursor)?;
                 }
                 Instruction::InvokeExact(memty, mem) => {
                     match memty {
                         MemberType::Static => INVOKESTATIC,
                         MemberType::Virtual => INVOKEVIRTUAL
                     }.write_to(&mut cursor)?;
-                    cp.insert_ordynamic(mem.clone(), C::insert_member);
+                    cp.insert_ordynamic(mem.clone(), C::insert_member).write_to(&mut cursor)?;
                 }
                 Instruction::InvokeSpecial(mem) => {
                     INVOKESPECIAL.write_to(&mut cursor)?;
-                    cp.insert_ordynamic(mem.clone(), C::insert_member);
+                    cp.insert_ordynamic(mem.clone(), C::insert_member).write_to(&mut cursor)?;
                 }
                 Instruction::InvokeDynamic(dy) => {
                     INVOKEDYNAMIC.write_to(&mut cursor)?;
-                    cp.insert_dynamic(dy.clone());
+                    cp.insert_dynamic(dy.clone()).write_to(&mut cursor)?;
                     cursor.write_all(&[0, 0])?;
                 }
                 Instruction::InvokeInterface(mem, count) => {
                     INVOKEINTERFACE.write_to(&mut cursor)?;
-                    cp.insert_ordynamic(mem.clone(), C::insert_member);
+                    cp.insert_ordynamic(mem.clone(), C::insert_member).write_to(&mut cursor)?;
                     count.write_to(&mut cursor)?;
                     cursor.write_all(&[0])?;
                 }
@@ -1178,8 +1178,8 @@ impl ConstantPoolReadWrite for Code {
         for j in &jumps {
             last_idx += buf_iter.next().unwrap().len();
             let actual_size = 1 + match *j {
-                Instruction::LookupSwitch { default: _, table } => (4 - (last_idx & 3)) + 8 + table.len() * 8,
-                Instruction::TableSwitch { default: _, low: _, offsets } => (4 - (last_idx & 3)) + 12 + offsets.len() * 4,
+                Instruction::LookupSwitch { default: _, table } => ((4 - ((last_idx+2) & 3)) & 3) + 8 + table.len() * 8,
+                Instruction::TableSwitch { default: _, low: _, offsets } => ((4 - ((last_idx+2) & 3)) & 3) + 12 + offsets.len() * 4,
                 Instruction::Jsr(target) | Instruction::Jump(JumpCondition::Always, target) => {
                     let (buf_idx, buf_off) = get_label!(target);
                     let target_off = if buf_idx != 0 { index_hints[buf_idx + 1] } else { 0 } + buf_off;
@@ -1205,7 +1205,7 @@ impl ConstantPoolReadWrite for Code {
             actual_sizes.push(actual_size);
             actual_indices.push(last_idx);
         }
-        let code_len = (buf_iter.next().unwrap().len() + last_idx - 1) as u32;
+        let code_len = (buf_iter.next().unwrap().len() + last_idx) as u32;
         code_len.write_to(writer)?;
         let mut jumps_iter = jumps.into_iter();
         let mut buf_iter = buf.into_iter();
@@ -1219,7 +1219,7 @@ impl ConstantPoolReadWrite for Code {
                     } else {
                         actual_indices[buf_off - 1] as u32
                     }) + (inner_off as u32);
-                    (that_off as i32).wrapping_sub(*idx as i32) + *act as i32 - 1
+                    (that_off as i32).wrapping_sub(*idx as i32) + *act as i32
                 });
             }
 
@@ -1237,7 +1237,7 @@ impl ConstantPoolReadWrite for Code {
             match jump {
                 Instruction::LookupSwitch { default, table } => {
                     LOOKUPSWITCH.write_to(writer)?;
-                    writer.write_all(&vec![0; 4 - actual_indices[i] % 3])?; // proper 4 byte alignment
+                    writer.write_all(&vec![0; (4 - (actual_indices[i] & 3)) & 3])?; // proper 4 byte alignment
                     write_to!(&resolve_label!(default), writer)?;
 
                     (table.len() as u32).write_to(writer)?;
@@ -1250,7 +1250,7 @@ impl ConstantPoolReadWrite for Code {
                 }
                 Instruction::TableSwitch { default, low, offsets } => {
                     TABLESWITCH.write_to(writer)?;
-                    writer.write_all(&vec![0; 4 - actual_indices[i] % 3])?; // proper 4 byte alignment
+                    writer.write_all(&vec![0; (4 - (actual_indices[i] & 3)) & 3])?; // proper 4 byte alignment
                     write_to!(&resolve_label!(default), writer)?;
                     write_to!(low, writer)?;
                     write_to!(&(low + (offsets.len() - 1) as i32), writer)?;

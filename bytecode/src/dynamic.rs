@@ -120,6 +120,13 @@ impl From<Constant> for OrDynamic<Constant> {
     }
 }
 
+impl From<MemberRef> for OrDynamic<MemberRef> {
+    #[inline]
+    fn from(t: MemberRef) -> Self {
+        OrDynamic::Static(t)
+    }
+}
+
 /// A lazily populated bootstrap method.
 #[derive(Debug)]
 pub struct LazyBsm {
