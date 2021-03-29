@@ -21,12 +21,12 @@ use derive::*;
 
 use proc_macro::TokenStream;
 use syn::{Error, DeriveInput};
-use quote::quote;
-use syn::export::{ToTokens, TokenStream2};
-use proc_macro2::{TokenTree, Spacing};
+use quote::{quote, ToTokens};
+use proc_macro2::{TokenTree, Spacing, TokenStream as TokenStream2};
 
 #[proc_macro]
 pub fn code_block(tokens: TokenStream) -> TokenStream {
+
     code_block_inner(TokenStream2::from(tokens)).unwrap_or_else(|e| e.into_compile_error()).into()
 }
 
@@ -63,7 +63,7 @@ pub fn code_block(tokens: TokenStream) -> TokenStream {
 /// invokevirtual "java/lang/String" "intern" "()V"
 ///
 /// ```
-
+#[allow(unused)] // Allow for now
 fn code_block_inner(tokens: TokenStream2) -> syn::Result<TokenStream2> {
     let mut iter = tokens.into_iter();
     let mut res: Vec<TokenStream2> = Vec::new();

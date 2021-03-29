@@ -17,7 +17,6 @@
 */
 use std::borrow::Cow;
 use std::hash::Hash;
-use std::io::{Read, Write};
 
 use annotation::Annotation;
 pub use code::*;

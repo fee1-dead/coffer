@@ -17,8 +17,7 @@
 
 use syn::*;
 use syn::spanned::Spanned;
-use syn::export::TokenStream2;
-use proc_macro2::{Ident, Span, Group};
+use proc_macro2::{Ident, Span, Group, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned, ToTokens};
 use syn::punctuated::Punctuated;
 
