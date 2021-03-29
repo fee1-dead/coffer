@@ -21,9 +21,9 @@ use std::hash::Hash;
 use annotation::Annotation;
 pub use code::*;
 
-use crate::{ConstantPoolReader, ConstantPoolReadWrite, ConstantPoolWriter, Error, ReadWrite, Result};
-use crate::flags::{FieldFlags, InnerClassFlags, MethodFlags, MethodParameterFlags, ModuleFlags, RequireFlags};
-use crate::full::annotation::{AnnotationValue, FieldTypeAnnotation, MethodTypeAnnotation};
+use crate::{ConstantPoolReadWrite, ReadWrite, Result};
+use crate::flags::{InnerClassFlags, MethodParameterFlags, ModuleFlags, RequireFlags};
+use crate::full::annotation::{FieldTypeAnnotation, MethodTypeAnnotation};
 use crate::prelude::*;
 
 pub mod annotation;
