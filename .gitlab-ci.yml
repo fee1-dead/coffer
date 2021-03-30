@@ -13,6 +13,4 @@ test-job:
     - cargo test
 
 default:
-  image: rust:1.51
-  services:
-    - openjdk:8
+  image: rustlang/rust:nightly
