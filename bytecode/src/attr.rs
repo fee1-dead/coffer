@@ -17,13 +17,13 @@
 use crate::full::*;
 use crate::module::Module;
 use crate::prelude::*;
-use std::fs::read;
 use crate::mod_utf8::{modified_utf8_to_string, string_to_modified_utf8};
 
 /// An unrecognized, unknown raw attribute.
 #[derive(Clone, PartialEq, Debug)]
 pub struct RawAttribute {
     /// Whether to keep this attribute upon writing.
+    ///
     /// Attributes that are related to local variables will default to `false`, whereas newly created attributes will be `true`.
     pub(crate) keep: bool,
     /// The name of this attribute.

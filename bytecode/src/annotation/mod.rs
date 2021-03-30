@@ -9,23 +9,56 @@ use crate::error::Error;
 use std::str::FromStr;
 use std::convert::TryInto;
 
-/// Some values actually becomes ints in the constant pool.
+#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
+pub struct ParameterAnnotations(#[vec_len_type(u16)] Vec<Annotation>);
+
+impl std::ops::Deref for ParameterAnnotations {
+    type Target = Vec<Annotation>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for ParameterAnnotations {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+/// This is an exhaustive enum representing values of an annotation.
 #[derive(Clone, PartialEq, Debug)]
 pub enum AnnotationValue {
+    /// A signed byte. This will get sign-extended into an integer in the constant pool.
     Byte(i8),
-    /// This is a UTF-16 codepoint possibly being a surrougate value. When converting from `char` in rust make sure to check if the length in utf-16 can be 2 or more.
+    /// This is a UTF-16 codepoint possibly being a surrogate value.
+    /// When converting from `char` in rust make sure to check if the length
+    /// in utf-16 can be 2 or more.
     Char(u16),
+    /// A double-precision floating decimal.
     Double(f64),
+    /// A single-precision floating decimal.
     Float(f32),
+    /// A signed 4-byte integer.
     Int(i32),
+    /// A signed 8-byte integer.
     Long(i64),
+    /// A signed 2-byte integer.
     Short(i16),
+    /// Represents a boolean, this will get sign-extended into an integer in the constant pool.
     Boolean(bool),
+    /// Represents a string literal.
     String(Cow<'static, str>),
+    /// A field descriptor representing this enum, and the name of the variant.
     Enum(Type, Cow<'static, str>),
     /// None = void.class
     Class(Option<Type>),
+    /// Represents an annotation.
+    ///
+    /// It is not allowed to refer to itself or the serializer will reach an infinite loop,
+    /// the rust ownership rules won't allow us to do this anyways.
     Annotation(Annotation),
+    /// Represents an array of annotation values.
     Array(Vec<AnnotationValue>)
 }
 
@@ -140,9 +173,12 @@ impl ConstantPoolReadWrite for AnnotationValue {
     }
 }
 
+/// An Annotation that has a name and named values.
 #[derive(Clone, PartialEq, Debug, ConstantPoolReadWrite)]
 pub struct Annotation {
+    /// A field descriptor representing the type of the annotation.
     pub annotation_type: Type,
+    /// Pairs of values that are passed as parameters to this annotation.
     pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
 }
 

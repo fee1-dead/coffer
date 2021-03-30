@@ -27,7 +27,7 @@ use nom::lib::std::borrow::Cow;
 use crate::{ConstantPoolReader, ConstantPoolReadWrite, ConstantPoolWriter, Error, read_from, ReadWrite, try_cp_read, try_cp_read_idx};
 use crate::flags::ExOpFlags;
 use crate::full::{BootstrapMethod, Constant, RawAttribute, Type, VerificationType};
-use crate::full::annotation::CodeTypeAnnotation;
+use crate::annotation::CodeTypeAnnotation;
 use crate::prelude::*;
 
 /// Acts as a unique identifier to the code. Labels should be treated carefully because when labels become invalid (i.e. removed from the code array) it will become an error.

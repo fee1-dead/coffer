@@ -18,34 +18,17 @@
 use std::borrow::Cow;
 use std::hash::Hash;
 
-use annotation::Annotation;
+use crate::annotation::Annotation;
 pub use code::*;
 
-use crate::{ConstantPoolReadWrite, ReadWrite, Result};
-use crate::flags::{InnerClassFlags, MethodParameterFlags, ModuleFlags, RequireFlags};
-use crate::full::annotation::{FieldTypeAnnotation, MethodTypeAnnotation};
+use crate::{ConstantPoolReadWrite, ReadWrite};
+use crate::flags::{InnerClassFlags};
 use crate::prelude::*;
 
-pub mod annotation;
 mod code;
 
 
-#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
-pub struct ParameterAnnotations(#[vec_len_type(u16)] Vec<Annotation>);
 
-impl std::ops::Deref for ParameterAnnotations {
-    type Target = Vec<Annotation>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for ParameterAnnotations {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, ConstantPoolReadWrite)]
 #[tag_type(u8)]

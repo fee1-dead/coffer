@@ -64,10 +64,12 @@ pub mod rw;
 pub mod module;
 pub mod cp;
 pub mod dynamic;
+pub mod annotation;
 
 #[cfg(test)]
 mod tests;
 pub(crate) mod insn;
+
 
 pub use rw::*;
 

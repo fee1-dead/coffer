@@ -2,19 +2,25 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use crate::{ConstantPoolReadWrite, ReadWrite};
-use crate::full::code::{Catch, Label};
+use crate::full::{Catch, Label};
 
 use super::AnnotationValue;
 use super::super::Type;
 
+/// Represents where a type annotation is annotated in a class.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ReadWrite)]
 #[tag_type(u8)]
 pub enum ClassTypeAnnotationTarget {
+    /// The type annotation is before a generic type parameter at an index.
     #[tag(0)]
     GenericTypeParameter(u8),
+    /// The type annotation is before the type after an `extends` or `implements` clause.
+    ///
     /// `u16::MAX` is `extends`, others are indices of `implements`
     #[tag(0x10)]
     ExtendsImplementsClause(u16),
+    /// The type annotation is applied to the bound on a generic type parameter.
+    ///
     /// Type parameter index, and then bound index
     #[tag(0x11)]
     GenericTypeParameterBound(u8, u8),
