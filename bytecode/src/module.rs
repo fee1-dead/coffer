@@ -20,7 +20,7 @@
 //! and the class must have an Module attribute.
 
 use crate::flags::{ModuleFlags, RequireFlags};
-use crate::full::{Export, Open};
+use crate::code::{Export, Open};
 use crate::prelude::*;
 
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]

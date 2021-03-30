@@ -37,12 +37,12 @@ extern crate bitflags;
 #[macro_use]
 extern crate coffer_macros;
 
-use prelude::*;
-
-pub use coffer_macros::*;
-
 use std::borrow::Cow;
 use std::io::{Read, Write};
+
+pub use coffer_macros::*;
+use prelude::*;
+pub use rw::*;
 
 pub use crate::error::Error;
 pub use crate::error::Result;
@@ -69,9 +69,8 @@ pub mod annotation;
 #[cfg(test)]
 mod tests;
 pub(crate) mod insn;
+mod code;
 
-
-pub use rw::*;
 
 #[derive(Debug, Clone)]
 pub struct Class {

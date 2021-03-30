@@ -18,7 +18,6 @@
 use std::convert::TryFrom;
 use std::rc::Rc;
 
-use crate::full::*;
 use crate::prelude::*;
 
 /// The generic read and write trait. This indicates a structure can be read without additional contextual information.

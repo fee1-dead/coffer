@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use crate::{ConstantPoolReadWrite, ReadWrite};
-use crate::full::{Catch, Label};
+use crate::code::{Catch, Label};
 
 use super::AnnotationValue;
 use super::super::Type;

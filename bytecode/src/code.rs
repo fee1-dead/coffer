@@ -26,7 +26,8 @@ use nom::lib::std::borrow::Cow;
 
 use crate::{ConstantPoolReader, ConstantPoolReadWrite, ConstantPoolWriter, Error, read_from, ReadWrite, try_cp_read, try_cp_read_idx};
 use crate::flags::ExOpFlags;
-use crate::full::{BootstrapMethod, Constant, RawAttribute, Type, VerificationType};
+
+use crate::full::VerificationType;
 use crate::annotation::CodeTypeAnnotation;
 use crate::prelude::*;
 
@@ -436,17 +437,17 @@ pub struct Code {
 impl ConstantPoolReadWrite for Code {
     fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> crate::Result<Self, Error> {
         use crate::insn::{Instruction as I, Wide, SwitchEntry, TableSwitch as TblS};
-        use crate::full::Instruction::*;
-        use crate::full::LoadOrStore::*;
-        use crate::full::GetOrPut::*;
-        use crate::full::StackValueType::*;
-        use crate::full::MemberType::*;
-        use crate::full::{IntOperation as IOp, FloatOperation as FOp};
+        use crate::code::Instruction::*;
+        use crate::code::LoadOrStore::*;
+        use crate::code::GetOrPut::*;
+        use crate::code::StackValueType::*;
+        use crate::code::MemberType::*;
+        use crate::code::{IntOperation as IOp, FloatOperation as FOp, Label as Lbl, LocalVariable as LocalVar};
         use std::io::{SeekFrom, Seek};
 
         struct Labeler<'a, T: ConstantPoolReader> {
             inner: &'a mut T,
-            labels: HashMap<u32, crate::full::Label>,
+            labels: HashMap<u32, Lbl>,
             catches: &'a [Catch],
         }
         impl<'a, T: ConstantPoolReader> ConstantPoolReader for Labeler<'a, T> {
@@ -462,11 +463,11 @@ impl ConstantPoolReadWrite for Code {
                 self.inner.bootstrap_methods(bsms)
             }
 
-            fn get_label(&mut self, idx: u32) -> crate::full::Label {
+            fn get_label(&mut self, idx: u32) -> Lbl {
                 if let Some(v) = self.labels.get(&idx) {
                     *v
                 } else {
-                    let l = crate::full::Label(self.labels.len() as u32);
+                    let l = Lbl(self.labels.len() as u32);
                     self.labels.insert(idx, l);
                     l
                 }
@@ -813,9 +814,9 @@ impl ConstantPoolReadWrite for Code {
         let numattrs = u16::read_from(reader)?;
         let mut attrs = Vec::with_capacity(numattrs as usize);
         let mut to_insert: std::collections::BTreeMap<usize, Vec<Instruction>> = std::collections::BTreeMap::new();
-        let mut local_vars: HashMap<LocalVarKey, crate::full::LocalVariable> = HashMap::new();
+        let mut local_vars: HashMap<LocalVarKey, LocalVar> = HashMap::new();
         #[derive(Hash, Eq, PartialEq)]
-        struct LocalVarKey(crate::full::Label, crate::full::Label, u16, Cow<'static, str>);
+        struct LocalVarKey(Lbl, Lbl, u16, Cow<'static, str>);
         for _ in 0..numattrs {
             match CodeAttr::read_from(&mut labeler, reader)? {
                 CodeAttr::LineNumberTable(ln) => {
@@ -832,7 +833,7 @@ impl ConstantPoolReadWrite for Code {
                         if let Some(v) = local_vars.get_mut(&key) {
                             v.descriptor = Some(l.descriptor);
                         } else {
-                            local_vars.insert(key, crate::full::LocalVariable {
+                            local_vars.insert(key, LocalVar {
                                 start,
                                 end,
                                 name: l.name,
@@ -851,7 +852,7 @@ impl ConstantPoolReadWrite for Code {
                         if let Some(v) = local_vars.get_mut(&key) {
                             v.signature = Some(l.signature);
                         } else {
-                            local_vars.insert(key, crate::full::LocalVariable {
+                            local_vars.insert(key, LocalVar {
                                 start,
                                 end,
                                 name: l.name,

@@ -17,7 +17,7 @@
 //! Members of a java class
 //!
 //! They can be fields or methods.
-use crate::full::{Code};
+use crate::code::Code;
 use crate::annotation::{Annotation, AnnotationValue, FieldTypeAnnotation, MethodTypeAnnotation, ParameterAnnotations};
 use crate::prelude::*;
 

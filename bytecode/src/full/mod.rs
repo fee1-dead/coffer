@@ -18,17 +18,10 @@
 use std::borrow::Cow;
 use std::hash::Hash;
 
-use crate::annotation::Annotation;
-pub use code::*;
-
 use crate::{ConstantPoolReadWrite, ReadWrite};
-use crate::flags::{InnerClassFlags};
+use crate::flags::InnerClassFlags;
 use crate::prelude::*;
-
-mod code;
-
-
-
+use crate::code::Label;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, ConstantPoolReadWrite)]
 #[tag_type(u8)]

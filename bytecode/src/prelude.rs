@@ -29,4 +29,5 @@ pub use crate::flags::*;
 pub use crate::rw::*;
 pub use crate::cp::*;
 pub use crate::dynamic::*;
+pub use crate::code::*;
 pub use coffer_macros::*;
