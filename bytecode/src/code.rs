@@ -354,8 +354,9 @@ pub struct LocalVariable {
     pub index: u16,
 }
 
+/// A line number for debugging, to use this in code, you can use the [`LineNumber`](crate::code::Instruction::LineNumber) variant.
 #[derive(Clone, Copy, Eq, PartialEq, ReadWrite, Debug)]
-pub struct LineNumber(u16, u16);
+pub struct LineNumber(pub u16, pub u16);
 
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
 struct LocalVar {
@@ -1474,39 +1475,4 @@ impl ConstantPoolReadWrite for RawFrame {
         }
         Ok(())
     }
-}
-
-#[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
-pub struct Export {
-    #[str_type(Package)]
-    pub package: Cow<'static, str>,
-    #[use_normal_rw]
-    pub flags: ExOpFlags,
-    #[vec_len_type(u16)]
-    #[str_type(Module)]
-    pub to: Vec<Cow<'static, str>>,
-}
-
-impl Export {
-    /// Creates a new instance of [`Export`].
-    ///
-    /// [`Export`]: Export
-    pub fn new<ToStr: Into<Cow<'static, str>>, ToOp: Into<ExOpFlags>, ToVec: Into<Vec<Cow<'static, str>>>>(pkg: ToStr, flags: ToOp, to: ToVec) -> Self {
-        Self {
-            package: pkg.into(),
-            flags: flags.into(),
-            to: to.into()
-        }
-    }
-}
-
-#[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
-pub struct Open {
-    #[str_type(Package)]
-    pub package: Cow<'static, str>,
-    #[use_normal_rw]
-    pub flags: ExOpFlags,
-    #[vec_len_type(u16)]
-    #[str_type(Module)]
-    pub to: Vec<Cow<'static, str>>,
 }

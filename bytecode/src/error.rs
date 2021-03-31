@@ -124,7 +124,7 @@ pub mod backtrace {
             Invalid(st: &'static str, cow: Cow<'static, str>),
             /// Creates a new instance of [`ErrorTrace`].
             ///
-            /// This is intentionally named the same as the [ErrorBase enum variant] so one can use [`Error::MUTF`] in any context.
+            /// This is intentionally named the same as the [ErrorBase enum variant] so one can use `Error::MUTF` in any context.
             ///
             /// [`ErrorTrace`]: ErrorTrace
             /// [ErrorBase enum variant]: ErrorBase::MUTF

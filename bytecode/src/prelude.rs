@@ -20,6 +20,7 @@ pub use std::borrow::Cow;
 pub use std::io::{Read, Write};
 pub use crate::{Result, Error, read_from, write_to, try_cp_read};
 pub use crate::member::*;
+pub use crate::module::*;
 pub use crate::ty::*;
 pub use crate::signature::*;
 pub use crate::loadable::*;

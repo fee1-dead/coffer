@@ -17,10 +17,9 @@
 //! A Module is not a class, but it is still represented by a .class file.
 //!
 //! Modules exist for Java 9+, to make your class recognized as a module, the module bit must be set
-//! and the class must have an Module attribute.
+//! for the access and the class must have an Module attribute.
 
 use crate::flags::{ModuleFlags, RequireFlags};
-use crate::code::{Export, Open};
 use crate::prelude::*;
 
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
@@ -63,4 +62,39 @@ pub struct Module {
     pub provides: Vec<Provide>
 }
 
+
+#[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
+pub struct Export {
+    #[str_type(Package)]
+    pub package: Cow<'static, str>,
+    #[use_normal_rw]
+    pub flags: ExOpFlags,
+    #[vec_len_type(u16)]
+    #[str_type(Module)]
+    pub to: Vec<Cow<'static, str>>,
+}
+
+impl Export {
+    /// Creates a new instance of [`Export`].
+    ///
+    /// [`Export`]: Export
+    pub fn new<ToStr: Into<Cow<'static, str>>, ToOp: Into<ExOpFlags>, ToVec: Into<Vec<Cow<'static, str>>>>(pkg: ToStr, flags: ToOp, to: ToVec) -> Self {
+        Self {
+            package: pkg.into(),
+            flags: flags.into(),
+            to: to.into()
+        }
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
+pub struct Open {
+    #[str_type(Package)]
+    pub package: Cow<'static, str>,
+    #[use_normal_rw]
+    pub flags: ExOpFlags,
+    #[vec_len_type(u16)]
+    #[str_type(Module)]
+    pub to: Vec<Cow<'static, str>>,
+}
 

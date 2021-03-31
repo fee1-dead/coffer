@@ -66,10 +66,14 @@ pub mod cp;
 pub mod dynamic;
 pub mod annotation;
 
+/// Structures that represent instructions that will be
+/// executed when a method is called.
+pub mod code;
+
 #[cfg(test)]
 mod tests;
 pub(crate) mod insn;
-mod code;
+
 
 
 #[derive(Debug, Clone)]
