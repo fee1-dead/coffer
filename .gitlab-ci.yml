@@ -1,0 +1,16 @@
+stages:
+  - build
+  - test
+
+build-job:
+  stage: build
+  script:
+    - cargo build
+
+test-job:
+  stage: test
+  script:
+    - cargo test
+
+default:
+  image: rustlang/rust:nightly

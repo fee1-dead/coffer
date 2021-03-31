@@ -15,11 +15,8 @@
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
 use crate::Class;
-use crate::full::{Code, MemberType};
-use crate::full::Instruction::*;
+use crate::code::{Code, MemberType, MemberType::Static, GetOrPut::Get, Instruction::*};
 use crate::loadable::Constant;
-use crate::full::GetOrPut::Get;
-use crate::full::MemberType::Static;
 use crate::member::{MemberRef, Method, MethodAttribute};
 use crate::prelude::{Type, JavaVersion};
 use crate::flags::{ClassFlags, MethodFlags};

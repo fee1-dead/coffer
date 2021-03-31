@@ -21,12 +21,10 @@ mod insn;
 mod exec;
 
 mod code {
-    use crate::full::{Code};
+
     use crate::{ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite, Class};
-    use std::io::{Cursor, Read, Seek, SeekFrom, Write};
-    use crate::full::Instruction::*;
-    use crate::full::StackValueType::One;
-    use crate::full::LocalType::Reference;
+    use std::io::{Cursor, Read, Write};
+    use crate::code::{Instruction::*, Instruction::Label as Lbl, StackValueType::One, LocalType::Reference, Label};
     use crate::prelude::*;
     use std::borrow::Cow;
     use std::collections::HashMap;
@@ -43,7 +41,7 @@ mod code {
             unreachable!()
         }
 
-        fn bootstrap_methods(&mut self, bsms: &[BootstrapMethod]) -> Result<()> {
+        fn bootstrap_methods(&mut self, _bsms: &[BootstrapMethod]) -> Result<()> {
             unreachable!()
         }
     }
@@ -75,7 +73,7 @@ mod code {
             self.1.push(ptr);
         }
 
-        fn bootstrap_methods(&mut self, bsms: &[BootstrapMethod]) -> Result<()> {
+        fn bootstrap_methods(&mut self, _bsms: &[BootstrapMethod]) -> Result<()> {
             Ok(())
         } // we are using these for testing, so we don't panic here in case a bsm was referenced.
     }
@@ -127,9 +125,9 @@ mod code {
     }
     #[test]
     fn code_writing() {
-        let lbl1 = crate::full::Label(0);
-        let lbl2 = crate::full::Label(1);
-        let lbl3 = crate::full::Label(2);
+        let lbl1 = Label(0);
+        let lbl2 = Label(1);
+        let lbl3 = Label(2);
         let mut buffer = Cursor::new(Vec::new());
         let mut cp = arr_cp([].as_ref());
         Code {
@@ -142,9 +140,9 @@ mod code {
                     offsets: vec![lbl2, lbl3]
                 },
                 NoOp, NoOp, NoOp, NoOp, NoOp, NoOp,
-                Label(lbl1), PushNull, Return(Some(Reference)), NoOp, NoOp,
-                Label(lbl2), PushNull, Return(Some(Reference)), NoOp, NoOp,
-                Label(lbl3), PushNull, Return(Some(Reference))
+                Lbl(lbl1), PushNull, Return(Some(Reference)), NoOp, NoOp,
+                Lbl(lbl2), PushNull, Return(Some(Reference)), NoOp, NoOp,
+                Lbl(lbl3), PushNull, Return(Some(Reference))
             ],
             catches: vec![],
             attrs: vec![]
@@ -195,9 +193,9 @@ mod code {
             0, 0,
             0, 0
         ];
-        let lbl1 = crate::full::Label(0);
-        let lbl2 = crate::full::Label(1);
-        let lbl3 = crate::full::Label(2);
+        let lbl1 = Label(0);
+        let lbl2 = Label(1);
+        let lbl3 = Label(2);
         assert_eq!(Code::read_from(&mut cp, &mut Cursor::new(bytes)).unwrap(), Code {
             max_stack: 255,
             max_locals: 254,
@@ -208,9 +206,9 @@ mod code {
                     offsets: vec![lbl2, lbl3]
                 },
                 NoOp, NoOp, NoOp, NoOp, NoOp, NoOp,
-                Label(lbl1), PushNull, Return(Some(Reference)), NoOp, NoOp,
-                Label(lbl2), PushNull, Return(Some(Reference)), NoOp, NoOp,
-                Label(lbl3), PushNull, Return(Some(Reference))
+                Lbl(lbl1), PushNull, Return(Some(Reference)), NoOp, NoOp,
+                Lbl(lbl2), PushNull, Return(Some(Reference)), NoOp, NoOp,
+                Lbl(lbl3), PushNull, Return(Some(Reference))
             ],
             catches: vec![],
             attrs: vec![]
