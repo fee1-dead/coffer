@@ -22,7 +22,7 @@ use crate::prelude::{Type, JavaVersion};
 use crate::flags::{ClassFlags, MethodFlags};
 use crate::prelude::*;
 use tempfile::{tempdir, TempDir};
-use std::process::{Command, Child, Stdio};
+use std::process::{Command, Stdio};
 use std::io::BufWriter;
 use std::fs::File;
 
@@ -36,7 +36,21 @@ macro_rules! ignored_tests {
     };
 }
 
-fn execute(code: Code) -> crate::Result<(TempDir, Child)> {
+struct Execution(TempDir, Command);
+
+impl Execution {
+    fn case(&mut self, success: bool, stdin: impl AsRef<[u8]>, stdout: impl AsRef<[u8]>, stderr: impl AsRef<[u8]>) -> Result<&mut Self> {
+        let mut child = self.1.spawn()?;
+        child.stdin.take().expect("Expected stdin").write_all(stdin.as_ref())?;
+        let out = child.wait_with_output()?;
+        assert_eq!(out.status.success(), success);
+        assert_eq!(out.stderr, stderr.as_ref());
+        assert_eq!(out.stdout, stdout.as_ref());
+        Ok(self)
+    }
+}
+
+fn bake(code: Code) -> crate::Result<Execution> {
     let cls = Class {
         version: JavaVersion::J8,
         access: ClassFlags::ACC_FINAL,
@@ -62,16 +76,17 @@ fn execute(code: Code) -> crate::Result<(TempDir, Child)> {
     let mut cmd = Command::new("java");
     cmd.current_dir(dir.path());
     cmd.arg("Test");
+    cmd.stdin(Stdio::piped());
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
-    Ok((dir, cmd.spawn()?)) // Pass the dir back so it does not get deleted
+    Ok(Execution(dir, cmd)) // Pass the dir back so it does not get deleted
 }
 
 // These tests are ignored by default.
 // To enable them, run cargo test -- --include-ignored.
 ignored_tests! {
     fn execute_helloworld() -> crate::Result<()> {
-        let (_dir, child) = execute(Code {
+        let mut exec = bake(Code {
             max_locals: 1,
             max_stack: 2,
             code: vec![
@@ -93,10 +108,7 @@ ignored_tests! {
             attrs: Default::default(),
             catches: Default::default()
         })?;
-        let out = child.wait_with_output()?;
-        assert!(out.status.success());
-        assert_eq!(&out.stderr, &[]);
-        assert_eq!(&out.stdout, b"Hello, World!\n");
+        exec.case(true, [], "Hello, World!", [])?;
         Ok(())
     }
 }
