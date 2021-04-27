@@ -47,34 +47,32 @@ pub use rw::*;
 pub use crate::error::Error;
 pub use crate::error::Result;
 
+pub mod annotation;
+pub mod attr;
+pub mod code;
 pub mod constants;
+pub mod cp;
+pub mod dynamic;
 pub mod error;
+pub mod flags;
 
 pub mod mod_utf8;
-pub mod full;
-pub mod flags;
+pub mod module;
 pub mod member;
 pub mod prelude;
 pub mod ty;
 pub mod signature;
 pub mod loadable;
-pub mod attr;
+
 pub mod version;
 pub mod rw;
-pub mod module;
-pub mod cp;
-pub mod dynamic;
-pub mod annotation;
 
-/// Structures that represent instructions that will be
-/// executed when a method is called.
-pub mod code;
+
+
 
 #[cfg(test)]
 mod tests;
 pub(crate) mod insn;
-
-
 
 #[derive(Debug, Clone)]
 pub struct Class {

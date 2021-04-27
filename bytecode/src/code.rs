@@ -14,20 +14,21 @@
  *     You should have received a copy of the GNU Lesser General Public License
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
+
+//! Structures that represent instructions that will be
+//! executed when a method is called.
+
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::io::{Cursor, Read, Write};
 use std::rc::Rc;
 use std::str::FromStr;
 
-use indexmap::map::IndexMap;
 use nom::lib::std::borrow::Cow;
+use indexmap::map::IndexMap;
 
 use crate::{ConstantPoolReader, ConstantPoolReadWrite, ConstantPoolWriter, Error, read_from, ReadWrite, try_cp_read, try_cp_read_idx};
-use crate::flags::ExOpFlags;
-
-use crate::full::VerificationType;
 use crate::annotation::CodeTypeAnnotation;
 use crate::prelude::*;
 
@@ -131,10 +132,11 @@ impl From<JumpCondition> for u8 {
 }
 
 impl std::ops::Neg for JumpCondition {
-    type Output = Self;
+    type Output = Option<JumpCondition>;
 
-    fn neg(self) -> Self {
-        match self {
+    #[inline]
+    fn neg(self) -> Self::Output {
+        Some(match self {
             JumpCondition::ReferenceEquals => JumpCondition::ReferenceNotEquals,
             JumpCondition::ReferenceNotEquals => JumpCondition::ReferenceEquals,
             JumpCondition::IntegerNotEquals => JumpCondition::IntegerEquals,
@@ -151,13 +153,13 @@ impl std::ops::Neg for JumpCondition {
             JumpCondition::IntegerGreaterThanOrEqualsZero => JumpCondition::IntegerLessThanZero,
             JumpCondition::IsNull => JumpCondition::IsNonNull,
             JumpCondition::IsNonNull => JumpCondition::IsNull,
-            JumpCondition::Always => unsafe { std::hint::unreachable_unchecked() }
-        }
+            JumpCondition::Always => return None
+        })
     }
 }
 
 impl std::ops::Neg for &JumpCondition {
-    type Output = JumpCondition;
+    type Output = Option<JumpCondition>;
 
     fn neg(self) -> Self::Output {
         (*self).neg()
@@ -295,14 +297,14 @@ pub enum Instruction {
     PushNull,
     /// Push a constant value to the current stack.
     Push(OrDynamic<Constant>),
-    /// Duplicate one or two stack values and insert them zero or more values down.
-    ///
-    /// `Duplicate(One, None)` is equivalent to `DUP`
-    ///
-    /// `Duplicate(Two, Some(Two))` is equivalent to `DUP2_X2`
-    Duplicate(StackValueType, Option<StackValueType>),
-    /// Pop one or two values. Use `Pop(Two)` for double/long values.
-    Pop(StackValueType),
+    Dup,
+    DupX1,
+    DupX2,
+    Dup2,
+    Dup2X1,
+    Dup2X2,
+    Pop1,
+    Pop2,
     Jump(JumpCondition, Label),
     CompareLongs,
     CompareFloats(FloatType, NaNBehavior),
@@ -521,15 +523,15 @@ impl ConstantPoolReadWrite for Code {
                 I::IInc(idx, val) => IntIncrement(idx as u16, val as i16),
                 I::Wide(Wide::IInc(idx, val)) => IntIncrement(idx, val),
 
-                I::Pop => Pop(One),
-                I::Pop2 => Pop(Two),
+                I::Pop => Pop1,
+                I::Pop2 => Pop2,
 
-                I::Dup => Duplicate(One, None),
-                I::Dup2 => Duplicate(Two, None),
-                I::Dupx1 => Duplicate(One, Some(One)),
-                I::Dupx2 => Duplicate(One, Some(Two)),
-                I::Dup2x1 => Duplicate(Two, Some(One)),
-                I::Dup2x2 => Duplicate(Two, Some(Two)),
+                I::Dup => Dup,
+                I::Dup2 => Dup2,
+                I::Dupx1 => DupX1,
+                I::Dupx2 => DupX2,
+                I::Dup2x1 => Dup2X1,
+                I::Dup2x2 => Dup2X2,
 
                 I::IConstM1 => push(Constant::I32(-1)),
                 I::IConst0 => push(Constant::I32(0)),
@@ -969,14 +971,14 @@ impl ConstantPoolReadWrite for Code {
                     }
                 }
 
-                Instruction::Duplicate(StackValueType::One, None) => DUP.write_to(&mut cursor)?,
-                Instruction::Duplicate(StackValueType::One, Some(StackValueType::One)) => DUP_X1.write_to(&mut cursor)?,
-                Instruction::Duplicate(StackValueType::One, Some(StackValueType::Two)) => DUP_X2.write_to(&mut cursor)?,
-                Instruction::Duplicate(StackValueType::Two, None) => DUP2.write_to(&mut cursor)?,
-                Instruction::Duplicate(StackValueType::Two, Some(StackValueType::One)) => DUP2_X1.write_to(&mut cursor)?,
-                Instruction::Duplicate(StackValueType::Two, Some(StackValueType::Two)) => DUP2_X2.write_to(&mut cursor)?,
-                Instruction::Pop(StackValueType::One) => POP.write_to(&mut cursor)?,
-                Instruction::Pop(StackValueType::Two) => POP2.write_to(&mut cursor)?,
+                Instruction::Dup => DUP.write_to(&mut cursor)?,
+                Instruction::DupX1 => DUP_X1.write_to(&mut cursor)?,
+                Instruction::DupX2 => DUP_X2.write_to(&mut cursor)?,
+                Instruction::Dup2 => DUP2.write_to(&mut cursor)?,
+                Instruction::Dup2X1 => DUP2_X1.write_to(&mut cursor)?,
+                Instruction::Dup2X2 => DUP2_X2.write_to(&mut cursor)?,
+                Instruction::Pop1 => POP.write_to(&mut cursor)?,
+                Instruction::Pop2 => POP2.write_to(&mut cursor)?,
                 Instruction::CompareLongs => LCMP.write_to(&mut cursor)?,
                 Instruction::CompareFloats(FloatType::Float, NaNBehavior::ReturnsOne) => FCMPG.write_to(&mut cursor)?,
                 Instruction::CompareFloats(FloatType::Float, NaNBehavior::ReturnsNegativeOne) => FCMPL.write_to(&mut cursor)?,
@@ -1283,7 +1285,7 @@ impl ConstantPoolReadWrite for Code {
                         u8::write_to(&(*cond).into(), writer)?;
                         write_to!(&off, writer)?;
                     }, {
-                        u8::write_to(&(-cond).into(), writer)?;
+                        u8::write_to(&(-cond).unwrap_or_else(|| unsafe { std::hint::unreachable_unchecked() }).into(), writer)?;
                         write_to!(&5i32, writer)?;
                         GOTO_W.write_to(writer)?;
                         write_to!(&off, writer)?;
@@ -1294,10 +1296,10 @@ impl ConstantPoolReadWrite for Code {
             }
             writer.write_all(&bytes)?;
         }
+
         struct Labeler<'a, T: ConstantPoolWriter>(&'a Vec<usize>, &'a HashMap<Label, (usize, usize)>, &'a mut T, &'a Vec<Catch>);
 
         impl<'a, T: ConstantPoolWriter> ConstantPoolWriter for Labeler<'a, T> {
-
             #[inline]
             fn insert_raw(&mut self, value: RawConstantEntry) -> u16 {
                 self.2.insert_raw(value)
@@ -1383,6 +1385,19 @@ impl ConstantPoolReadWrite for Code {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Hash, Clone, ConstantPoolReadWrite)]
+#[tag_type(u8)]
+pub enum VerificationType {
+    Top, Int, Float, Long, Double, Null, UninitializedThis, Object(#[str_type(Class)] Cow<'static, str>),
+    /// Following the label, must be a `NEW` instruction.
+    UninitializedVariable(Label)
+}
+
+impl VerificationType {
+    pub const fn is_wide(&self) -> bool {
+        matches!(self, VerificationType::Double | VerificationType::Long)
+    }
+}
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum RawFrame {

@@ -20,7 +20,7 @@ use crate::loadable::Constant;
 use crate::member::{MemberRef, Method, MethodAttribute};
 use crate::prelude::{Type, JavaVersion};
 use crate::flags::{ClassFlags, MethodFlags};
-use crate::prelude::*;
+use crate::prelude::{*, Label as Lbl};
 use tempfile::{tempdir, TempDir};
 use std::process::{Command, Stdio};
 use std::io::BufWriter;
@@ -99,7 +99,7 @@ ignored_tests! {
                 Push(Constant::string("Hello, World!").into()),
                 InvokeExact(MemberType::Virtual, MemberRef {
                     owner: "java/io/PrintStream".into(),
-                    name: "println".into(),
+                    name: "print".into(),
                     descriptor: Type::method([Type::reference("java/lang/String")], None),
                     itfs: false
                 }.into()),
@@ -109,6 +109,27 @@ ignored_tests! {
             catches: Default::default()
         })?;
         exec.case(true, [], "Hello, World!", [])?;
+        Ok(())
+    }
+    fn execute_tableswitch() -> crate::Result<()> {
+        let label1 = Lbl(0);
+        let label2 = Lbl(1);
+        let mut exec = bake(Code {
+            max_locals: 1,
+            max_stack: 2,
+            code: vec![
+                Push(Constant::string("Hello, World!").into()),
+                InvokeExact(MemberType::Virtual, MemberRef {
+                    owner: "java/io/PrintStream".into(),
+                    name: "println".into(),
+                    descriptor: Type::method([Type::reference("java/lang/String")], None),
+                    itfs: false
+                }.into()),
+                Return(None)
+            ],
+            attrs: Default::default(),
+            catches: Default::default()
+        });
         Ok(())
     }
 }

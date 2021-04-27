@@ -14,7 +14,6 @@
  *     You should have received a copy of the GNU Lesser General Public License
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::full::*;
 use crate::module::Module;
 use crate::prelude::*;
 use crate::mod_utf8::{modified_utf8_to_string, string_to_modified_utf8};
@@ -90,6 +89,20 @@ impl ReadWrite for SourceDebugExtension {
         writer.write_all(&string_to_modified_utf8(&self.0))?;
         Ok(())
     }
+}
+
+#[derive(Eq, PartialEq, Debug, Clone, ConstantPoolReadWrite)]
+pub struct InnerClass {
+    #[str_type(Class)]
+    pub inner_fqname: Cow<'static, str>,
+    #[str_optional]
+    #[str_type(Class)]
+    pub outer_fqname: Option<Cow<'static, str>>,
+    /// None if the inner class is an anonymous class.
+    #[str_optional]
+    pub inner_name: Option<Cow<'static, str>>,
+    #[use_normal_rw]
+    pub inner_access: InnerClassFlags
 }
 
 #[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]

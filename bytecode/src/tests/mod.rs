@@ -134,7 +134,7 @@ mod code {
             max_stack: 255,
             max_locals: 254,
             code: vec![
-                NoOp, PushNull, Pop(One), Push(OrDynamic::Static(Constant::I32(123))), TableSwitch {
+                NoOp, PushNull, Pop1, Push(OrDynamic::Static(Constant::I32(123))), TableSwitch {
                     default: lbl1,
                     low: 1,
                     offsets: vec![lbl2, lbl3]
@@ -200,7 +200,7 @@ mod code {
             max_stack: 255,
             max_locals: 254,
             code: vec![
-                NoOp, PushNull, Pop(One), Push(OrDynamic::Static(Constant::I32(123))), TableSwitch {
+                NoOp, PushNull, Pop1, Push(OrDynamic::Static(Constant::I32(123))), TableSwitch {
                     default: lbl1,
                     low: 1,
                     offsets: vec![lbl2, lbl3]

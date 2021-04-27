@@ -14,19 +14,38 @@
     You should have received a copy of the GNU Lesser General Public License
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
-use thiserror::Error;
-use std::convert::TryFrom;
 
+//! Module for converting between Java's Modified UTF-8 and UTF-8.
+//!
+//! Rust uses UTF-8 natively, so a conversion is needed for every string in Java.
+//!
+//! An UTF-8 codepoint might be 1, 2, or 4 bytes, but for MUTF-8 it might be 1, 3, or 6.
+//! Another important thing is that there will never be a NUL byte in a string.
+//!
+//! Refer to the [JVM Spec](https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-4.html#jvms-4.4.7) for more info.
+
+use std::convert::TryFrom;
+use thiserror::Error;
+
+/// An error encountered during conversion.
 #[derive(Debug, Error)]
 pub enum MUTFError {
+    /// The code point is 3 or 6 bytes long if the MUTF is valid,
+    /// however it reached end of string, resulting in a partial
+    /// code point at the end.
     #[error("Malformed Input: Partial character at end")]
     PartialCharacterAtEnd,
+
+    /// The code point at index is invalid.
     #[error("Malformed Input around byte: {0}")]
     AroundByte(usize),
+
+    /// The modified utf-8 buffer becomes an invalid UTF-8 sequence when decoded.
     #[error(transparent)]
     UTF8Error(#[from] std::str::Utf8Error),
 }
 
+/// Converts a modified utf-8 sequence to an owned rust string.
 pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MUTFError> {
     let mut count: usize = 0;
 
@@ -108,6 +127,10 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MUTFError> {
     Ok(str)
 }
 
+/// Converts a string to modified UTF-8.
+///
+/// This will never error because `&str` is guarenteed to be in UTF-8,
+/// therefore it will always be able to convert to modified UTF-8.
 pub fn string_to_modified_utf8(str: &str) -> Vec<u8> {
     let mut utflen: usize = 0;
     for c in str.chars() {

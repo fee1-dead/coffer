@@ -16,11 +16,16 @@
  */
 //! A Module is not a class, but it is still represented by a .class file.
 //!
-//! Modules exist for Java 9+, to make your class recognized as a module, the module bit must be set
-//! for the access and the class must have an Module attribute.
+//! Modules exist for Java 9+, to make your class recognized as a module,
+//! the module bit must be set for the access and
+//! the class must have an Module attribute.
+//!
+//! See [the Java Language Spec](https://docs.oracle.com/javase/specs/jls/se16/html/jls-7.html#jls-7.7) and
+//! [the JVM Spec](https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-4.html#jvms-4.7.25) for more details.
 
 use crate::flags::{ModuleFlags, RequireFlags};
 use crate::prelude::*;
+
 
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
 pub struct Require {
