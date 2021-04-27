@@ -443,7 +443,6 @@ impl ConstantPoolReadWrite for Code {
         use crate::code::Instruction::*;
         use crate::code::LoadOrStore::*;
         use crate::code::GetOrPut::*;
-        use crate::code::StackValueType::*;
         use crate::code::MemberType::*;
         use crate::code::{IntOperation as IOp, FloatOperation as FOp, Label as Lbl, LocalVariable as LocalVar};
         use std::io::{SeekFrom, Seek};

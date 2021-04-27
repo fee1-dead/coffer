@@ -271,7 +271,7 @@ pub trait ConstantPoolReader {
     fn read_invokedynamic(&mut self, idx: u16) -> Option<Dynamic> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::InvokeDynamic(s, a)) =>  {
-                let mut cell = Rc::new(LazyBsm::new());
+                let cell = Rc::new(LazyBsm::new());
                 let (name, descriptor) = self.read_nameandtype(a)?;
                 self.resolve_later(s, cell.clone());
                 Some(Dynamic {
@@ -285,7 +285,7 @@ pub trait ConstantPoolReader {
     fn read_dynamic(&mut self, idx: u16) -> Option<Dynamic> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::Dynamic(s, a)) =>  {
-                let mut cell = Rc::new(LazyBsm::new());
+                let cell = Rc::new(LazyBsm::new());
                 let (name, descriptor) = self.read_nameandtype(a)?;
                 self.resolve_later(s, cell.clone());
                 Some(Dynamic {
