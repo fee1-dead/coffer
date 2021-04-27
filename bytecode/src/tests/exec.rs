@@ -20,7 +20,7 @@ use crate::loadable::Constant;
 use crate::member::{MemberRef, Method, MethodAttribute};
 use crate::prelude::{Type, JavaVersion};
 use crate::flags::{ClassFlags, MethodFlags};
-use crate::prelude::{*, Label as Lbl};
+use crate::prelude::*;
 use tempfile::{tempdir, TempDir};
 use std::process::{Command, Stdio};
 use std::io::BufWriter;
@@ -111,7 +111,7 @@ ignored_tests! {
         exec.case(true, [], "Hello, World!", [])?;
         Ok(())
     }
-    fn execute_tableswitch() -> crate::Result<()> {
+    /*fn execute_tableswitch() -> crate::Result<()> {
         let label1 = Lbl(0);
         let label2 = Lbl(1);
         let mut exec = bake(Code {
@@ -131,6 +131,6 @@ ignored_tests! {
             catches: Default::default()
         });
         Ok(())
-    }
+    }*/
 }
 
