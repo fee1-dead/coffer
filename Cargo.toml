@@ -1,40 +1,5 @@
-[package]
-name = "coffer"
-version = "0.1.0"
-authors = ["Deadbeef"]
-edition = "2018"
+[workspace]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-thiserror = "1.0"
-bitflags = "1.0"
-delegate = "0.4.3"
-
-[features]
-jvm1_1 = []
-jvm1_2 = []
-jvm1_3 = []
-jvm1_4 = []
-jvm5 = []
-jvm6 = []
-jvm7 = []
-jvm8 = []
-jvm9 = []
-jvm10 = []
-jvm11 = []
-jvm12 = []
-jvm13 = []
-jvm14 = []
-jvm15 = []
-
-[dev-dependencies]
-criterion = "0.3"
-curl = "0.4"
-zip = "0.5"
-class_sample = { git = "https://github.com/fee1-dead/class-sample-rs", branch = "master" }
-
-
-[[bench]]
-name = "insn"
-harness = false
+members = [
+    "bytecode", "bytecode/macro"
+]

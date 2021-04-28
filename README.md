@@ -1,10 +1,11 @@
-# Coffer
+# Coffer - a lightweight and fast library for reading and writing Java classes
 
-Licensed under GPL v3 or later, a copy of the GNU General Public License can be found by the name of `LICENSE.md`
+Licensed under LGPL v3 or later, a copy of the Lesser GNU General Public License 
+can be found by the name of `LICENSE.md`
 
-## Unstable
+## Running tests
 
-This library uses unstable features and its structures are subject to change at anytime:
- 
- - [`seek_convenience`](https://github.com/rust-lang/rust/issues/59359)
- - [`arbitrary_enum_discriminant`](https://github.com/rust-lang/rust/issues/60553)
+Use `cargo test` to run tests that do not require java.
+
+Tests that require java are ignored by default, to add them, make sure you have 
+`java` in your path and run `cargo test -- --include-ignored` (stable 1.51 and above).

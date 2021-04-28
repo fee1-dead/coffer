@@ -1,0 +1,21 @@
+[package]
+name = "coffer-macros"
+version = "1.0.0"
+authors = ["Deadbeef"]
+edition = "2018"
+license = "LGPL-3.0-or-later"
+description = "Procedural Macros used by coffer - Unusable outside coffer"
+readme = "../../README.md"
+repository = "https://gitlab.com/fee1-dead/coffer"
+homepage = "https://gitlab.com/fee1-dead/coffer"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0.24"
+quote = "1.0.7"
+
+[dependencies.syn]
+version = "1.0.56"
+features = ["default", "printing"]
