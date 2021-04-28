@@ -69,10 +69,8 @@ fn bake(code: Code) -> crate::Result<Execution> {
     let dir = tempdir()?;
     let class = dir.path().join("Test.class");
     let mut wtr = BufWriter::new(File::create(class)?);
-    let mut wtr2 = BufWriter::new(File::create("Test.class")?);
 
     cls.write_to(&mut wtr)?;
-    cls.write_to(&mut wtr2)?;
     let mut cmd = Command::new("java");
     cmd.current_dir(dir.path());
     cmd.arg("Test");
