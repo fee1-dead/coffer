@@ -109,10 +109,18 @@ pub struct InnerClass {
 #[attr_enum]
 pub enum ClassAttribute {
     Signature(ClassSignature),
-    Synthetic, Deprecated, SourceFile(Cow<'static, str>), InnerClasses(#[vec_len_type(u16)] Vec<InnerClass>),
-    EnclosingMethod(#[str_type(Class)] Cow<'static, str>, Option<(Cow<'static,str>, Type)>), SourceDebugExtension(#[use_normal_rw] SourceDebugExtension),
-    BootstrapMethods(#[vec_len_type(u16)]  Vec<BootstrapMethod>), Module(Module), ModulePackages(#[vec_len_type(u16)] #[str_type(Package)] Vec<Cow<'static, str>>), ModuleMainClass(#[str_type(Class)] Cow<'static, str>),
-    NestHost(#[str_type(Class)] Cow<'static, str>), NestMembers(#[vec_len_type(u16)] #[str_type(Class)] Vec<Cow<'static, str>>),
+    Synthetic,
+    Deprecated,
+    SourceFile(Cow<'static, str>),
+    InnerClasses(#[vec_len_type(u16)] Vec<InnerClass>),
+    EnclosingMethod(#[str_type(Class)] Cow<'static, str>, Option<(Cow<'static,str>, Type)>),
+    SourceDebugExtension(#[use_normal_rw] SourceDebugExtension),
+    BootstrapMethods(#[vec_len_type(u16)]  Vec<BootstrapMethod>),
+    Module(Module),
+    ModulePackages(#[vec_len_type(u16)] #[str_type(Package)] Vec<Cow<'static, str>>),
+    ModuleMainClass(#[str_type(Class)] Cow<'static, str>),
+    NestHost(#[str_type(Class)] Cow<'static, str>),
+    NestMembers(#[vec_len_type(u16)] #[str_type(Class)] Vec<Cow<'static, str>>),
     #[raw_variant]
     Raw(RawAttribute)
 }
