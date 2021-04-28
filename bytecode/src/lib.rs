@@ -40,7 +40,6 @@ extern crate coffer_macros;
 use std::borrow::Cow;
 use std::io::{Read, Write};
 
-pub use coffer_macros::*;
 use prelude::*;
 pub use rw::*;
 

@@ -23,12 +23,10 @@ mod exec;
 mod code {
 
     use crate::{ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite, Class};
-    use std::io::{Cursor, Read, Write};
-    use crate::code::{Instruction::*, Instruction::Label as Lbl, StackValueType::One, LocalType::Reference, Label};
+    use std::io::{Cursor, Write};
+    use crate::code::{Instruction::*, Instruction::Label as Lbl, LocalType::Reference, Label};
     use crate::prelude::*;
     use std::borrow::Cow;
-    use std::collections::HashMap;
-
 
     struct ArrCp<'a>(Cow<'a, [RawConstantEntry]>);
 
@@ -59,42 +57,6 @@ mod code {
 
     fn arr_cp<'a, T: Into<Cow<'a, [RawConstantEntry]>>>(inner: T) -> ArrCp<'a> {
         ArrCp(inner.into())
-    }
-
-    #[derive(Debug, Clone, Default)]
-    struct MapCp(HashMap<u16, RawConstantEntry>, Vec<Rc<LazyBsm>>);
-
-    impl ConstantPoolReader for MapCp {
-        fn read_raw(&mut self, idx: u16) -> Option<RawConstantEntry> {
-            self.0.get(&idx).cloned()
-        }
-
-        fn resolve_later(&mut self, _bsm_idx: u16, ptr: Rc<LazyBsm>) {
-            self.1.push(ptr);
-        }
-
-        fn bootstrap_methods(&mut self, _bsms: &[BootstrapMethod]) -> Result<()> {
-            Ok(())
-        } // we are using these for testing, so we don't panic here in case a bsm was referenced.
-    }
-
-    impl MapCp {
-        fn read_from<R: Read>(reader: &mut R) -> crate::Result<Self> {
-            let mut map = HashMap::new();
-            let count = u16::read_from(reader)?;
-            let mut i = 1;
-            while i < count {
-                let entry = RawConstantEntry::read_from(reader)?;
-                let size = if entry.is_wide() {
-                    2
-                } else {
-                    1
-                };
-                map.insert(i, entry);
-                i += size;
-            }
-            Ok(Self(map, Vec::new()))
-        }
     }
 
     use lazy_static::lazy_static;

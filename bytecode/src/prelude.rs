@@ -14,7 +14,7 @@
  *     You should have received a copy of the GNU Lesser General Public License
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
-//! Useful re-exports that can be reused.
+//! Re-exports
 
 pub use std::borrow::Cow;
 pub use std::io::{Read, Write};
@@ -31,4 +31,5 @@ pub use crate::rw::*;
 pub use crate::cp::*;
 pub use crate::dynamic::*;
 pub use crate::code::*;
-pub use coffer_macros::*;
+
+pub(crate) use coffer_macros::*;
