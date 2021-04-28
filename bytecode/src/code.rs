@@ -553,8 +553,8 @@ impl ConstantPoolReadWrite for Code {
                 I::Bipush(b) => push(Constant::I32(b as i32)),
                 I::Sipush(s) => push(Constant::I32(s as i32)),
 
-                I::LDC(b) => push(try_cp_read_idx!(labeler, b as u16, read_constant)?),
-                I::LDCW(i) | I::LDC2W(i) => push(try_cp_read_idx!(labeler, i, read_constant)?),
+                I::Ldc(b) => push(try_cp_read_idx!(labeler, b as u16, read_constant)?),
+                I::LdcW(i) | I::Ldc2W(i) => push(try_cp_read_idx!(labeler, i, read_constant)?),
 
                 I::IALoad => Array(Load, ArrayType::Int),
                 I::LALoad => Array(Load, ArrayType::Long),
