@@ -55,7 +55,7 @@ impl ConstantPoolReadWrite for BootstrapMethod {
 ///
 /// Note: dynamic computed constants are syntactically allowed to refer to themselves via the bootstrap method table but it will fail during resolution.
 /// Rust ownership rules prevent us from doing so.
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, PartialEq, Hash)]
 pub struct Dynamic {
     pub(crate) bsm: Rc<LazyBsm>,
     /// The name of the bootstrap method that will compute the constant value.
@@ -90,6 +90,15 @@ impl Dynamic {
     }
 }
 
+impl Clone for Dynamic {
+    fn clone(&self) -> Self {
+        Self {
+            bsm: Rc::new(self.bsm.as_ref().clone()),
+            name: self.name.clone(),
+            descriptor: self.descriptor.clone()
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub enum OrDynamic<T> {
@@ -170,6 +179,14 @@ impl Hash for LazyBsm {
 impl PartialEq for LazyBsm {
     fn eq(&self, other: &Self) -> bool {
         self.get().eq(&other.get())
+    }
+}
+
+impl Clone for LazyBsm {
+    fn clone(&self) -> Self {
+        Self {
+            inner: UnsafeCell::new(unsafe { &*self.inner.get() }.clone())
+        }
     }
 }
 

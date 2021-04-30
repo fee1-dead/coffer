@@ -176,10 +176,9 @@ impl ConstantPoolReader for MapCp {
     fn bootstrap_methods(&mut self, bsms: &[BootstrapMethod]) -> Result<()> {
         for (i, b) in bsms.iter().enumerate() {
             if let Entry::Occupied(bsm) = self.refs.entry(i as _) {
-                for reg in bsm.get() {
+                for reg in bsm.remove() {
                     reg.fill(b.clone()).unwrap()
                 }
-                bsm.remove();
             }
         }
         if let Some((_, v)) = self.refs.iter().find(|(_, v)| !v.is_empty()) {
