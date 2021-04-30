@@ -141,9 +141,18 @@ impl ReadWrite for Class {
     }
 
     fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
+        let mut bsm = vec![];
+        for a in &self.attributes {
+            if let ClassAttribute::BootstrapMethods(b) = a {
+                bsm.extend_from_slice(b);
+            }
+        }
+        let mut cp = VecCp::new();
+        cp.bsm = bsm;
+
         0xCAFEBABEu32.write_to(writer)?;
         self.version.write_to(writer)?;
-        let mut cp = VecCp::new();
+
         let mut buf = vec![];
         self.access.write_to(&mut buf)?;
         cp.insert_class(self.name.clone()).write_to(&mut buf)?;
@@ -161,15 +170,13 @@ impl ReadWrite for Class {
             m.write_to(&mut cp, &mut buf)?;
         }
         (self.attributes.len() as u16).write_to(&mut buf)?;
-        let mut bsm = vec![];
         for a in &self.attributes {
-            if let ClassAttribute::BootstrapMethods(b) = a {
-                bsm.extend_from_slice(b);
-            } else {
-                a.write_to(&mut cp, &mut buf)?;
+            match a {
+                ClassAttribute::BootstrapMethods(_) => {}
+                _ => a.write_to(&mut cp, &mut buf)?
             }
         }
-        if !bsm.is_empty() {
+        if !cp.bsm.is_empty() {
             let mut i: u16 = 0;
             let mut buf2 = vec![];
             while !cp.bsm.is_empty() {
