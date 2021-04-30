@@ -106,10 +106,13 @@ pub enum TypePath {
     Array(u8), Nested(u8), TypeBound(u8), TypeArgument(u8)
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ConstantPoolReadWrite)]
 pub struct ClassTypeAnnotation {
+    #[use_normal_rw]
     pub target: ClassTypeAnnotationTarget,
-    pub type_path: Vec<(u8, u8)>,
+    #[vec_len_type(u8)]
+    #[use_normal_rw]
+    pub type_path: Vec<TypePath>,
     pub annotation_type: Type,
     pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
 }

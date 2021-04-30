@@ -17,6 +17,7 @@
 use crate::module::Module;
 use crate::prelude::*;
 use crate::mod_utf8::{modified_utf8_to_string, string_to_modified_utf8};
+use crate::annotation::{Annotation, ClassTypeAnnotation};
 
 /// An unrecognized, unknown raw attribute.
 #[derive(Clone, PartialEq, Debug)]
@@ -121,6 +122,10 @@ pub enum ClassAttribute {
     ModuleMainClass(#[str_type(Class)] Cow<'static, str>),
     NestHost(#[str_type(Class)] Cow<'static, str>),
     NestMembers(#[vec_len_type(u16)] #[str_type(Class)] Vec<Cow<'static, str>>),
+    RuntimeVisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),
+    RuntimeInvisibleAnnotations(#[vec_len_type(u16)]Vec<Annotation>),
+    RuntimeVisibleTypeAnnotations(#[vec_len_type(u16)] Vec<ClassTypeAnnotation>),
+    RuntimeInvisibleTypeAnnotations(#[vec_len_type(u16)] Vec<ClassTypeAnnotation>),
     #[raw_variant]
     Raw(RawAttribute)
 }
