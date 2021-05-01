@@ -1,5 +1,7 @@
 # Coffer - a lightweight and fast library for reading and writing Java classes
 
+[![Discord](https://img.shields.io/discord/721385143461478480?logo=discord)](https://discord.gg/Ddv9XUPYcK)
+
 Licensed under LGPL v3 or later, a copy of the Lesser GNU General Public License 
 can be found by the name of `LICENSE.md`
 
