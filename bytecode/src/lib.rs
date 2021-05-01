@@ -43,6 +43,7 @@ use std::io::{Read, Write};
 use prelude::*;
 pub use rw::*;
 
+use crate::constants::JVM_MAGIC;
 pub use crate::error::Error;
 pub use crate::error::Result;
 
@@ -115,7 +116,7 @@ struct ClassWrapper {
 impl ReadWrite for Class {
     fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
         match u32::read_from(reader)? {
-            0xCAFEBABE => {
+            JVM_MAGIC => {
                 let version = JavaVersion::read_from(reader)?;
                 let mut cp = MapCp::read_from(reader)?;
                 let c = ClassWrapper::read_from(&mut cp, reader)?;
@@ -150,7 +151,7 @@ impl ReadWrite for Class {
         let mut cp = VecCp::new();
         cp.bsm = bsm;
 
-        0xCAFEBABEu32.write_to(writer)?;
+        JVM_MAGIC.write_to(writer)?;
         self.version.write_to(writer)?;
 
         let mut buf = vec![];
