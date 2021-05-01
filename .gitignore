@@ -1,6 +1,10 @@
-/target
-/out/*
+# Rust
+target/
 Cargo.lock
+
+# Intellij IDEA
 *.iml
-.idea
-launch.json
+.idea/
+
+# VS Code
+.vscode/
