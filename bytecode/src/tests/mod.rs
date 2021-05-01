@@ -21,7 +21,6 @@ mod insn;
 mod mutf8;
 
 mod code {
-
     use crate::code::{Instruction::Label as Lbl, Instruction::*, Label, LocalType::Reference};
     use crate::prelude::*;
     use crate::{Class, ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite};
@@ -67,28 +66,41 @@ mod code {
     }
 
     #[test]
-    fn code_reading_with_sample() {
+    fn sample_read_write_read() {
         for (s, buf) in SAMPLE.iter().map(|(s, buf)| (s.as_str(), buf.clone())) {
-            let mut reader = Cursor::new(buf);
             #[inline]
-            fn inner(reader: &mut Cursor<Vec<u8>>) -> crate::Result<Class> {
-                Class::read_from(reader)
-            }
-            if let Err(e) = inner(&mut reader) {
+            fn handle_error<E: std::fmt::Display, P: std::fmt::UpperHex>(e: E, s: &str, buf: &[u8], pos: P, phase: u8) {
                 let filename = s.split('/').last().unwrap();
                 let res =
-                    File::create(filename).and_then(|mut f| f.write_all(reader.get_ref().as_ref()));
+                    File::create(filename).and_then(|mut f| f.write_all(buf));
                 let message = match res {
                     Ok(()) => format!("A file named {} has been created", filename),
                     Err(e) => format!("Unable to write to file: {:?}", e),
                 };
                 panic!(
-                    "Unable to parse {}: {}\ncursor position: 0x{:X}\n{}",
+                    "Failure in phase {} of read/write/read for {}: {}\ncursor position: 0x{:X}\n{}",
+                    phase,
                     s,
                     e,
-                    reader.position(),
+                    pos,
                     message
                 )
+            }
+            let mut reader = Cursor::new(buf);
+            match Class::read_from(&mut reader) {
+                Ok(c) => {
+                    let mut writer = Vec::new();
+                    match c.write_to(&mut writer) {
+                        Ok(()) => {
+                            reader = Cursor::new(writer);
+                            if let Err(e) = Class::read_from(&mut reader) {
+                                handle_error(e, s, reader.get_ref(), reader.position(), 3)
+                            }
+                        }
+                        Err(e) => handle_error(e, s, reader.get_ref(), writer.len(), 2)
+                    }
+                }
+                Err(e) => handle_error(e, s, reader.get_ref(), reader.position(), 1)
             }
         }
     }
