@@ -19,10 +19,10 @@
 pub use crate::member::MemberRef;
 pub use crate::ty::Type;
 
-use crate::read_from;
 use crate::prelude::*;
-use std::hash::{Hash, Hasher};
+use crate::read_from;
 use std::convert::TryFrom;
+use std::hash::{Hash, Hasher};
 
 /// The kind of a method handle. It generally represents an instruction related to a member with one exception.
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, ReadWrite)]
@@ -54,9 +54,16 @@ impl TryFrom<u8> for MethodHandleKind {
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         use MethodHandleKind::*;
         Ok(match value {
-            1 => GetField, 2 => GetStatic, 3 => PutField, 4 => PutStatic, 5 => InvokeVirtual,
-            6 => InvokeStatic, 7 => InvokeSpecial, 8 => NewInvokeSpecial, 9 => InvokeInterface,
-            v => return Err(v)
+            1 => GetField,
+            2 => GetStatic,
+            3 => PutField,
+            4 => PutStatic,
+            5 => InvokeVirtual,
+            6 => InvokeStatic,
+            7 => InvokeSpecial,
+            8 => NewInvokeSpecial,
+            9 => InvokeInterface,
+            v => return Err(v),
         })
     }
 }
@@ -69,7 +76,7 @@ pub struct MethodHandle {
     /// The kind of the handle.
     pub kind: MethodHandleKind,
     /// The member that this handle points to.
-    pub member: MemberRef
+    pub member: MemberRef,
 }
 
 impl MethodHandle {
@@ -122,29 +129,44 @@ impl MethodHandle {
         should_not_be_method! { MethodHandleKind::GetField, MethodHandleKind::GetStatic, MethodHandleKind::PutField, MethodHandleKind::PutStatic }
         should_be_method! { MethodHandleKind::InvokeInterface, MethodHandleKind::InvokeSpecial, MethodHandleKind::InvokeStatic, MethodHandleKind::InvokeVirtual, MethodHandleKind::NewInvokeSpecial }
         match self.kind {
-            MethodHandleKind::InvokeVirtual |
-            MethodHandleKind::InvokeStatic |
-            MethodHandleKind::InvokeSpecial |
-            MethodHandleKind::InvokeInterface if self.member.name == "<init>" || self.member.name == "<clinit>" =>
-                Err(Error::Invalid("MethodHandle", Cow::Borrowed("name must not be <init> or <clinit>"))),
-            MethodHandleKind::NewInvokeSpecial if self.member.name != "<init>" =>
-                Err(Error::Invalid("MethodHandle", Cow::Borrowed("name for NewInvokeSpecial must be <init>"))),
-            _ => Ok(())
+            MethodHandleKind::InvokeVirtual
+            | MethodHandleKind::InvokeStatic
+            | MethodHandleKind::InvokeSpecial
+            | MethodHandleKind::InvokeInterface
+                if self.member.name == "<init>" || self.member.name == "<clinit>" =>
+            {
+                Err(Error::Invalid(
+                    "MethodHandle",
+                    Cow::Borrowed("name must not be <init> or <clinit>"),
+                ))
+            }
+            MethodHandleKind::NewInvokeSpecial if self.member.name != "<init>" => {
+                Err(Error::Invalid(
+                    "MethodHandle",
+                    Cow::Borrowed("name for NewInvokeSpecial must be <init>"),
+                ))
+            }
+            _ => Ok(()),
         }
     }
 }
 impl ConstantPoolReadWrite for MethodHandle {
-    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self, Error> {
+    fn read_from<C: ConstantPoolReader, R: Read>(
+        cp: &mut C,
+        reader: &mut R,
+    ) -> Result<Self, Error> {
         let kind = read_from!(reader)?;
         let member = read_from!(cp, reader)?;
-        let res = Self {
-            kind, member
-        };
+        let res = Self { kind, member };
         res.check()?;
         Ok(res)
     }
 
-    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<(), Error> {
+    fn write_to<C: ConstantPoolWriter, W: Write>(
+        &self,
+        cp: &mut C,
+        writer: &mut W,
+    ) -> Result<(), Error> {
         self.check()?;
         self.kind.write_to(writer)?;
         self.member.write_to(cp, writer)
@@ -171,7 +193,7 @@ pub enum Constant {
     /// A method descriptor.
     MethodType(Type),
     /// A method handle.
-    MethodHandle(MethodHandle)
+    MethodHandle(MethodHandle),
 }
 
 impl Constant {
@@ -193,7 +215,9 @@ impl Constant {
 impl ConstantPoolReadWrite for Constant {
     fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self> {
         let idx = ReadWrite::read_from(reader)?;
-        cp.read_constant(idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", idx.to_string().into()))
+        cp.read_constant(idx).ok_or_else(|| {
+            crate::error::Error::Invalid("constant pool entry index", idx.to_string().into())
+        })
     }
 
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()> {
@@ -221,7 +245,7 @@ impl Hash for Constant {
             Constant::Class(s) => s.hash(state),
             Constant::MethodType(s) => s.hash(state),
             Constant::MethodHandle(m) => m.hash(state),
-            Constant::Member(mem) => mem.hash(state)
+            Constant::Member(mem) => mem.hash(state),
         }
     }
 }

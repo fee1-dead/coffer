@@ -1,13 +1,16 @@
 pub(crate) mod type_annotation;
 pub use type_annotation::*;
 
+use super::Type;
+use crate::error::Error;
+use crate::{
+    read_from, write_to, ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, Read,
+    ReadWrite, Result, Write,
+};
 use std::borrow::Cow;
 use std::collections::HashMap;
-use super::Type;
-use crate::{ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, Read, Write, ReadWrite, Result, read_from, write_to};
-use crate::error::Error;
-use std::str::FromStr;
 use std::convert::TryInto;
+use std::str::FromStr;
 
 #[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
 pub struct ParameterAnnotations(#[vec_len_type(u16)] Vec<Annotation>);
@@ -59,7 +62,7 @@ pub enum AnnotationValue {
     /// the rust ownership rules won't allow us to do this anyways.
     Annotation(Annotation),
     /// Represents an array of annotation values.
-    Array(Vec<AnnotationValue>)
+    Array(Vec<AnnotationValue>),
 }
 
 impl ConstantPoolReadWrite for AnnotationValue {
@@ -68,11 +71,15 @@ impl ConstantPoolReadWrite for AnnotationValue {
         Ok(match tag {
             'B' => AnnotationValue::Byte({
                 let val: i32 = read_from!(cp, reader)?;
-                val.try_into().map_err(|_| crate::error::Error::Invalid("byte annotation value", val.to_string().into()))?
+                val.try_into().map_err(|_| {
+                    crate::error::Error::Invalid("byte annotation value", val.to_string().into())
+                })?
             }),
             'C' => AnnotationValue::Char({
                 let val: i32 = read_from!(cp, reader)?;
-                val.try_into().map_err(|_| crate::error::Error::Invalid("char annotation value", val.to_string().into()))?
+                val.try_into().map_err(|_| {
+                    crate::error::Error::Invalid("char annotation value", val.to_string().into())
+                })?
             }),
             'D' => AnnotationValue::Double(read_from!(cp, reader)?),
             'F' => AnnotationValue::Float(read_from!(cp, reader)?),
@@ -80,19 +87,35 @@ impl ConstantPoolReadWrite for AnnotationValue {
             'J' => AnnotationValue::Long(read_from!(cp, reader)?),
             'S' => AnnotationValue::Short({
                 let val: i32 = read_from!(cp, reader)?;
-                val.try_into().map_err(|_| crate::error::Error::Invalid("short annotation value", val.to_string().into()))?
+                val.try_into().map_err(|_| {
+                    crate::error::Error::Invalid("short annotation value", val.to_string().into())
+                })?
             }),
             'Z' => AnnotationValue::Boolean(match read_from!(cp, reader)? {
                 1 => true,
                 0 => false,
-                i => return Err(crate::error::Error::Invalid("bool annotation value", i.to_string().into()))
+                i => {
+                    return Err(crate::error::Error::Invalid(
+                        "bool annotation value",
+                        i.to_string().into(),
+                    ))
+                }
             }),
             's' => AnnotationValue::String(read_from!(cp, reader)?),
             'e' => AnnotationValue::Enum(Type::read_from(cp, reader)?, read_from!(cp, reader)?),
             'c' => {
                 let idx = u16::read_from(reader)?;
-                let str = cp.read_indirect_str(7, idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", idx.to_string().into()))?;
-                AnnotationValue::Class(if str == "V" { None } else { Some(Type::from_str(str.as_ref())?) })
+                let str = cp.read_indirect_str(7, idx).ok_or_else(|| {
+                    crate::error::Error::Invalid(
+                        "constant pool entry index",
+                        idx.to_string().into(),
+                    )
+                })?;
+                AnnotationValue::Class(if str == "V" {
+                    None
+                } else {
+                    Some(Type::from_str(str.as_ref())?)
+                })
             }
             '@' => AnnotationValue::Annotation(Annotation::read_from(cp, reader)?),
             '[' => {
@@ -103,12 +126,16 @@ impl ConstantPoolReadWrite for AnnotationValue {
                 }
                 AnnotationValue::Array(values)
             }
-            _ => { return Err(Error::Invalid("Enum value type", tag.to_string().into())) }
+            _ => return Err(Error::Invalid("Enum value type", tag.to_string().into())),
         })
     }
 
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()> {
-        fn cp_int<C: ConstantPoolWriter, W: Write, I: Into<i32>>(cp: &mut C, writer: &mut W, val: I) -> Result<()> {
+        fn cp_int<C: ConstantPoolWriter, W: Write, I: Into<i32>>(
+            cp: &mut C,
+            writer: &mut W,
+            val: I,
+        ) -> Result<()> {
             write_to!(&val.into(), cp, writer)
         }
         match self {
@@ -155,7 +182,12 @@ impl ConstantPoolReadWrite for AnnotationValue {
             }
             AnnotationValue::Class(n) => {
                 b'C'.write_to(writer)?;
-                write_to!(&n.as_ref().map_or_else(|| Cow::Borrowed("V"), |t| t.to_string().into()), cp, writer)
+                write_to!(
+                    &n.as_ref()
+                        .map_or_else(|| Cow::Borrowed("V"), |t| t.to_string().into()),
+                    cp,
+                    writer
+                )
             }
             AnnotationValue::Annotation(a) => {
                 b'@'.write_to(writer)?;
@@ -179,11 +211,14 @@ pub struct Annotation {
     /// A field descriptor representing the type of the annotation.
     pub annotation_type: Type,
     /// Pairs of values that are passed as parameters to this annotation.
-    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
+    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>,
 }
 
 impl ConstantPoolReadWrite for HashMap<Cow<'static, str>, AnnotationValue> {
-    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self, Error> {
+    fn read_from<C: ConstantPoolReader, R: Read>(
+        cp: &mut C,
+        reader: &mut R,
+    ) -> Result<Self, Error> {
         let pairs = u16::read_from(reader)?;
         let mut element_values = HashMap::with_capacity(pairs as usize);
         for _ in 0..pairs {
@@ -194,7 +229,11 @@ impl ConstantPoolReadWrite for HashMap<Cow<'static, str>, AnnotationValue> {
         Ok(element_values)
     }
 
-    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<(), Error> {
+    fn write_to<C: ConstantPoolWriter, W: Write>(
+        &self,
+        cp: &mut C,
+        writer: &mut W,
+    ) -> Result<(), Error> {
         let size = self.len() as u16;
         size.write_to(writer)?;
         for (k, e) in self {

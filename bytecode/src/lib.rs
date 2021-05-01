@@ -56,23 +56,20 @@ pub mod dynamic;
 pub mod error;
 pub mod flags;
 
+pub mod loadable;
+pub mod member;
 pub mod mod_utf8;
 pub mod module;
-pub mod member;
 pub mod prelude;
-pub mod ty;
 pub mod signature;
-pub mod loadable;
+pub mod ty;
 
-pub mod version;
 pub mod rw;
+pub mod version;
 
-
-
-
+pub(crate) mod insn;
 #[cfg(test)]
 mod tests;
-pub(crate) mod insn;
 
 #[derive(Debug, Clone)]
 pub struct Class {
@@ -88,10 +85,8 @@ pub struct Class {
     pub interfaces: Vec<Cow<'static, str>>,
     pub fields: Vec<Field>,
     pub methods: Vec<Method>,
-    pub attributes: Vec<ClassAttribute>
+    pub attributes: Vec<ClassAttribute>,
 }
-
-
 
 #[derive(ConstantPoolReadWrite)]
 struct ClassWrapper {
@@ -110,7 +105,7 @@ struct ClassWrapper {
     #[vec_len_type(u16)]
     pub methods: Vec<Method>,
     #[vec_len_type(u16)]
-    pub attributes: Vec<ClassAttribute>
+    pub attributes: Vec<ClassAttribute>,
 }
 
 impl ReadWrite for Class {
@@ -123,7 +118,7 @@ impl ReadWrite for Class {
                 for attr in &c.attributes {
                     if let ClassAttribute::BootstrapMethods(b) = attr {
                         cp.bootstrap_methods(b)?;
-                        break
+                        break;
                     }
                 }
                 Ok(Class {
@@ -134,10 +129,10 @@ impl ReadWrite for Class {
                     interfaces: c.interfaces,
                     fields: c.fields,
                     methods: c.methods,
-                    attributes: c.attributes
+                    attributes: c.attributes,
                 })
             }
-            n => Err(Error::Invalid("class header", n.to_string().into()))
+            n => Err(Error::Invalid("class header", n.to_string().into())),
         }
     }
 
@@ -157,7 +152,10 @@ impl ReadWrite for Class {
         let mut buf = vec![];
         self.access.write_to(&mut buf)?;
         cp.insert_class(self.name.clone()).write_to(&mut buf)?;
-        self.super_name.as_ref().map_or(0, |n| cp.insert_class(n.clone())).write_to(&mut buf)?;
+        self.super_name
+            .as_ref()
+            .map_or(0, |n| cp.insert_class(n.clone()))
+            .write_to(&mut buf)?;
         (self.interfaces.len() as u16).write_to(&mut buf)?;
         for i in &self.interfaces {
             cp.insert_class(i.clone()).write_to(&mut buf)?;
@@ -174,7 +172,7 @@ impl ReadWrite for Class {
         for a in &self.attributes {
             match a {
                 ClassAttribute::BootstrapMethods(_) => {}
-                _ => a.write_to(&mut cp, &mut buf)?
+                _ => a.write_to(&mut cp, &mut buf)?,
             }
         }
         if !cp.bsm.is_empty() {

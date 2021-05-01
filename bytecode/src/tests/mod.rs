@@ -15,18 +15,18 @@
     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
 */
 
-mod mutf8;
+mod exec;
 mod full_type;
 mod insn;
-mod exec;
+mod mutf8;
 
 mod code {
 
-    use crate::{ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite, Class};
-    use std::io::{Cursor, Write};
-    use crate::code::{Instruction::*, Instruction::Label as Lbl, LocalType::Reference, Label};
+    use crate::code::{Instruction::Label as Lbl, Instruction::*, Label, LocalType::Reference};
     use crate::prelude::*;
+    use crate::{Class, ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite};
     use std::borrow::Cow;
+    use std::io::{Cursor, Write};
 
     struct ArrCp<'a>(Cow<'a, [RawConstantEntry]>);
 
@@ -76,12 +76,19 @@ mod code {
             }
             if let Err(e) = inner(&mut reader) {
                 let filename = s.split('/').last().unwrap();
-                let res = File::create(filename).and_then(|mut f| f.write_all(reader.get_ref().as_ref()));
+                let res =
+                    File::create(filename).and_then(|mut f| f.write_all(reader.get_ref().as_ref()));
                 let message = match res {
                     Ok(()) => format!("A file named {} has been created", filename),
-                    Err(e) => format!("Unable to write to file: {:?}", e)
+                    Err(e) => format!("Unable to write to file: {:?}", e),
                 };
-                panic!("Unable to parse {}: {}\ncursor position: 0x{:X}\n{}", s, e, reader.position(), message)
+                panic!(
+                    "Unable to parse {}: {}\ncursor position: 0x{:X}\n{}",
+                    s,
+                    e,
+                    reader.position(),
+                    message
+                )
             }
         }
     }
@@ -96,40 +103,100 @@ mod code {
             max_stack: 255,
             max_locals: 254,
             code: vec![
-                NoOp, PushNull, Pop1, Push(OrDynamic::Static(Constant::I32(123))), TableSwitch {
+                NoOp,
+                PushNull,
+                Pop1,
+                Push(OrDynamic::Static(Constant::I32(123))),
+                TableSwitch {
                     default: lbl1,
                     low: 1,
-                    offsets: vec![lbl2, lbl3]
+                    offsets: vec![lbl2, lbl3],
                 },
-                NoOp, NoOp, NoOp, NoOp, NoOp, NoOp,
-                Lbl(lbl1), PushNull, Return(Some(Reference)), NoOp, NoOp,
-                Lbl(lbl2), PushNull, Return(Some(Reference)), NoOp, NoOp,
-                Lbl(lbl3), PushNull, Return(Some(Reference))
+                NoOp,
+                NoOp,
+                NoOp,
+                NoOp,
+                NoOp,
+                NoOp,
+                Lbl(lbl1),
+                PushNull,
+                Return(Some(Reference)),
+                NoOp,
+                NoOp,
+                Lbl(lbl2),
+                PushNull,
+                Return(Some(Reference)),
+                NoOp,
+                NoOp,
+                Lbl(lbl3),
+                PushNull,
+                Return(Some(Reference)),
             ],
             catches: vec![],
-            attrs: vec![]
-        }.write_to(&mut cp,&mut buffer).unwrap();
-        assert_eq!(buffer.into_inner(), vec![
-            0, 255, // max_stack
-            0, 254, // max_locals
-            0, 0, 0, 43, // code_length
-            0, // NOP
-            1, // null
-            87, // pop
-            crate::constants::insn::BIPUSH, 123,
-            170, 0, // tableswitch with padding
-            0, 0, 0, 28, // default
-            0, 0, 0, 1,
-            0, 0, 0, 2,
-            0, 0, 0, 32,
-            0, 0, 0, 36,
-            0, 0, 0, 0,
-            0, 0, 1, 176,
-            0, 0, 1, 176,
-            0, 0, 1, 176,
-            0, 0,
-            0, 0
-        ])
+            attrs: vec![],
+        }
+        .write_to(&mut cp, &mut buffer)
+        .unwrap();
+        assert_eq!(
+            buffer.into_inner(),
+            vec![
+                0,
+                255, // max_stack
+                0,
+                254, // max_locals
+                0,
+                0,
+                0,
+                43, // code_length
+                0,  // NOP
+                1,  // null
+                87, // pop
+                crate::constants::insn::BIPUSH,
+                123,
+                170,
+                0, // tableswitch with padding
+                0,
+                0,
+                0,
+                28, // default
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                2,
+                0,
+                0,
+                0,
+                32,
+                0,
+                0,
+                0,
+                36,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                176,
+                0,
+                0,
+                1,
+                176,
+                0,
+                0,
+                1,
+                176,
+                0,
+                0,
+                0,
+                0
+            ]
+        )
     }
     #[test]
     fn code_reading() {
@@ -138,44 +205,56 @@ mod code {
             0, 255, // max_stack
             0, 254, // max_locals
             0, 0, 0, 44, // code_length
-            0, // NOP
-            1, // null
+            0,  // NOP
+            1,  // null
             87, // pop
             18, 1, // LDC #1
             170, 0, 0, // tableswitch with padding
             0, 0, 0, 29, // default
-            0, 0, 0, 1,
-            0, 0, 0, 2,
-            0, 0, 0, 33,
-            0, 0, 0, 37,
-            0, 0, 0, 0,
-            0, 0, 1, 176,
-            0, 0, 1, 176,
-            0, 0, 1, 176,
-            0, 0,
-            0, 0
+            0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 33, 0, 0, 0, 37, 0, 0, 0, 0, 0, 0, 1, 176, 0, 0, 1,
+            176, 0, 0, 1, 176, 0, 0, 0, 0,
         ];
         let lbl1 = Label(0);
         let lbl2 = Label(1);
         let lbl3 = Label(2);
-        assert_eq!(Code::read_from(&mut cp, &mut Cursor::new(bytes)).unwrap(), Code {
-            max_stack: 255,
-            max_locals: 254,
-            code: vec![
-                NoOp, PushNull, Pop1, Push(OrDynamic::Static(Constant::I32(123))), TableSwitch {
-                    default: lbl1,
-                    low: 1,
-                    offsets: vec![lbl2, lbl3]
-                },
-                NoOp, NoOp, NoOp, NoOp, NoOp, NoOp,
-                Lbl(lbl1), PushNull, Return(Some(Reference)), NoOp, NoOp,
-                Lbl(lbl2), PushNull, Return(Some(Reference)), NoOp, NoOp,
-                Lbl(lbl3), PushNull, Return(Some(Reference))
-            ],
-            catches: vec![],
-            attrs: vec![]
-        })
-
+        assert_eq!(
+            Code::read_from(&mut cp, &mut Cursor::new(bytes)).unwrap(),
+            Code {
+                max_stack: 255,
+                max_locals: 254,
+                code: vec![
+                    NoOp,
+                    PushNull,
+                    Pop1,
+                    Push(OrDynamic::Static(Constant::I32(123))),
+                    TableSwitch {
+                        default: lbl1,
+                        low: 1,
+                        offsets: vec![lbl2, lbl3]
+                    },
+                    NoOp,
+                    NoOp,
+                    NoOp,
+                    NoOp,
+                    NoOp,
+                    NoOp,
+                    Lbl(lbl1),
+                    PushNull,
+                    Return(Some(Reference)),
+                    NoOp,
+                    NoOp,
+                    Lbl(lbl2),
+                    PushNull,
+                    Return(Some(Reference)),
+                    NoOp,
+                    NoOp,
+                    Lbl(lbl3),
+                    PushNull,
+                    Return(Some(Reference))
+                ],
+                catches: vec![],
+                attrs: vec![]
+            }
+        )
     }
 }
-

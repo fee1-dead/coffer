@@ -16,13 +16,13 @@
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::hash::{Hash, Hasher};
+use crate::prelude::{BootstrapMethod, LazyBsm, Read, Result, Write};
+use crate::{ConstantPoolReader, ConstantPoolWriter, Error, ReadWrite};
 use std::borrow::Cow;
-use std::collections::HashMap;
-use crate::{ReadWrite, ConstantPoolReader, ConstantPoolWriter, Error};
-use crate::prelude::{Read, Write, Result, BootstrapMethod, LazyBsm};
-use std::rc::Rc;
 use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 
 /// A raw constant entry that has unresolved indices to other entries.
 #[derive(ReadWrite, Debug, Clone)]
@@ -47,22 +47,28 @@ pub enum RawConstantEntry {
     Dynamic(u16, u16),
     InvokeDynamic(u16, u16),
     Module(u16),
-    Package(u16)
+    Package(u16),
 }
 impl Hash for RawConstantEntry {
     fn hash<H: Hasher>(&self, state: &mut H) {
         std::mem::discriminant(self).hash(state);
         match self {
-            RawConstantEntry::UTF8(ref s) => { s.hash(state) }
-            RawConstantEntry::Int(ref i) => { i.hash(state) }
-            RawConstantEntry::Float(ref f) => { f.to_bits().hash(state) }
-            RawConstantEntry::Long(ref l) => { l.hash(state) }
-            RawConstantEntry::Double(ref d) => { d.to_bits().hash(state) }
-            RawConstantEntry::Class(ref u) | RawConstantEntry::String(ref u) | RawConstantEntry::MethodType(ref u) |
-            RawConstantEntry::Module(ref u) | RawConstantEntry::Package(ref u) => { u.hash(state) }
-            RawConstantEntry::Field(ref u1, ref u2) | RawConstantEntry::Method(ref u1, ref u2) |
-            RawConstantEntry::InterfaceMethod(ref u1, ref u2) | RawConstantEntry::NameAndType(ref u1, ref u2) |
-            RawConstantEntry::Dynamic(ref u1, ref u2) | RawConstantEntry::InvokeDynamic(ref u1, ref u2) => {
+            RawConstantEntry::UTF8(ref s) => s.hash(state),
+            RawConstantEntry::Int(ref i) => i.hash(state),
+            RawConstantEntry::Float(ref f) => f.to_bits().hash(state),
+            RawConstantEntry::Long(ref l) => l.hash(state),
+            RawConstantEntry::Double(ref d) => d.to_bits().hash(state),
+            RawConstantEntry::Class(ref u)
+            | RawConstantEntry::String(ref u)
+            | RawConstantEntry::MethodType(ref u)
+            | RawConstantEntry::Module(ref u)
+            | RawConstantEntry::Package(ref u) => u.hash(state),
+            RawConstantEntry::Field(ref u1, ref u2)
+            | RawConstantEntry::Method(ref u1, ref u2)
+            | RawConstantEntry::InterfaceMethod(ref u1, ref u2)
+            | RawConstantEntry::NameAndType(ref u1, ref u2)
+            | RawConstantEntry::Dynamic(ref u1, ref u2)
+            | RawConstantEntry::InvokeDynamic(ref u1, ref u2) => {
                 u1.hash(state);
                 u2.hash(state);
             }
@@ -70,7 +76,6 @@ impl Hash for RawConstantEntry {
                 b.hash(state);
                 u.hash(state);
             }
-
         }
     }
 }
@@ -80,15 +85,17 @@ impl RawConstantEntry {
     #[inline]
     pub const fn size(&self) -> u16 {
         match self {
-            RawConstantEntry::Long(_) |
-            RawConstantEntry::Double(_) => 2,
-            _ => 1
+            RawConstantEntry::Long(_) | RawConstantEntry::Double(_) => 2,
+            _ => 1,
         }
     }
     /// Returns `true` if this entry is a Long/Double constant, which takes 2 indices.
     #[inline]
     pub const fn is_wide(&self) -> bool {
-        matches!(self, RawConstantEntry::Long(_) | RawConstantEntry::Double(_))
+        matches!(
+            self,
+            RawConstantEntry::Long(_) | RawConstantEntry::Double(_)
+        )
     }
 }
 
@@ -106,7 +113,7 @@ pub struct VecCp {
     entries: Vec<RawConstantEntry>,
     /// Not actual len. (if e.wide 2 else 1 for e in entries) + 1 in pseudocode
     len: u16,
-    pub(crate) bsm: Vec<BootstrapMethod>
+    pub(crate) bsm: Vec<BootstrapMethod>,
 }
 impl VecCp {
     /// Creates an empty constant pool.
@@ -115,7 +122,7 @@ impl VecCp {
         Self {
             entries: vec![],
             len: 1,
-            bsm: vec![]
+            bsm: vec![],
         }
     }
 }
@@ -132,7 +139,7 @@ impl MapCp {
     pub fn new() -> Self {
         Self {
             entries: HashMap::new(),
-            refs: HashMap::new()
+            refs: HashMap::new(),
         }
     }
 }
@@ -143,7 +150,6 @@ impl Default for MapCp {
         Self::new()
     }
 }
-
 
 impl ReadWrite for MapCp {
     fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
@@ -182,7 +188,10 @@ impl ConstantPoolReader for MapCp {
             }
         }
         if let Some((_, v)) = self.refs.iter().find(|(_, v)| !v.is_empty()) {
-            Err(Error::Invalid("reference(s) to bootstrap method", Cow::from(format!("{:?}", v))))
+            Err(Error::Invalid(
+                "reference(s) to bootstrap method",
+                Cow::from(format!("{:?}", v)),
+            ))
         } else {
             Ok(())
         }
@@ -217,4 +226,3 @@ impl ConstantPoolWriter for VecCp {
         ret
     }
 }
-

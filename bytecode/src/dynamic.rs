@@ -15,37 +15,46 @@
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::cell::UnsafeCell;
-use std::rc::Rc;
 use crate::prelude::*;
+use std::cell::UnsafeCell;
 use std::hash::{Hash, Hasher};
-
+use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct BootstrapMethod {
     pub handle: MethodHandle,
-    pub arguments: Vec<OrDynamic<Constant>>
+    pub arguments: Vec<OrDynamic<Constant>>,
 }
 
 impl ConstantPoolReadWrite for BootstrapMethod {
-    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self, Error> {
+    fn read_from<C: ConstantPoolReader, R: Read>(
+        cp: &mut C,
+        reader: &mut R,
+    ) -> Result<Self, Error> {
         let handle = try_cp_read!(cp, reader, read_method_handle)?;
         let num_arguments = u16::read_from(reader)?;
         let mut arguments = Vec::with_capacity(num_arguments as usize);
         for _ in 0..num_arguments {
             let idx = u16::read_from(reader)?;
-            arguments.push(try_cp_read!(idx, cp.read_or_dynamic(idx, ConstantPoolReader::read_constant))?)
+            arguments.push(try_cp_read!(
+                idx,
+                cp.read_or_dynamic(idx, ConstantPoolReader::read_constant)
+            )?)
         }
-        Ok(BootstrapMethod {
-            handle, arguments
-        })
+        Ok(BootstrapMethod { handle, arguments })
     }
 
-    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<(), Error> {
-        cp.insert_method_handle(self.handle.clone()).write_to(writer)?;
+    fn write_to<C: ConstantPoolWriter, W: Write>(
+        &self,
+        cp: &mut C,
+        writer: &mut W,
+    ) -> Result<(), Error> {
+        cp.insert_method_handle(self.handle.clone())
+            .write_to(writer)?;
         (self.arguments.len() as u16).write_to(writer)?;
         for arg in self.arguments.iter().cloned() {
-            cp.insert_ordynamic(arg, ConstantPoolWriter::insert_constant).write_to(writer)?;
+            cp.insert_ordynamic(arg, ConstantPoolWriter::insert_constant)
+                .write_to(writer)?;
         }
         Ok(())
     }
@@ -66,11 +75,15 @@ pub struct Dynamic {
 
 impl Dynamic {
     /// Creates a new dynamic computed constant.
-    pub fn new<N: Into<Cow<'static, str>>, D: Into<Type>>(bsm: BootstrapMethod, name: N, descriptor: D) -> Dynamic {
+    pub fn new<N: Into<Cow<'static, str>>, D: Into<Type>>(
+        bsm: BootstrapMethod,
+        name: N,
+        descriptor: D,
+    ) -> Dynamic {
         Self {
             bsm: Rc::new(bsm.into()),
             name: name.into(),
-            descriptor: descriptor.into()
+            descriptor: descriptor.into(),
         }
     }
     /// Returns an immutable reference to the bootstrap method of this dynamic computed constant.
@@ -86,7 +99,11 @@ impl Dynamic {
     }
 
     pub fn into_inner(self) -> (Option<BootstrapMethod>, Cow<'static, str>, Type) {
-        (Rc::try_unwrap(self.bsm).unwrap().into_inner(), self.name, self.descriptor)
+        (
+            Rc::try_unwrap(self.bsm).unwrap().into_inner(),
+            self.name,
+            self.descriptor,
+        )
     }
 }
 
@@ -95,7 +112,7 @@ impl Clone for Dynamic {
         Self {
             bsm: Rc::new(self.bsm.as_ref().clone()),
             name: self.name.clone(),
-            descriptor: self.descriptor.clone()
+            descriptor: self.descriptor.clone(),
         }
     }
 }
@@ -107,10 +124,13 @@ pub enum OrDynamic<T> {
 }
 
 impl<T> OrDynamic<T> {
-    pub fn map_static<F, N>(self, f: F) -> OrDynamic<N> where F: FnOnce(T) -> N {
+    pub fn map_static<F, N>(self, f: F) -> OrDynamic<N>
+    where
+        F: FnOnce(T) -> N,
+    {
         match self {
             Self::Dynamic(d) => OrDynamic::Dynamic(d),
-            Self::Static(t) => OrDynamic::Static(f(t))
+            Self::Static(t) => OrDynamic::Static(f(t)),
         }
     }
 }
@@ -139,12 +159,14 @@ impl From<MemberRef> for OrDynamic<MemberRef> {
 /// A lazily populated bootstrap method.
 #[derive(Debug)]
 pub struct LazyBsm {
-    inner: UnsafeCell<Option<BootstrapMethod>>
+    inner: UnsafeCell<Option<BootstrapMethod>>,
 }
 
 impl LazyBsm {
     pub const fn new() -> LazyBsm {
-        Self { inner: UnsafeCell::new(None) }
+        Self {
+            inner: UnsafeCell::new(None),
+        }
     }
     pub fn get(&self) -> Option<&BootstrapMethod> {
         unsafe { &*self.inner.get() }.as_ref()
@@ -185,7 +207,7 @@ impl PartialEq for LazyBsm {
 impl Clone for LazyBsm {
     fn clone(&self) -> Self {
         Self {
-            inner: UnsafeCell::new(unsafe { &*self.inner.get() }.clone())
+            inner: UnsafeCell::new(unsafe { &*self.inner.get() }.clone()),
         }
     }
 }
@@ -193,7 +215,7 @@ impl Clone for LazyBsm {
 impl From<BootstrapMethod> for LazyBsm {
     fn from(b: BootstrapMethod) -> Self {
         Self {
-            inner: UnsafeCell::new(Some(b))
+            inner: UnsafeCell::new(Some(b)),
         }
     }
 }

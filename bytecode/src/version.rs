@@ -24,13 +24,13 @@ pub struct JavaVersion {
     /// The minor version.
     pub minor: u16,
     /// The major version.
-    pub major: MajorVersion
+    pub major: MajorVersion,
 }
 
 impl JavaVersion {
     pub const J8: JavaVersion = JavaVersion {
         minor: 0,
-        major: MajorVersion::J8
+        major: MajorVersion::J8,
     };
 }
 
@@ -67,7 +67,7 @@ pub enum MajorVersion {
     /// Java SE 14
     J14,
     /// Java SE 15
-    J15
+    J15,
 }
 
 impl Display for JavaVersion {

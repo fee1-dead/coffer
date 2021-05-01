@@ -16,11 +16,10 @@
  */
 #![allow(unused)]
 
-use syn::{braced, Token, Lifetime, LitInt, token::Brace};
+use proc_macro2::{Ident, Span};
 use syn::parse::{Parse, ParseBuffer, ParseStream, Result};
 use syn::punctuated::Punctuated;
-use proc_macro2::{Ident, Span};
-
+use syn::{braced, token::Brace, Lifetime, LitInt, Token};
 
 struct LabelDecl {
     lifetime: Lifetime,
@@ -31,7 +30,7 @@ impl Parse for LabelDecl {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(LabelDecl {
             lifetime: input.parse()?,
-            colon: input.parse()?
+            colon: input.parse()?,
         })
     }
 }
@@ -60,7 +59,7 @@ impl Parse for TableSwitch {
             end,
             brace,
             labels,
-            default
+            default,
         })
     }
 }
@@ -74,14 +73,14 @@ enum Condition {
     Lt(Token![<]),
 }
 
-
 enum CondRhs {
     Null(Span),
     Zero(Span),
 }
 
 enum CondType {
-    Reference, Int
+    Reference,
+    Int,
 }
 
 enum CondTy {
@@ -90,7 +89,7 @@ enum CondTy {
     Ref(Token![ref]),
     Reference(Span),
     A(Span),
-    I(Span)
+    I(Span),
 }
 
 impl Parse for CondTy {
@@ -99,7 +98,9 @@ impl Parse for CondTy {
             Ok(CondTy::Ref(input.parse()?))
             // todo
         } else {
-            Err(input.error("expected a condition type (valid types: int, integer, i, a, ref, reference)"))
+            Err(input.error(
+                "expected a condition type (valid types: int, integer, i, a, ref, reference)",
+            ))
         }
     }
 }
@@ -108,13 +109,12 @@ struct Cond {
     t: Token![if],
     ty: Ident,
     cond: Condition,
-    rhs: Option<CondRhs>
+    rhs: Option<CondRhs>,
 }
-
 
 struct Jump {
     to: Lifetime,
-    condition: Option<Cond>
+    condition: Option<Cond>,
 }
 
 enum Op {

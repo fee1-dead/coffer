@@ -1,11 +1,11 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use crate::{ConstantPoolReadWrite, ReadWrite};
 use crate::code::{Catch, Label};
+use crate::{ConstantPoolReadWrite, ReadWrite};
 
-use super::AnnotationValue;
 use super::super::Type;
+use super::AnnotationValue;
 
 /// Represents where a type annotation is annotated in a class.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ReadWrite)]
@@ -40,27 +40,36 @@ pub enum MethodTypeAnnotationTarget {
     #[tag(0x16)]
     FormalParameter(u8),
     #[tag(0x17)]
-    Throws(u16)
+    Throws(u16),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct LocalVarTarget {
     pub start: Label,
     pub end: Label,
-    pub idx: u16
+    pub idx: u16,
 }
 
 impl ConstantPoolReadWrite for LocalVarTarget {
-    fn read_from<C: crate::ConstantPoolReader, R: std::io::Read>(cp: &mut C, reader: &mut R) -> crate::Result<Self> {
+    fn read_from<C: crate::ConstantPoolReader, R: std::io::Read>(
+        cp: &mut C,
+        reader: &mut R,
+    ) -> crate::Result<Self> {
         let start_idx = u16::read_from(reader)?;
         let start = cp.get_label(start_idx as _);
         let end = cp.get_label(start_idx as u32 + (u16::read_from(reader)? - 1) as u32);
         Ok(LocalVarTarget {
-            start, end, idx: crate::read_from!(reader)?
+            start,
+            end,
+            idx: crate::read_from!(reader)?,
         })
     }
 
-    fn write_to<C: crate::ConstantPoolWriter, W: std::io::Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<()> {
+    fn write_to<C: crate::ConstantPoolWriter, W: std::io::Write>(
+        &self,
+        cp: &mut C,
+        writer: &mut W,
+    ) -> crate::Result<()> {
         let start = cp.label(&self.start);
         let end = cp.label(&self.end);
         start.write_to(writer)?;
@@ -103,7 +112,10 @@ pub enum CodeTypeAnnotationTarget {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, ReadWrite)]
 #[tag_type(u8)]
 pub enum TypePath {
-    Array(u8), Nested(u8), TypeBound(u8), TypeArgument(u8)
+    Array(u8),
+    Nested(u8),
+    TypeBound(u8),
+    TypeArgument(u8),
 }
 
 #[derive(Debug, Clone, PartialEq, ConstantPoolReadWrite)]
@@ -114,7 +126,7 @@ pub struct ClassTypeAnnotation {
     #[use_normal_rw]
     pub type_path: Vec<TypePath>,
     pub annotation_type: Type,
-    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
+    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, ConstantPoolReadWrite)]
@@ -125,12 +137,15 @@ pub struct MethodTypeAnnotation {
     #[use_normal_rw]
     pub type_path: Vec<TypePath>,
     pub annotation_type: Type,
-    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
+    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, ReadWrite, Copy, Eq)]
 #[tag_type(u8)]
-pub enum FieldTarget { #[tag(0x13)] Field }
+pub enum FieldTarget {
+    #[tag(0x13)]
+    Field,
+}
 
 #[derive(Debug, Clone, PartialEq, ConstantPoolReadWrite)]
 pub struct FieldTypeAnnotation {
@@ -140,9 +155,8 @@ pub struct FieldTypeAnnotation {
     #[use_normal_rw]
     pub type_path: Vec<TypePath>,
     pub annotation_type: Type,
-    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
+    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>,
 }
-
 
 #[derive(Debug, Clone, PartialEq, ConstantPoolReadWrite)]
 pub struct CodeTypeAnnotation {
@@ -151,5 +165,5 @@ pub struct CodeTypeAnnotation {
     #[use_normal_rw]
     pub type_path: Vec<TypePath>,
     pub annotation_type: Type,
-    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>
+    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>,
 }

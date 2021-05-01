@@ -70,8 +70,9 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MUTFError> {
                     return Err(MUTFError::AroundByte(count));
                 }
                 str.push(
-                    char::try_from(((c & 0x1F) << 6) | (c2 & 0x3F)).ok()
-                        .ok_or(MUTFError::AroundByte(count))?
+                    char::try_from(((c & 0x1F) << 6) | (c2 & 0x3F))
+                        .ok()
+                        .ok_or(MUTFError::AroundByte(count))?,
                 )
             }
             14 => {
@@ -90,12 +91,16 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MUTFError> {
                             let c3 = c3 as u32;
                             let c5 = c5 as u32;
                             let c6 = c6 as u32;
-                            str.push(char::try_from(
-                                (((c2 & 0b1111) + 1) << 16)
-                                    | ((c3 & 0b111111) << 10)
-                                    | ((c5 & 0b1111) << 6)
-                                    | (c6 & 0b111111),
-                            ).ok().ok_or(MUTFError::AroundByte(count))?);
+                            str.push(
+                                char::try_from(
+                                    (((c2 & 0b1111) + 1) << 16)
+                                        | ((c3 & 0b111111) << 10)
+                                        | ((c5 & 0b1111) << 6)
+                                        | (c6 & 0b111111),
+                                )
+                                .ok()
+                                .ok_or(MUTFError::AroundByte(count))?,
+                            );
                             continue 'outer;
                         }
                     }
@@ -116,8 +121,9 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MUTFError> {
                 let c3 = c3 as u32;
 
                 str.push(
-                    char::try_from(((c & 0xF) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F)).ok()
-                        .ok_or(MUTFError::AroundByte(count))?
+                    char::try_from(((c & 0xF) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F))
+                        .ok()
+                        .ok_or(MUTFError::AroundByte(count))?,
                 )
             }
             _ => return Err(MUTFError::AroundByte(count)),
@@ -153,13 +159,13 @@ pub fn string_to_modified_utf8(str: &str) -> Vec<u8> {
             0b0 | 0b100_00000..=0b11111_111111 => {
                 // 110xxxxx 10xxxxxx
                 vec.push(((c >> 6) as u8 & 0b011111) | 0b110_00000);
-                vec.push(( c       as u8 & 0b111111) | 0b10_000000);
+                vec.push((c as u8 & 0b111111) | 0b10_000000);
             }
             0b1000_00000000..=0b1111_111111_111111 => {
                 // 1110xxxx 10xxxxxx 10xxxxxx
                 vec.push(((c >> 12) as u8 & 0b001111) | 0b1110_0000);
-                vec.push(((c >> 6 ) as u8 & 0b111111) | 0b10_000000);
-                vec.push(( c        as u8 & 0b111111) | 0b10_000000);
+                vec.push(((c >> 6) as u8 & 0b111111) | 0b10_000000);
+                vec.push((c as u8 & 0b111111) | 0b10_000000);
             }
             _ => {
                 // 11101101 1010(xxxxx - 1) 10xxxxxx 11101101 1011xxxx 10xxxxxx

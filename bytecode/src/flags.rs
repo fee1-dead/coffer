@@ -155,7 +155,7 @@ bitflags! {
     pub struct RequireFlags: u16 {
         /// Any module which depends on the current module, implicitly declares a dependence on the module indicated by this entry.
         const ACC_TRANSITIVE   = 0b0000_0000_0010_0000;
-        /// This dependence is mandatory in the static phase, i.e., at compile time, but is optional in the dynamic phase, i.e., at run time. 
+        /// This dependence is mandatory in the static phase, i.e., at compile time, but is optional in the dynamic phase, i.e., at run time.
         const ACC_STATIC_PHASE = 0b0000_0000_0100_0000;
         /// This dependence was not explicitly or implicitly declared.
         const ACC_SYNTHETIC    = 0b0001_0000_0000_0000;
@@ -185,4 +185,13 @@ macro_rules! rw_impls {
     };
 }
 
-rw_impls!(ClassFlags, ExOpFlags, RequireFlags, ModuleFlags, MethodParameterFlags, InnerClassFlags, MethodFlags, FieldFlags);
+rw_impls!(
+    ClassFlags,
+    ExOpFlags,
+    RequireFlags,
+    ModuleFlags,
+    MethodParameterFlags,
+    InnerClassFlags,
+    MethodFlags,
+    FieldFlags
+);

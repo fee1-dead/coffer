@@ -26,7 +26,6 @@
 use crate::flags::{ModuleFlags, RequireFlags};
 use crate::prelude::*;
 
-
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
 pub struct Require {
     #[str_type(Module)]
@@ -34,7 +33,7 @@ pub struct Require {
     #[use_normal_rw]
     pub flags: RequireFlags,
     #[str_optional]
-    pub version: Option<Cow<'static, str>>
+    pub version: Option<Cow<'static, str>>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
@@ -43,7 +42,7 @@ pub struct Provide {
     pub class: Cow<'static, str>,
     #[vec_len_type(u16)]
     #[str_type(Class)]
-    pub with: Vec<Cow<'static, str>>
+    pub with: Vec<Cow<'static, str>>,
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, ConstantPoolReadWrite)]
@@ -64,9 +63,8 @@ pub struct Module {
     #[str_type(Class)]
     pub uses: Vec<Cow<'static, str>>,
     #[vec_len_type(u16)]
-    pub provides: Vec<Provide>
+    pub provides: Vec<Provide>,
 }
-
 
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
 pub struct Export {
@@ -83,11 +81,19 @@ impl Export {
     /// Creates a new instance of [`Export`].
     ///
     /// [`Export`]: Export
-    pub fn new<ToStr: Into<Cow<'static, str>>, ToOp: Into<ExOpFlags>, ToVec: Into<Vec<Cow<'static, str>>>>(pkg: ToStr, flags: ToOp, to: ToVec) -> Self {
+    pub fn new<
+        ToStr: Into<Cow<'static, str>>,
+        ToOp: Into<ExOpFlags>,
+        ToVec: Into<Vec<Cow<'static, str>>>,
+    >(
+        pkg: ToStr,
+        flags: ToOp,
+        to: ToVec,
+    ) -> Self {
         Self {
             package: pkg.into(),
             flags: flags.into(),
-            to: to.into()
+            to: to.into(),
         }
     }
 }
@@ -102,4 +108,3 @@ pub struct Open {
     #[str_type(Module)]
     pub to: Vec<Cow<'static, str>>,
 }
-

@@ -24,7 +24,10 @@ use crate::prelude::*;
 ///
 /// This trait can be derived with #[derive(ReadWrite)] if all the types it can hold are also `ReadWrite`.
 /// Furthermore, all integer types implement `ReadWrite`.
-pub trait ReadWrite where Self: Sized {
+pub trait ReadWrite
+where
+    Self: Sized,
+{
     fn read_from<T: Read>(reader: &mut T) -> Result<Self>;
     fn write_to<T: Write>(&self, writer: &mut T) -> Result<()>;
 }
@@ -51,10 +54,13 @@ pub trait ConstantPoolWriter {
             Constant::MethodType(t) => {
                 let desc = self.insert_utf8(t.to_string());
                 self.insert_raw(RawConstantEntry::MethodType(desc))
-            },
+            }
             Constant::MethodHandle(h) => {
                 let mem = self.insert_member(h.member);
-                self.insert_raw(RawConstantEntry::MethodHandle(unsafe { *(&h.kind as *const MethodHandleKind as *const u8) }, mem))
+                self.insert_raw(RawConstantEntry::MethodHandle(
+                    unsafe { *(&h.kind as *const MethodHandleKind as *const u8) },
+                    mem,
+                ))
             }
         }
     }
@@ -64,10 +70,13 @@ pub trait ConstantPoolWriter {
     /// This needs a closure which would insert the static variant to the constant pool.
     ///
     /// Returns an index that points to the inserted entry.
-    fn insert_ordynamic<T, F>(&mut self, or_dyn: OrDynamic<T>, f: F) -> u16 where F: FnOnce(&mut Self, T) -> u16 {
+    fn insert_ordynamic<T, F>(&mut self, or_dyn: OrDynamic<T>, f: F) -> u16
+    where
+        F: FnOnce(&mut Self, T) -> u16,
+    {
         match or_dyn {
             OrDynamic::Dynamic(d) => self.insert_dynamic(d),
-            OrDynamic::Static(t) => f(self, t)
+            OrDynamic::Static(t) => f(self, t),
         }
     }
 
@@ -110,14 +119,20 @@ pub trait ConstantPoolWriter {
                 panic!("invalid tag for indirect string: {}", tag);
 
                 #[cfg(not(debug_assertions))]
-                    unsafe { std::hint::unreachable_unchecked() }
+                unsafe {
+                    std::hint::unreachable_unchecked()
+                }
             }
         }(str_ref))
     }
-    fn insert_utf8<T: Into<Cow<'static, str>>>(&mut self, st: T) ->  u16 {
+    fn insert_utf8<T: Into<Cow<'static, str>>>(&mut self, st: T) -> u16 {
         self.insert_raw(RawConstantEntry::UTF8(st.into()))
     }
-    fn insert_nameandtype<T: Into<Cow<'static, str>>, T2: Into<Cow<'static, str>>>(&mut self, name: T, descriptor: T2) -> u16 {
+    fn insert_nameandtype<T: Into<Cow<'static, str>>, T2: Into<Cow<'static, str>>>(
+        &mut self,
+        name: T,
+        descriptor: T2,
+    ) -> u16 {
         let a = self.insert_utf8(name);
         let b = self.insert_utf8(descriptor);
         self.insert_raw(RawConstantEntry::NameAndType(a, b))
@@ -146,8 +161,11 @@ pub trait ConstantPoolWriter {
         let entry = match (&mem.descriptor, mem.itfs) {
             (Type::Method { .. }, true) => RawConstantEntry::InterfaceMethod,
             (Type::Method { .. }, false) => RawConstantEntry::Method,
-            _ => RawConstantEntry::Field
-        }(self.insert_class(mem.owner), self.insert_nameandtype(mem.name, mem.descriptor));
+            _ => RawConstantEntry::Field,
+        }(
+            self.insert_class(mem.owner),
+            self.insert_nameandtype(mem.name, mem.descriptor),
+        );
         self.insert_raw(entry)
     }
     fn insert_method_handle(&mut self, handle: MethodHandle) -> u16 {
@@ -164,7 +182,7 @@ pub trait ConstantPoolWriter {
         #[cfg(debug_assertions)]
         unreachable!();
         #[cfg(not(debug_assertions))]
-            unsafe {
+        unsafe {
             core::hint::unreachable_unchecked();
         }
     }
@@ -178,7 +196,7 @@ pub trait ConstantPoolWriter {
         #[cfg(debug_assertions)]
         unreachable!();
         #[cfg(not(debug_assertions))]
-            unsafe {
+        unsafe {
             core::hint::unreachable_unchecked();
         }
     }
@@ -194,8 +212,14 @@ pub trait ConstantPoolReader {
     /// Reads a name and type tuple.
     fn read_nameandtype(&mut self, idx: u16) -> Option<(Cow<'static, str>, Type)> {
         match self.read_raw(idx) {
-            Some(RawConstantEntry::NameAndType(n, t)) => self.read_utf8(n).and_then(|n| self.read_utf8(t).as_deref().map(str::parse).and_then(Result::ok).map(|t| (n, t))),
-            _ => None
+            Some(RawConstantEntry::NameAndType(n, t)) => self.read_utf8(n).and_then(|n| {
+                self.read_utf8(t)
+                    .as_deref()
+                    .map(str::parse)
+                    .and_then(Result::ok)
+                    .map(|t| (n, t))
+            }),
+            _ => None,
         }
     }
     fn read_constant(&mut self, idx: u16) -> Option<Constant> {
@@ -206,48 +230,56 @@ pub trait ConstantPoolReader {
             Some(RawConstantEntry::Double(d)) => Some(Constant::F64(d)),
             Some(RawConstantEntry::String(s)) => self.read_utf8(s).map(Constant::String),
             Some(RawConstantEntry::Class(c)) => self.read_utf8(c).map(Constant::Class),
-            Some(RawConstantEntry::MethodType(m)) => self.read_utf8(m).as_deref().map(str::parse).and_then(Result::ok).map(Constant::MethodType),
+            Some(RawConstantEntry::MethodType(m)) => self
+                .read_utf8(m)
+                .as_deref()
+                .map(str::parse)
+                .and_then(Result::ok)
+                .map(Constant::MethodType),
             Some(RawConstantEntry::MethodHandle(k, m)) => MethodHandleKind::try_from(k)
                 .ok()
                 .zip(self.read_member(m))
                 .map(|(kind, member)| MethodHandle { kind, member })
                 .map(Constant::MethodHandle),
-            _ => self.read_member(idx).map(Constant::Member)
+            _ => self.read_member(idx).map(Constant::Member),
         }
     }
     fn read_int(&mut self, idx: u16) -> Option<i32> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::Int(i)) => Some(i),
-            _ => None
+            _ => None,
         }
     }
     fn read_long(&mut self, idx: u16) -> Option<i64> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::Long(l)) => Some(l),
-            _ => None
+            _ => None,
         }
     }
     fn read_float(&mut self, idx: u16) -> Option<f32> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::Float(f)) => Some(f),
-            _ => None
+            _ => None,
         }
     }
     fn read_double(&mut self, idx: u16) -> Option<f64> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::Double(d)) => Some(d),
-            _ => None
+            _ => None,
         }
     }
 
     fn read_indirect_str(&mut self, tag: u8, idx: u16) -> Option<Cow<'static, str>> {
-        self.read_raw(idx).map(|c| match c {
-            RawConstantEntry::Module(u) if tag == 19 => self.read_utf8(u),
-            RawConstantEntry::Package(u) if tag == 20 => self.read_utf8(u),
-            RawConstantEntry::String(u) if tag == 8 => self.read_utf8(u),
-            RawConstantEntry::Class(u) if tag == 7 => self.read_utf8(u),
-            _ => None
-        }).flatten().map(Into::into)
+        self.read_raw(idx)
+            .map(|c| match c {
+                RawConstantEntry::Module(u) if tag == 19 => self.read_utf8(u),
+                RawConstantEntry::Package(u) if tag == 20 => self.read_utf8(u),
+                RawConstantEntry::String(u) if tag == 8 => self.read_utf8(u),
+                RawConstantEntry::Class(u) if tag == 7 => self.read_utf8(u),
+                _ => None,
+            })
+            .flatten()
+            .map(Into::into)
     }
 
     fn read_class(&mut self, idx: u16) -> Option<Cow<'static, str>> {
@@ -257,10 +289,13 @@ pub trait ConstantPoolReader {
     fn read_utf8(&mut self, idx: u16) -> Option<Cow<'static, str>> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::UTF8(s)) => Some(s),
-            _ => None
+            _ => None,
         }
     }
-    fn read_or_dynamic<T, F>(&mut self, idx: u16, f: F) -> Option<OrDynamic<T>> where F: FnOnce(&mut Self, u16) -> Option<T> {
+    fn read_or_dynamic<T, F>(&mut self, idx: u16, f: F) -> Option<OrDynamic<T>>
+    where
+        F: FnOnce(&mut Self, u16) -> Option<T>,
+    {
         let dy = self.read_dynamic(idx);
         if let Some(d) = dy {
             Some(OrDynamic::Dynamic(d))
@@ -270,62 +305,68 @@ pub trait ConstantPoolReader {
     }
     fn read_invokedynamic(&mut self, idx: u16) -> Option<Dynamic> {
         match self.read_raw(idx) {
-            Some(RawConstantEntry::InvokeDynamic(s, a)) =>  {
+            Some(RawConstantEntry::InvokeDynamic(s, a)) => {
                 let cell = Rc::new(LazyBsm::new());
                 let (name, descriptor) = self.read_nameandtype(a)?;
                 self.resolve_later(s, cell.clone());
                 Some(Dynamic {
                     bsm: cell,
-                    name, descriptor
+                    name,
+                    descriptor,
                 })
-            },
-            _ => None
+            }
+            _ => None,
         }
     }
     fn read_dynamic(&mut self, idx: u16) -> Option<Dynamic> {
         match self.read_raw(idx) {
-            Some(RawConstantEntry::Dynamic(s, a)) =>  {
+            Some(RawConstantEntry::Dynamic(s, a)) => {
                 let cell = Rc::new(LazyBsm::new());
                 let (name, descriptor) = self.read_nameandtype(a)?;
                 self.resolve_later(s, cell.clone());
                 Some(Dynamic {
                     bsm: cell,
-                    name, descriptor
+                    name,
+                    descriptor,
                 })
-            },
-            _ => None
+            }
+            _ => None,
         }
     }
     fn read_method_handle(&mut self, idx: u16) -> Option<MethodHandle> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::MethodHandle(kind, idx)) => {
-                if let (Some(m), Ok(k)) = (self.read_member(idx), MethodHandleKind::try_from(kind)) {
-                    Some(MethodHandle {
-                        kind: k,
-                        member: m
-                    })
+                if let (Some(m), Ok(k)) = (self.read_member(idx), MethodHandleKind::try_from(kind))
+                {
+                    Some(MethodHandle { kind: k, member: m })
                 } else {
                     None
                 }
             }
-            _ => None
+            _ => None,
         }
     }
     fn read_member(&mut self, idx: u16) -> Option<MemberRef> {
         match self.read_raw(idx) {
-            Some(RawConstantEntry::Method(o, nt)) |
-            Some(RawConstantEntry::Field(o, nt)) =>
-                self.read_indirect_str(7, o)
-                    .and_then(|o|
-                        self.read_nameandtype(nt)
-                            .map(|(n,t)| (o, n, t)))
-                    .map(|(o, n, t)| MemberRef { owner: o, name: n, descriptor: t, itfs: false }),
-            Some(RawConstantEntry::InterfaceMethod(o, nt)) => self.read_indirect_str(7, o)
-                .and_then(|o|
-                    self.read_nameandtype(nt)
-                        .map(|(n,t)| (o, n, t)))
-                .map(|(o, n, t)| MemberRef { owner: o, name: n, descriptor: t, itfs: true }),
-            _ => None
+            Some(RawConstantEntry::Method(o, nt)) | Some(RawConstantEntry::Field(o, nt)) => self
+                .read_indirect_str(7, o)
+                .and_then(|o| self.read_nameandtype(nt).map(|(n, t)| (o, n, t)))
+                .map(|(o, n, t)| MemberRef {
+                    owner: o,
+                    name: n,
+                    descriptor: t,
+                    itfs: false,
+                }),
+            Some(RawConstantEntry::InterfaceMethod(o, nt)) => self
+                .read_indirect_str(7, o)
+                .and_then(|o| self.read_nameandtype(nt).map(|(n, t)| (o, n, t)))
+                .map(|(o, n, t)| MemberRef {
+                    owner: o,
+                    name: n,
+                    descriptor: t,
+                    itfs: true,
+                }),
+            _ => None,
         }
     }
 
@@ -363,7 +404,10 @@ pub trait ConstantPoolReader {
 /// The read and write trait where information must be retrieved along with constant pool information.
 ///
 /// And will insert constant entries into the the constant pool when writing.
-pub trait ConstantPoolReadWrite where Self: Sized {
+pub trait ConstantPoolReadWrite
+where
+    Self: Sized,
+{
     fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self>;
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()>;
 }
@@ -371,24 +415,27 @@ pub trait ConstantPoolReadWrite where Self: Sized {
 /// helpful macro to return an error if the constant entry is not found or occupied by a double-sized entry.
 #[macro_export]
 macro_rules! try_cp_read {
-    ($cp: ident, $reader: ident, $fn: ident) => ({
+    ($cp: ident, $reader: ident, $fn: ident) => {{
         let idx = $crate::ReadWrite::read_from($reader)?;
         $crate::try_cp_read!(idx, $cp.$fn(idx))
-    });
+    }};
 
-    ($idx: expr, $opt: expr) => ({
+    ($idx: expr, $opt: expr) => {{
         match $opt {
             Some(s) => Ok(s),
-            None => Err($crate::error::Error::Invalid("Constant pool entry index", Into::into($idx.to_string())))
+            None => Err($crate::error::Error::Invalid(
+                "Constant pool entry index",
+                Into::into($idx.to_string()),
+            )),
         }
-    })
+    }};
 }
 
 #[macro_export]
 macro_rules! try_cp_read_idx {
-    ($cp: ident, $idx: expr, $fn: ident) => ({
+    ($cp: ident, $idx: expr, $fn: ident) => {{
         $crate::try_cp_read!($idx, $cp.$fn($idx))
-    });
+    }};
 }
 
 /// Helper macro to disambigurate if a type implements both [`ConstantPoolReadWrite`] and [`ReadWrite`].
@@ -482,4 +529,9 @@ macro_rules! cprw_impls {
     };
 }
 
-cprw_impls!((i32, read_int, insert_int), (i64, read_long, insert_long), (f32, read_float, insert_float), (f64, read_double, insert_double));
+cprw_impls!(
+    (i32, read_int, insert_int),
+    (i64, read_long, insert_long),
+    (f32, read_float, insert_float),
+    (f64, read_double, insert_double)
+);

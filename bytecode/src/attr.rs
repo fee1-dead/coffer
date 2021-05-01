@@ -14,10 +14,10 @@
  *     You should have received a copy of the GNU Lesser General Public License
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
+use crate::annotation::{Annotation, ClassTypeAnnotation};
+use crate::mod_utf8::{modified_utf8_to_string, string_to_modified_utf8};
 use crate::module::Module;
 use crate::prelude::*;
-use crate::mod_utf8::{modified_utf8_to_string, string_to_modified_utf8};
-use crate::annotation::{Annotation, ClassTypeAnnotation};
 
 /// An unrecognized, unknown raw attribute.
 #[derive(Clone, PartialEq, Debug)]
@@ -29,7 +29,7 @@ pub struct RawAttribute {
     /// The name of this attribute.
     pub name: Cow<'static, str>,
     /// The inner data of this attribute.
-    pub inner: Cow<'static, [u8]>
+    pub inner: Cow<'static, [u8]>,
 }
 
 impl RawAttribute {
@@ -40,7 +40,7 @@ impl RawAttribute {
         Self {
             keep: true,
             name: name.into(),
-            inner: inner.into()
+            inner: inner.into(),
         }
     }
     /// Used by the procedural macro.
@@ -48,13 +48,16 @@ impl RawAttribute {
         Self {
             keep: false,
             name,
-            inner: Cow::Owned(inner)
+            inner: Cow::Owned(inner),
         }
     }
 }
 
-impl ConstantPoolReadWrite for Option<(Cow<'static,str>, Type)> {
-    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self, Error> {
+impl ConstantPoolReadWrite for Option<(Cow<'static, str>, Type)> {
+    fn read_from<C: ConstantPoolReader, R: Read>(
+        cp: &mut C,
+        reader: &mut R,
+    ) -> Result<Self, Error> {
         let idx = u16::read_from(reader)?;
         if idx == 0 {
             Ok(None)
@@ -63,9 +66,14 @@ impl ConstantPoolReadWrite for Option<(Cow<'static,str>, Type)> {
         }
     }
 
-    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<(), Error> {
+    fn write_to<C: ConstantPoolWriter, W: Write>(
+        &self,
+        cp: &mut C,
+        writer: &mut W,
+    ) -> Result<(), Error> {
         if let Some((n, t)) = self {
-            cp.insert_nameandtype(n.clone(), t.to_string()).write_to(writer)
+            cp.insert_nameandtype(n.clone(), t.to_string())
+                .write_to(writer)
         } else {
             0u16.write_to(writer)
         }
@@ -103,7 +111,7 @@ pub struct InnerClass {
     #[str_optional]
     pub inner_name: Option<Cow<'static, str>>,
     #[use_normal_rw]
-    pub inner_access: InnerClassFlags
+    pub inner_access: InnerClassFlags,
 }
 
 #[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
@@ -114,18 +122,29 @@ pub enum ClassAttribute {
     Deprecated,
     SourceFile(Cow<'static, str>),
     InnerClasses(#[vec_len_type(u16)] Vec<InnerClass>),
-    EnclosingMethod(#[str_type(Class)] Cow<'static, str>, Option<(Cow<'static,str>, Type)>),
+    EnclosingMethod(
+        #[str_type(Class)] Cow<'static, str>,
+        Option<(Cow<'static, str>, Type)>,
+    ),
     SourceDebugExtension(#[use_normal_rw] SourceDebugExtension),
-    BootstrapMethods(#[vec_len_type(u16)]  Vec<BootstrapMethod>),
+    BootstrapMethods(#[vec_len_type(u16)] Vec<BootstrapMethod>),
     Module(Module),
-    ModulePackages(#[vec_len_type(u16)] #[str_type(Package)] Vec<Cow<'static, str>>),
+    ModulePackages(
+        #[vec_len_type(u16)]
+        #[str_type(Package)]
+        Vec<Cow<'static, str>>,
+    ),
     ModuleMainClass(#[str_type(Class)] Cow<'static, str>),
     NestHost(#[str_type(Class)] Cow<'static, str>),
-    NestMembers(#[vec_len_type(u16)] #[str_type(Class)] Vec<Cow<'static, str>>),
+    NestMembers(
+        #[vec_len_type(u16)]
+        #[str_type(Class)]
+        Vec<Cow<'static, str>>,
+    ),
     RuntimeVisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),
-    RuntimeInvisibleAnnotations(#[vec_len_type(u16)]Vec<Annotation>),
+    RuntimeInvisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),
     RuntimeVisibleTypeAnnotations(#[vec_len_type(u16)] Vec<ClassTypeAnnotation>),
     RuntimeInvisibleTypeAnnotations(#[vec_len_type(u16)] Vec<ClassTypeAnnotation>),
     #[raw_variant]
-    Raw(RawAttribute)
+    Raw(RawAttribute),
 }

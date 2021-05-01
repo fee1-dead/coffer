@@ -17,8 +17,8 @@
 //! A type represents a field descriptor or a method descriptor.
 
 use crate::prelude::*;
-use std::str::FromStr;
 use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 
 /// A descriptor, field or method.
 #[derive(Clone, Eq, PartialEq, Debug, Hash)]
@@ -50,8 +50,8 @@ pub enum Type {
         /// The parameters of the method type.
         parameters: Vec<Type>,
         /// The return type of the method. If this is `None`, it represents `void`.
-        ret: Option<Box<Type>>
-    }
+        ret: Option<Box<Type>>,
+    },
 }
 
 impl Type {
@@ -63,16 +63,24 @@ impl Type {
 
     /// returns `true` if this type is a method descriptor.
     #[inline]
-    pub fn is_method(&self) -> bool { matches!(self, Type::Method{..}) }
+    pub fn is_method(&self) -> bool {
+        matches!(self, Type::Method { .. })
+    }
 
     /// Creates a new method descriptor with parameters and return type.
     #[inline]
     pub fn method<P: Into<Vec<Type>>>(params: P, ret: Option<Type>) -> Type {
-        Type::Method { parameters: params.into(), ret: ret.map(Box::new) }
+        Type::Method {
+            parameters: params.into(),
+            ret: ret.map(Box::new),
+        }
     }
     /// Creates a new reference type with a full-qualified name to the type.
     #[inline]
-    pub fn reference<S>(str: S) -> Type where S: Into<Cow<'static, str>> {
+    pub fn reference<S>(str: S) -> Type
+    where
+        S: Into<Cow<'static, str>>,
+    {
         Type::Ref(str.into())
     }
     /// Creates a new array field descriptor. If the underlying type is array, then the dimension is added to the original dimension and the original type is returned.
@@ -82,7 +90,7 @@ impl Type {
                 *orig_dim += dim;
                 t
             }
-            _ => Type::ArrayRef(dim, Box::new(t))
+            _ => Type::ArrayRef(dim, Box::new(t)),
         }
     }
 }
@@ -100,7 +108,10 @@ impl From<Type> for Cow<'static, str> {
             Type::Short => "S".into(),
             Type::Ref(t) => format!("L{};", t).into(),
             Type::ArrayRef(dim, t) => format!("{}{}", "[".repeat(dim as usize), t).into(),
-            Type::Method { parameters: ty, ret } => {
+            Type::Method {
+                parameters: ty,
+                ret,
+            } => {
                 let mut s = String::from('(');
                 for t in ty {
                     s.push_str(Cow::from(t).as_ref());
@@ -138,7 +149,7 @@ impl FromStr for Type {
                         st.push(c.next().unwrap())
                     }
                     if c.next().is_none() {
-                        return unexpected_end()
+                        return unexpected_end();
                     } else {
                         Type::Ref(Cow::Owned(st))
                     }
@@ -158,21 +169,25 @@ impl FromStr for Type {
                         types.push(get_type(c, st)?)
                     }
                     if c.next().is_none() {
-                        return unexpected_end()
+                        return unexpected_end();
                     } else {
-                        Type::Method { parameters: types, ret: if let Some('V') = c.as_str().chars().next() {
-                            None
-                        } else {
-                            Some(Box::new(get_type(c, st)?))
-                        } }
+                        Type::Method {
+                            parameters: types,
+                            ret: if let Some('V') = c.as_str().chars().next() {
+                                None
+                            } else {
+                                Some(Box::new(get_type(c, st)?))
+                            },
+                        }
                     }
                 }
                 Some(ch) => {
-                    return Err(crate::error::Error::Invalid("type character", ch.to_string().into()))
+                    return Err(crate::error::Error::Invalid(
+                        "type character",
+                        ch.to_string().into(),
+                    ))
                 }
-                None => {
-                    return unexpected_end()
-                }
+                None => return unexpected_end(),
             })
         }
         get_type(&mut s.chars(), s)
@@ -181,7 +196,11 @@ impl FromStr for Type {
 impl ConstantPoolReadWrite for Cow<'static, str> {
     fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self> {
         let idx = ReadWrite::read_from(reader)?;
-        cp.read_utf8(idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index", idx.to_string().into())).map(Into::into)
+        cp.read_utf8(idx)
+            .ok_or_else(|| {
+                crate::error::Error::Invalid("constant pool entry index", idx.to_string().into())
+            })
+            .map(Into::into)
     }
 
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()> {
@@ -202,20 +221,25 @@ impl Display for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         use std::fmt::Write;
         match self {
-            Type::Byte => { f.write_char('B') }
-            Type::Char => { f.write_char('C') }
-            Type::Double => { f.write_char('D') }
-            Type::Float => { f.write_char('F') }
-            Type::Int => { f.write_char('I') }
-            Type::Long => { f.write_char('J') }
-            Type::Boolean => { f.write_char('Z') }
-            Type::Short => { f.write_char('S') }
-            Type::Ref(s) => { write!(f, "L{};", s) }
+            Type::Byte => f.write_char('B'),
+            Type::Char => f.write_char('C'),
+            Type::Double => f.write_char('D'),
+            Type::Float => f.write_char('F'),
+            Type::Int => f.write_char('I'),
+            Type::Long => f.write_char('J'),
+            Type::Boolean => f.write_char('Z'),
+            Type::Short => f.write_char('S'),
+            Type::Ref(s) => {
+                write!(f, "L{};", s)
+            }
             Type::ArrayRef(dim, t) => {
                 "[".repeat(*dim as usize).fmt(f)?;
                 t.fmt(f)
             }
-            Type::Method { parameters: params, ret } => {
+            Type::Method {
+                parameters: params,
+                ret,
+            } => {
                 f.write_char('(')?;
                 for t in params {
                     t.fmt(f)?;

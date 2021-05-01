@@ -15,19 +15,20 @@
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
 
-mod derive;
 mod code_block;
+mod derive;
 use derive::*;
 
 use proc_macro::TokenStream;
-use syn::{Error, DeriveInput};
+use proc_macro2::{Spacing, TokenStream as TokenStream2, TokenTree};
 use quote::{quote, ToTokens};
-use proc_macro2::{TokenTree, Spacing, TokenStream as TokenStream2};
+use syn::{DeriveInput, Error};
 
 #[proc_macro]
 pub fn code_block(tokens: TokenStream) -> TokenStream {
-
-    code_block_inner(TokenStream2::from(tokens)).unwrap_or_else(|e| e.into_compile_error()).into()
+    code_block_inner(TokenStream2::from(tokens))
+        .unwrap_or_else(|e| e.into_compile_error())
+        .into()
 }
 
 /// Grammar:
@@ -72,13 +73,10 @@ fn code_block_inner(tokens: TokenStream2) -> syn::Result<TokenStream2> {
         match tt {
             TokenTree::Ident(op) => todo!(),
             TokenTree::Punct(p) if p.spacing() == Spacing::Alone => {
-                if let Some(TokenTree::Ident(label)) = iter.next() {
-
-                }
+                if let Some(TokenTree::Ident(label)) = iter.next() {}
             }
-            _ =>{}
+            _ => {}
         }
-
     }
     todo!()
 }
@@ -96,10 +94,25 @@ fn code_block_inner(tokens: TokenStream2) -> syn::Result<TokenStream2> {
 ///   - `str_type`: indicates this field is one of the constant pool types that has a string. One of `Package`, `Module`, `String` and `Class` to be exact. Therefore a type must be specified: `#[str_type(Class)]`
 ///   - `str_optional`: indicates this field is an optional string. `None` represents `0` in byte form. The field must be `Option<Cow<'static, str>>`.
 ///   - `vec_len_type`: indicates the length type of the vec. if this is `#[vec_len_type(u32)]`, then the 32-bit length `n` is written/read first.
-#[proc_macro_derive(ConstantPoolReadWrite, attributes(tag_type, tag, attr_enum, raw_variant, use_normal_rw, str_type, str_optional, vec_len_type))]
+#[proc_macro_derive(
+    ConstantPoolReadWrite,
+    attributes(
+        tag_type,
+        tag,
+        attr_enum,
+        raw_variant,
+        use_normal_rw,
+        str_type,
+        str_optional,
+        vec_len_type
+    )
+)]
 pub fn derive_cp_readwrite(item: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(item as DeriveInput);
-    let is_enum = input.attrs.iter().any(|a| a.path.to_token_stream().to_string() == "attr_enum");
+    let is_enum = input
+        .attrs
+        .iter()
+        .any(|a| a.path.to_token_stream().to_string() == "attr_enum");
     if is_enum {
         // Enum variants as Attribute names, also `attr_raw` creates an exhaustive match.
         attr_enum(input)
@@ -127,7 +140,15 @@ pub fn derive_cp_readwrite(item: TokenStream) -> TokenStream {
 pub fn derive_readwrite(item: TokenStream) -> TokenStream {
     //println!("input: \"{}\"", item);
     let input = syn::parse_macro_input!(item as DeriveInput);
-    let res = derive_readwrite_inner(input, quote! { crate::ReadWrite }, quote! { reader }, quote! { writer }, quote! { <Reader: std::io::Read>(reader: &mut Reader) }, quote! { <Writer: std::io::Write>(&self, writer: &mut Writer) }).unwrap_or_else(Error::into_compile_error);
+    let res = derive_readwrite_inner(
+        input,
+        quote! { crate::ReadWrite },
+        quote! { reader },
+        quote! { writer },
+        quote! { <Reader: std::io::Read>(reader: &mut Reader) },
+        quote! { <Writer: std::io::Write>(&self, writer: &mut Writer) },
+    )
+    .unwrap_or_else(Error::into_compile_error);
     //println!("res: \"{}\"", res.to_string());
     res.into()
 }

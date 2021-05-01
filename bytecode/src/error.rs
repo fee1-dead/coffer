@@ -16,8 +16,8 @@
 */
 //! The error module contains errors that may be raised when invalid data is encountered.
 
-use thiserror::Error;
 use std::borrow::Cow;
+use thiserror::Error;
 
 /// The base error type.
 #[derive(Debug, Error)]
@@ -45,24 +45,27 @@ pub enum ErrorBase {
 
     /// A custom error type.
     #[error(transparent)]
-    Custom(#[from] Box<dyn std::error::Error>)
+    Custom(#[from] Box<dyn std::error::Error>),
 }
 
 /// The backtrace module containing an error type that holds a backtrace.
 #[cfg(any(feature = "backtrace", test, doc))]
 pub mod backtrace {
+    use crate::error::ErrorBase;
     use std::backtrace::Backtrace;
     use std::borrow::Cow;
-    use crate::error::ErrorBase;
     use std::error::Error;
     use std::fmt::Formatter;
 
-    impl<T> From<T> for ErrorTrace where ErrorBase: From<T> {
+    impl<T> From<T> for ErrorTrace
+    where
+        ErrorBase: From<T>,
+    {
         #[inline(always)]
         fn from(t: T) -> Self {
             Self {
                 inner: t.into(),
-                trace: Backtrace::force_capture()
+                trace: Backtrace::force_capture(),
             }
         }
     }
@@ -72,7 +75,7 @@ pub mod backtrace {
     pub struct ErrorTrace {
         /// The inner error.
         pub inner: ErrorBase,
-        trace: Backtrace
+        trace: Backtrace,
     }
 
     impl std::fmt::Display for ErrorTrace {

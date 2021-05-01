@@ -14,17 +14,17 @@
  *     You should have received a copy of the GNU Lesser General Public License
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::Class;
-use crate::code::{Code, MemberType, MemberType::Static, GetOrPut::Get, Instruction::*};
+use crate::code::{Code, GetOrPut::Get, Instruction::*, MemberType, MemberType::Static};
+use crate::flags::{ClassFlags, MethodFlags};
 use crate::loadable::Constant;
 use crate::member::{MemberRef, Method, MethodAttribute};
-use crate::prelude::{Type, JavaVersion};
-use crate::flags::{ClassFlags, MethodFlags};
 use crate::prelude::*;
-use tempfile::{tempdir, TempDir};
-use std::process::{Command, Stdio};
-use std::io::BufWriter;
+use crate::prelude::{JavaVersion, Type};
+use crate::Class;
 use std::fs::File;
+use std::io::BufWriter;
+use std::process::{Command, Stdio};
+use tempfile::{tempdir, TempDir};
 
 macro_rules! ignored_tests {
     ($($item: item)*) => {
@@ -39,9 +39,19 @@ macro_rules! ignored_tests {
 struct Execution(TempDir, Command);
 
 impl Execution {
-    fn case(&mut self, success: bool, stdin: impl AsRef<[u8]>, stdout: impl AsRef<[u8]>, stderr: impl AsRef<[u8]>) -> Result<&mut Self> {
+    fn case(
+        &mut self,
+        success: bool,
+        stdin: impl AsRef<[u8]>,
+        stdout: impl AsRef<[u8]>,
+        stderr: impl AsRef<[u8]>,
+    ) -> Result<&mut Self> {
         let mut child = self.1.spawn()?;
-        child.stdin.take().expect("Expected stdin").write_all(stdin.as_ref())?;
+        child
+            .stdin
+            .take()
+            .expect("Expected stdin")
+            .write_all(stdin.as_ref())?;
         let out = child.wait_with_output()?;
         assert_eq!(out.status.success(), success);
         assert_eq!(out.stderr, stderr.as_ref());
@@ -62,9 +72,9 @@ fn bake(code: Code) -> crate::Result<Execution> {
             access: MethodFlags::ACC_STATIC | MethodFlags::ACC_FINAL | MethodFlags::ACC_PUBLIC,
             name: "main".into(),
             descriptor: Type::method([Type::array(1, Type::reference("java/lang/String"))], None),
-            attributes: vec![MethodAttribute::Code(code)]
+            attributes: vec![MethodAttribute::Code(code)],
         }],
-        attributes: vec![]
+        attributes: vec![],
     };
     let dir = tempdir()?;
     let class = dir.path().join("Test.class");
@@ -131,4 +141,3 @@ ignored_tests! {
         Ok(())
     }*/
 }
-
