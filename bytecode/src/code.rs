@@ -1039,11 +1039,11 @@ impl ConstantPoolReadWrite for Code {
         writer: &mut W,
     ) -> crate::Result<(), Error> {
         use crate::constants::insn::*;
+
         self.max_stack.write_to(writer)?;
         self.max_locals.write_to(writer)?;
         let mut buf: Vec<Vec<u8>> = Vec::new();
         let mut jumps: Vec<&Instruction> = Vec::new();
-        let insns = self.code.iter();
         let mut cursor: Cursor<Vec<u8>> = Cursor::new(Vec::new());
         let mut line_numbers: HashMap<usize, u16> = HashMap::new();
         let mut labels: HashMap<Label, (usize, usize)> = HashMap::new();
@@ -1072,7 +1072,7 @@ impl ConstantPoolReadWrite for Code {
                 }
             });
         }
-        for insn in insns {
+        for insn in self.code.iter() {
             match insn {
                 Instruction::NoOp => NOP.write_to(&mut cursor)?,
                 Instruction::PushNull => ACONST_NULL.write_to(&mut cursor)?,
@@ -1523,7 +1523,7 @@ impl ConstantPoolReadWrite for Code {
                 Instruction::Jsr(target) | Instruction::Jump(JumpCondition::Always, target) => {
                     let (buf_idx, buf_off) = get_label!(target);
                     let target_off = if buf_idx != 0 {
-                        index_hints[buf_idx + 1]
+                        index_hints[buf_idx - 1]
                     } else {
                         0
                     } + buf_off;
