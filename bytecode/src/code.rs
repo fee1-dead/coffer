@@ -1505,21 +1505,27 @@ impl ConstantPoolReadWrite for Code {
                 cont:
                     ops
         */
+        // Where the elements of `buf` end up.
         let mut actual_indices = Vec::new();
+        // the index at the opcode byte of the jump instruction.
         let mut last_idx = 0;
         buf_iter = buf.iter();
         let mut actual_sizes = Vec::new();
         for j in &jumps {
             last_idx += buf_iter.next().unwrap().len();
             let actual_size = 1 + match *j {
+                // These switch instructions need a padding so that the address of the
+                // default offset is perfectly aligned (multiple of four). Therefore,
+                // their `index % 4` must equal 3, since we are using zero-based index.
+                // To calculate this, we just need to find `3 - (index + 1) % 4`. 
                 Instruction::LookupSwitch { default: _, table } => {
-                    ((4 - ((last_idx + 2) & 3)) & 3) + 8 + table.len() * 8
+                    (3 - (last_idx + 1) % 4) + 8 + table.len() * 8
                 }
                 Instruction::TableSwitch {
                     default: _,
                     low: _,
                     offsets,
-                } => ((4 - ((last_idx + 2) & 3)) & 3) + 12 + offsets.len() * 4,
+                } => (3 - (last_idx + 1) % 4) + 12 + offsets.len() * 4,
                 Instruction::Jsr(target) | Instruction::Jump(JumpCondition::Always, target) => {
                     let (buf_idx, buf_off) = get_label!(target);
                     let target_off = if buf_idx != 0 {
@@ -1553,8 +1559,9 @@ impl ConstantPoolReadWrite for Code {
             actual_sizes.push(actual_size);
             actual_indices.push(last_idx);
         }
+        // The index of the second last `buf` element + length of last element.
         let code_len = (buf_iter.next().unwrap().len() + last_idx) as u32;
-        code_len.write_to(writer)?;
+        code_len.write_to(writer)?; // u4 code_length
         let mut jumps_iter = jumps.into_iter();
         let mut buf_iter = buf.into_iter();
         writer.write_all(&buf_iter.next().unwrap())?;
@@ -1588,7 +1595,7 @@ impl ConstantPoolReadWrite for Code {
             match jump {
                 Instruction::LookupSwitch { default, table } => {
                     LOOKUPSWITCH.write_to(writer)?;
-                    writer.write_all(&vec![0; (4 - (actual_indices[i] & 3)) & 3])?; // proper 4 byte alignment
+                    writer.write_all(&vec![0; 3 - (actual_indices[i] - actual_sizes[i] + 1) % 4])?; // proper 4 byte alignment
                     write_to!(&resolve_label!(default), writer)?;
 
                     (table.len() as u32).write_to(writer)?;
@@ -1605,7 +1612,7 @@ impl ConstantPoolReadWrite for Code {
                     offsets,
                 } => {
                     TABLESWITCH.write_to(writer)?;
-                    writer.write_all(&vec![0; (4 - (actual_indices[i] & 3)) & 3])?; // proper 4 byte alignment
+                    writer.write_all(&vec![0; 3 - (actual_indices[i] - actual_sizes[i] + 1) % 4])?; // proper 4 byte alignment
                     write_to!(&resolve_label!(default), writer)?;
                     write_to!(low, writer)?;
                     write_to!(&(low + (offsets.len() - 1) as i32), writer)?;
@@ -1636,6 +1643,7 @@ impl ConstantPoolReadWrite for Code {
                         u8::write_to(&(*cond).into(), writer)?;
                         write_to!(&off, writer)?;
                     }, {
+                        // SAFETY: JumpCondition::Always is matched before this
                         u8::write_to(&(-cond).unwrap_or_else(|| unsafe { std::hint::unreachable_unchecked() }).into(), writer)?;
                         write_to!(&5i32, writer)?;
                         GOTO_W.write_to(writer)?;
