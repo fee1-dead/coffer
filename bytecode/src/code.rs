@@ -1707,7 +1707,9 @@ impl ConstantPoolReadWrite for Code {
             }
             .write_to(writer)?;
         }
-        (self.attrs.len() as u16).write_to(writer)?;
+        let mut extra_attrs = 0;
+        let mut attributes_writer = Vec::new();
+
         for a in &self.attrs {
             match a {
                 CodeAttribute::VisibleTypeAnnotations(a) => {
@@ -1753,15 +1755,18 @@ impl ConstantPoolReadWrite for Code {
                         (false, true) => CodeAttr::LocalVariableTypeTable(ty),
                         (true, false) => CodeAttr::LocalVariableTable(var),
                         (false, false) => {
-                            CodeAttr::LocalVariableTable(var).write_to(&mut labeler, writer)?;
+                            extra_attrs += 1;
+                            CodeAttr::LocalVariableTable(var).write_to(&mut labeler, &mut attributes_writer)?;
                             CodeAttr::LocalVariableTypeTable(ty)
                         }
                     }
                 }
                 CodeAttribute::Raw(r) => CodeAttr::Raw(r.clone()),
             }
-            .write_to(&mut labeler, writer)?;
+            .write_to(&mut labeler, &mut attributes_writer)?;
         }
+        (self.attrs.len() as u16 + extra_attrs).write_to(writer)?;
+        writer.write_all(&attributes_writer)?;
         Ok(())
     }
 }
