@@ -71,13 +71,19 @@ pub mod backtrace {
     }
 
     /// The error type, but contains a backtrace. Useful when debugging.
-    #[derive(Debug)]
     pub struct ErrorTrace {
         /// The inner error.
         pub inner: ErrorBase,
         trace: Backtrace,
     }
 
+    impl std::fmt::Debug for ErrorTrace {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("ErrorTrace")
+            .field("inner", &self.inner)
+            .finish()
+        }
+    }
     impl std::fmt::Display for ErrorTrace {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
             write!(f, "{}\nBacktrace:\n{}", self.inner, self.trace)
