@@ -1656,40 +1656,45 @@ impl ConstantPoolReadWrite for Code {
             writer.write_all(&bytes)?;
         }
 
-        struct Labeler<'a, T: ConstantPoolWriter>(
-            &'a Vec<usize>,
-            &'a HashMap<Label, (usize, usize)>,
-            &'a mut T,
-            &'a Vec<Catch>,
-        );
+        struct Labeler<'a, T: ConstantPoolWriter> {
+            indices: &'a Vec<usize>,
+            labels: &'a HashMap<Label, (usize, usize)>,
+            writer: &'a mut T,
+            catches: &'a Vec<Catch>,
+        }
 
         impl<'a, T: ConstantPoolWriter> ConstantPoolWriter for Labeler<'a, T> {
             #[inline]
             fn insert_raw(&mut self, value: RawConstantEntry) -> u16 {
-                self.2.insert_raw(value)
+                self.writer.insert_raw(value)
             }
 
             #[inline]
             fn insert_bsm(&mut self, bsm: BootstrapMethod) -> u16 {
-                self.2.insert_bsm(bsm)
+                self.writer.insert_bsm(bsm)
             }
 
             fn label(&mut self, lbl: &Label) -> u16 {
-                let (buf_off, inner_off) = *self.1.get(lbl).unwrap();
+                let (buf_off, inner_off) = *self.labels.get(lbl).unwrap();
                 (if buf_off == 0 {
                     0
                 } else {
-                    self.0[buf_off - 1] as u16
+                    self.indices[buf_off - 1] as u16
                 }) + (inner_off as u16)
             }
 
             fn catch(&mut self, catch: &Catch) -> Option<u16> {
-                self.3.iter().position(|c| c == catch).map(|n| n as u16)
+                self.catches.iter().position(|c| c == catch).map(|n| n as u16)
             }
         }
 
         (self.catches.len() as u16).write_to(writer)?;
-        let mut labeler = Labeler(&actual_indices, &labels, cp, &self.catches);
+        let mut labeler = Labeler { 
+            indices: &actual_indices, 
+            labels: &labels, 
+            writer: cp, 
+            catches: &self.catches,
+        };
         for Catch {
             start,
             end,
