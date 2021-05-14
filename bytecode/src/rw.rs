@@ -179,12 +179,7 @@ pub trait ConstantPoolWriter {
     /// however a wrapper type should always delagate this function to their inner impl.
     #[inline]
     fn label(&mut self, _lbl: &Label) -> u16 {
-        #[cfg(debug_assertions)]
         unreachable!();
-        #[cfg(not(debug_assertions))]
-        unsafe {
-            core::hint::unreachable_unchecked();
-        }
     }
 
     /// Find the index of a catch.
@@ -193,12 +188,7 @@ pub trait ConstantPoolWriter {
     /// however a wrapper type should always delagate this function to their inner impl.
     #[inline]
     fn catch(&mut self, _catch: &Catch) -> Option<u16> {
-        #[cfg(debug_assertions)]
         unreachable!();
-        #[cfg(not(debug_assertions))]
-        unsafe {
-            core::hint::unreachable_unchecked();
-        }
     }
 }
 
