@@ -100,6 +100,7 @@ fn code_block_inner(tokens: TokenStream2) -> syn::Result<TokenStream2> {
         tag_type,
         tag,
         attr_enum,
+        attr_normal_size,
         raw_variant,
         use_normal_rw,
         str_type,
