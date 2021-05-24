@@ -24,9 +24,6 @@ use std::hash::Hash;
 use std::io::{Cursor, Read, Write};
 use std::rc::Rc;
 
-
-use nom::lib::std::borrow::Cow;
-
 use crate::prelude::*;
 use crate::{
     read_from, try_cp_read_idx, ConstantPoolReadWrite, ConstantPoolReader,
