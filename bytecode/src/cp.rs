@@ -16,13 +16,51 @@
  *     along with Coffer. (LICENSE.md)  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::prelude::{BootstrapMethod, LazyBsm, Read, Result, Write};
+use crate::{mod_utf8, prelude::{BootstrapMethod, LazyBsm, Read, Result, Write}};
 use crate::{ConstantPoolReader, ConstantPoolWriter, Error, ReadWrite};
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
+
+#[derive(Clone, Debug, Copy)]
+pub struct StrRef<'a>(pub &'a str);
+
+impl<'a> ReadWrite for StrRef<'a> {
+    fn read_from<T: Read>(_reader: &mut T) -> Result<Self> {
+        Err(crate::Error::Invalid("call", "read_from for StrRef is unimplemented".into()))
+    }
+
+    fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
+        writer.write_all(&mod_utf8::string_to_modified_utf8(self.0))?;
+        Ok(())
+    }
+}
+
+#[derive(ReadWrite, Debug, Clone, Copy)]
+#[tag_type(u8)]
+pub enum ConstEntryRef<'a> {
+    UTF8(StrRef<'a>),
+    #[tag(3)]
+    Int(i32),
+    Float(f32),
+    Long(i64),
+    Double(f64),
+    Class(u16),
+    String(u16),
+    Field(u16, u16),
+    Method(u16, u16),
+    InterfaceMethod(u16, u16),
+    NameAndType(u16, u16),
+    #[tag(15)]
+    MethodHandle(u8, u16),
+    MethodType(u16),
+    Dynamic(u16, u16),
+    InvokeDynamic(u16, u16),
+    Module(u16),
+    Package(u16),
+}
 
 /// A raw constant entry that has unresolved indices to other entries.
 #[derive(ReadWrite, Debug, Clone)]
