@@ -18,7 +18,9 @@
 //! Structures that represent instructions that will be
 //! executed when a method is called.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::convert::TryFrom;
 use std::hash::Hash;
 use std::io::{Cursor, Read, Write};
@@ -90,6 +92,7 @@ impl ConstantPoolReadWrite for Code {
         }
         let max_stack = u16::read_from(reader)?;
         let max_locals = u16::read_from(reader)?;
+        // Read code to a buffer so we are able to seek.
         let mut code = vec![0; u32::read_from(reader)? as usize];
         reader.read_exact(&mut code)?;
         let mut labeler = Labeler {
@@ -97,29 +100,35 @@ impl ConstantPoolReadWrite for Code {
             labels: HashMap::new(),
             catches: &[],
         };
-        let len = code.len();
+        
+        let len = code.len() as u64;
         let mut code_reader = Cursor::new(code);
         let mut instructions = Vec::new();
+        // Map positions of opcodes to the index to the `instructions` 
         let mut pos2idx = HashMap::new();
-        while (code_reader.position() as usize) < len {
+        
+        while code_reader.position() < len {
             let curpos = code_reader.position();
             pos2idx.insert(curpos as u32, instructions.len());
             let opcode = code_reader.get_ref()[curpos as usize];
             let insn = match opcode {
+                // Special opcodes that might contain padding bytes
                 crate::constants::insn::TABLESWITCH | crate::constants::insn::LOOKUPSWITCH => {
                     // pad 0-3 bytes to align properly
                     code_reader.seek(SeekFrom::Current((4 - (curpos & 3)) as i64))?;
                     let op = [opcode];
-                    let mut temp_read = (&op).chain(&mut code_reader);
-                    crate::insn::Instruction::read_from(&mut temp_read)?
+                    let mut chained_reader = (&op).chain(&mut code_reader);
+                    crate::insn::Instruction::read_from(&mut chained_reader)?
                 }
                 _ => crate::insn::Instruction::read_from(&mut code_reader)?,
             };
             let insn = Conv::convert_direct_instruction(insn, &mut labeler, curpos as i64)?;
             instructions.push(insn);
         }
-        pos2idx.insert(code_reader.get_ref().len() as u32, instructions.len()); // the last position that is still valid but will not be covered in the loop
+        pos2idx.insert(code_reader.get_ref().len() as u32, instructions.len()); 
+        // ^ the last position that is still valid but will not be covered in the loop
 
+        // Read try-catch blocks.
         let exceptions = u16::read_from(reader)?;
         let mut catches = Vec::with_capacity(exceptions as usize);
         for _ in 0..exceptions {
@@ -143,13 +152,23 @@ impl ConstantPoolReadWrite for Code {
         }
         labeler.catches = &catches;
 
+        // Read Attributes
         let numattrs = u16::read_from(reader)?;
         let mut attrs = Vec::with_capacity(numattrs as usize);
-        let mut to_insert: std::collections::BTreeMap<usize, Vec<Instruction>> =
-            std::collections::BTreeMap::new();
+
+        // Some attributes are instructions that will be inserted to the vector.
+        // It should be sorted to avoid ending in the wrong positions.
+        let mut to_insert: BTreeMap<usize, Vec<Instruction>> = BTreeMap::new();
+
+        // Local variables have two different types of attributes containing
+        // information about them. One has descriptor and other has siganture.
+        // A HashMap is used to locate existing local variable data described
+        // by an attribute from before.
         let mut local_vars: HashMap<LocalVarKey, LocalVar> = HashMap::new();
+
         #[derive(Hash, Eq, PartialEq)]
         struct LocalVarKey(Lbl, Lbl, u16, Cow<'static, str>);
+
         for _ in 0..numattrs {
             match CodeAttr::read_from(&mut labeler, reader)? {
                 CodeAttr::LineNumberTable(ln) => {
@@ -163,20 +182,20 @@ impl ConstantPoolReadWrite for Code {
                         let end = labeler.get_label((l.start + l.len) as u32);
 
                         let key = LocalVarKey(start, end, l.index, l.name.clone());
-                        if let Some(v) = local_vars.get_mut(&key) {
-                            v.descriptor = Some(l.descriptor);
-                        } else {
-                            local_vars.insert(
-                                key,
-                                LocalVar {
+                        match local_vars.entry(key) {
+                            Entry::Occupied(mut e) => {
+                                e.get_mut().descriptor = Some(l.descriptor);
+                            }
+                            Entry::Vacant(e) => {
+                                e.insert(LocalVar {
                                     start,
                                     end,
                                     name: l.name,
                                     descriptor: Some(l.descriptor),
                                     signature: None,
                                     index: l.index,
-                                },
-                            );
+                                });
+                            }
                         }
                     }
                 }
@@ -185,31 +204,32 @@ impl ConstantPoolReadWrite for Code {
                         let start = labeler.get_label(l.start as u32);
                         let end = labeler.get_label((l.start + l.len) as u32);
                         let key = LocalVarKey(start, end, l.index, l.name.clone());
-                        if let Some(v) = local_vars.get_mut(&key) {
-                            v.signature = Some(l.signature);
-                        } else {
-                            local_vars.insert(
-                                key,
-                                LocalVar {
+                        match local_vars.entry(key) {
+                            Entry::Occupied(mut e) => {
+                                e.get_mut().signature = Some(l.signature);
+                            }
+                            Entry::Vacant(e) => {
+                                e.insert(LocalVar {
                                     start,
                                     end,
                                     name: l.name,
                                     descriptor: None,
                                     signature: Some(l.signature),
                                     index: l.index,
-                                },
-                            );
+                                });
+                            }
                         }
                     }
                 }
-                CodeAttr::Raw(r) => attrs.push(CodeAttribute::Raw(r)),
-                CodeAttr::StackMapTable(_) => {} // stack map will be regenerated
+                // Stack map information is ignored for now.
+                CodeAttr::StackMapTable(_) => {}
                 CodeAttr::RuntimeInvisibleTypeAnnotations(an) => {
                     attrs.push(CodeAttribute::InvisibleTypeAnnotations(an))
                 }
                 CodeAttr::RuntimeVisibleTypeAnnotations(an) => {
                     attrs.push(CodeAttribute::VisibleTypeAnnotations(an))
                 }
+                CodeAttr::Raw(r) => attrs.push(CodeAttribute::Raw(r))
             }
         }
         if !local_vars.is_empty() {
@@ -218,6 +238,7 @@ impl ConstantPoolReadWrite for Code {
             ));
         }
         instructions.reserve(to_insert.len());
+        instructions.reserve(labeler.labels.len());
         for (k, v) in labeler.labels {
             to_insert.entry(pos2idx[&k]).or_default().push(Label(v));
         }
