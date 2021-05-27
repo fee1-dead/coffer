@@ -1,4 +1,4 @@
-# 1.1
+# 2.0
 
  - Fixed Bootstrap Methods not visible during write 
  - Renamed `Error::MUTF` to `Error::Mutf`.
