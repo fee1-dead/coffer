@@ -374,6 +374,7 @@ impl Conv {
                         if let Type::ArrayRef(dim, ty) = Type::from_str(c.as_ref())? {
                             ClassType::Array(dim, *ty)
                         } else {
+                            // SAFETY: Must be array because string starts with '['.
                             unsafe { std::hint::unreachable_unchecked() }
                         }
                     } else {
