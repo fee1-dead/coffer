@@ -1,68 +1,9 @@
-mod code_block;
 mod derive;
 use derive::*;
 
 use proc_macro::TokenStream;
-use proc_macro2::{Spacing, TokenStream as TokenStream2, TokenTree};
 use quote::{quote, ToTokens};
 use syn::{DeriveInput, Error};
-
-#[proc_macro]
-pub fn code_block(tokens: TokenStream) -> TokenStream {
-    code_block_inner(TokenStream2::from(tokens))
-        .unwrap_or_else(|e| e.into_compile_error())
-        .into()
-}
-
-/// Grammar:
-///
-/// ```mygrammar
-/// +class ""
-/// +str ""
-/// +int 1
-/// +long 2
-/// +float 1.0
-/// -int
-/// -float
-/// -double
-/// ^int
-/// ^long
-/// ~int
-/// >= 0 int
-/// < 0 int
-/// >= int
-/// 'label:
-/// goto 'label
-///
-/// lookupswitch {
-///     1 => 'label,
-///     2 => 'label,
-///     _ => 'label
-/// }
-///
-/// swap
-///
-/// tableswitch 1-2 { 'label, 'label } 'label
-///
-/// invokevirtual "java/lang/String" "intern" "()V"
-///
-/// ```
-#[allow(unused)] // Allow for now
-fn code_block_inner(tokens: TokenStream2) -> syn::Result<TokenStream2> {
-    let mut iter = tokens.into_iter();
-    let mut res: Vec<TokenStream2> = Vec::new();
-
-    while let Some(tt) = iter.next() {
-        match tt {
-            TokenTree::Ident(op) => todo!(),
-            TokenTree::Punct(p) if p.spacing() == Spacing::Alone => {
-                if let Some(TokenTree::Ident(label)) = iter.next() {}
-            }
-            _ => {}
-        }
-    }
-    todo!()
-}
 
 /// !Internal use only! Derive a `ConstantPoolReadWrite` trait.
 ///
