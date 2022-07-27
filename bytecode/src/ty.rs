@@ -133,7 +133,7 @@ impl FromStr for Type {
                         st.push(c.next().unwrap())
                     }
                     if c.next().is_none() {
-                        return unexpected_end();
+                        return Err(unexpected_end());
                     } else {
                         Type::Ref(Cow::Owned(st))
                     }
@@ -153,7 +153,7 @@ impl FromStr for Type {
                         types.push(get_type(c)?)
                     }
                     if c.next().is_none() {
-                        return unexpected_end();
+                        return Err(unexpected_end());
                     } else {
                         Type::Method {
                             parameters: types,
@@ -171,7 +171,7 @@ impl FromStr for Type {
                         ch.to_string().into(),
                     ))
                 }
-                None => return unexpected_end(),
+                None => return Err(unexpected_end()),
             })
         }
         get_type(&mut s.chars())

@@ -140,74 +140,90 @@ pub enum RefTypeSignature {
 // Implementations
 
 #[inline]
-pub(super) fn unexpected_end<T>() -> crate::Result<T> {
-    Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Unexpected end of string").into())
+pub(super) fn unexpected_end() -> crate::Error {
+    crate::Error::Invalid("data", "unexpected end of string".into())
 }
 
 use crate::ConstantPoolReadWrite;
-use nom::{
-    char, complete, do_parse, many0, one_of, opt, peek, switch, take, take_till1, take_until1,
-    IResult,
-};
 
-fn type_sig(i: &str) -> IResult<&str, TypeSignature> {
-    let (i, c) = peek!(i, one_of!("BCDFIJSZTL["))?;
-    let o = match c {
-        'B' => TypeSignature::Byte,
-        'C' => TypeSignature::Char,
-        'D' => TypeSignature::Double,
-        'F' => TypeSignature::Float,
-        'I' => TypeSignature::Int,
-        'J' => TypeSignature::Long,
-        'S' => TypeSignature::Short,
-        'Z' => TypeSignature::Boolean,
-        _ => return ref_type_sig(i).map(|(i, r)| (i, TypeSignature::Ref(r))),
+pub type IResult<'a, T> = crate::Result<(&'a str, T)>;
+
+fn invalid(s: &'static str, x: impl Into<String>) -> crate::Error {
+    crate::Error::Invalid(s, x.into().into())
+}
+
+fn type_sig(i: &str) -> IResult<'_, TypeSignature> {
+    let o = match i.chars().next() {
+        Some('B') => TypeSignature::Byte,
+        Some('C') => TypeSignature::Char,
+        Some('D') => TypeSignature::Double,
+        Some('F') => TypeSignature::Float,
+        Some('I') => TypeSignature::Int,
+        Some('J') => TypeSignature::Long,
+        Some('S') => TypeSignature::Short,
+        Some('Z') => TypeSignature::Boolean,
+        Some('T' | 'L' | '[') => return ref_type_sig(i).map(|(i, r)| (i, TypeSignature::Ref(r))),
+        Some(c) => return Err(invalid("character for type signature", c)),
+        None => return Err(unexpected_end()),
     };
 
     Ok((&i[1..], o))
 }
-fn ref_type_sig(i: &str) -> IResult<&str, RefTypeSignature> {
-    let (newi, c) = one_of!(i, "[TL")?;
-    match c {
-        '[' => {
-            let (i, o) = many0!(newi, char!('['))?;
-            let dim = o.len() + 1;
-            let (i, t) = type_sig(i)?;
+fn ref_type_sig(i: &str) -> IResult<'_, RefTypeSignature> {
+    match i.chars().next() {
+        Some('[') => {
+            let mut c = i.chars();
+            let dim = c.by_ref().take_while(|&x| x == '[').count();
+            // take_while takes the first non-`[` character, so we go back one character.
+            c.next_back();
+            let (i, t) = type_sig(c.as_str())?;
             Ok((i, RefTypeSignature::ArrayRef(dim as u8, Box::new(t))))
         }
-        'T' => {
-            let (i, o) = take_until1!(newi, ";")?;
-            let (i, _) = take!(i, 1)?;
-            Ok((i, RefTypeSignature::TypeVariable(o.to_owned().into())))
+        Some('T') => {
+            let semi = i.find(';').ok_or_else(unexpected_end)?;
+            let type_var = i[1..semi].to_string();
+            Ok((&i[semi + 1..], RefTypeSignature::TypeVariable(type_var.into())))
         }
-        'L' => {
+        Some('L') => {
             let (i, sig) = class_type_sig(i)?;
             Ok((i, RefTypeSignature::ClassType(sig)))
         }
-        _ => unsafe { std::hint::unreachable_unchecked() },
+        Some(c) => Err(invalid("character for referenced tyep signature", c)),
+        None => Err(unexpected_end()),
     }
 }
 
-fn throws(i: &str) -> IResult<&str, Throws> {
-    do_parse!(
-        i,
-        char!('^')
-            >> res: switch!(peek!(take!(1)),
-        "T" => do_parse!(char!('T') >>
-            ty: take_until1!(";") >>
-            take!(1) >>
-            (Throws::TypeParameter(ty.to_owned().into()))) |
-        "L" => do_parse!(sig: class_type_sig >> (Throws::Class(sig))))
-            >> (res)
-    )
+fn char<const C: char>(i: &str) -> IResult<'_, ()> {
+    match i.chars().next() {
+        Some(c) if c == C => Ok((&i[1..], ())),
+        Some(other) => Err(invalid("character", format!("expected {C}, found {other}"))),
+        None => Err(unexpected_end())
+    }
+}
+
+fn throws(i: &str) -> IResult<'_, Throws> {
+    let (i, ()) = char::<'^'>(i)?;
+    match i.chars().next() {
+        Some('L') => {
+            let (i, sig) = class_type_sig(i)?;
+            Ok((i, Throws::Class(sig)))
+        }
+        Some('T') => {
+            let semi = i.find(';').ok_or_else(unexpected_end)?;
+            let type_var = i[1..semi].to_string();
+            Ok((&i[semi + 1..], Throws::TypeParameter(type_var.into())))
+        }
+        Some(c) => Err(invalid("character for thrown type signature", c)),
+        None => Err(unexpected_end()),
+    }
 }
 
 // ClassTypeSignature:
 // L [PackageSpecifier] SimpleClassTypeSignature {ClassTypeSignatureSuffix} ;
 // ClassTypeSignatureSuffix:
 // . SimpleClassTypeSignature
-fn class_type_sig(i: &str) -> IResult<&str, ClassTypeSignature> {
-    let (i, _) = char!(i, 'L')?;
+fn class_type_sig(i: &str) -> IResult<'_, ClassTypeSignature> {
+    let (i, ()) = char::<'L'>(i)?;
     let (i, package) = packages(i)?;
     let (mut i, name) = simple_type_sig(i)?;
     let mut suffix = vec![];
@@ -217,7 +233,7 @@ fn class_type_sig(i: &str) -> IResult<&str, ClassTypeSignature> {
         i = res.0;
         suffix.push(res.1);
     }
-    let (i, _) = char!(i, ';')?;
+    let (i, _) = char::<';'>(i)?;
     Ok((
         i,
         ClassTypeSignature {
@@ -230,7 +246,7 @@ fn class_type_sig(i: &str) -> IResult<&str, ClassTypeSignature> {
 
 // PackageSpecifier:
 // Identifier / {PackageSpecifier}
-fn packages(i: &str) -> IResult<&str, Vec<Cow<'static, str>>> {
+fn packages(i: &str) -> IResult<'_, Vec<Cow<'static, str>>> {
     let bytes = i.as_bytes();
     let mut vec = vec![];
     let mut n = 0;
@@ -260,7 +276,7 @@ fn packages(i: &str) -> IResult<&str, Vec<Cow<'static, str>>> {
             // Push this byte to build the string.
             Some(b) => str.push(*b),
             // The string ended but we are still parsing the packages!
-            None => break Err(nom::Err::Incomplete(nom::Needed::Unknown)),
+            None => break Err(unexpected_end()),
         }
         n += 1;
     }
@@ -272,28 +288,29 @@ fn packages(i: &str) -> IResult<&str, Vec<Cow<'static, str>>> {
 // WildcardIndicator:
 // +
 // -
-fn type_arg(i: &str) -> IResult<&str, TypeArgument> {
-    // Matching the start of RefTypeSig and -+*.
-    let (newi, o) = one_of!(i, "-+*TL[")?;
-    Ok(match o {
-        '*' => (newi, TypeArgument::Any),
-        '-' => {
-            let (i, o) = ref_type_sig(newi)?;
+fn type_arg(i: &str) -> IResult<'_, TypeArgument> {
+    let mut chars = i.chars();
+    Ok(match chars.next() {
+        Some('*') => (chars.as_str(), TypeArgument::Any),
+        Some('-') => {
+            let (i, o) = ref_type_sig(chars.as_str())?;
             (i, TypeArgument::Super(o))
         }
-        '+' => {
-            let (i, o) = ref_type_sig(newi)?;
+        Some('+') => {
+            let (i, o) = ref_type_sig(chars.as_str())?;
             (i, TypeArgument::Extends(o))
         }
         // Use the old `i` to parse the exact type.
-        _ => {
+        Some('T' | 'L' | '[') => {
             let (i, o) = ref_type_sig(i)?;
             (i, TypeArgument::Exact(o))
         }
+        Some(c) => return Err(invalid("type argument", format!("expected one of '*', '-', '+', 'T', 'L', '[, found {c}"))),
+        None => return Err(unexpected_end()),
     })
 }
 
-fn type_args(mut i: &str) -> IResult<&str, Vec<TypeArgument>> {
+fn type_args(mut i: &str) -> IResult<'_, Vec<TypeArgument>> {
     let mut args = vec![];
     if i.as_bytes().get(0) == Some(&b'<') {
         i = &i[1..];
@@ -302,44 +319,47 @@ fn type_args(mut i: &str) -> IResult<&str, Vec<TypeArgument>> {
             i = res.0;
             args.push(res.1);
         }
-        let (i, _) = char!(i, '>')?;
+        let (i, _) = char::<'>'>(i)?;
         Ok((i, args))
     } else {
         Ok((i, Vec::new()))
     }
 }
 
-fn simple_type_sig(i: &str) -> IResult<&str, SimpleClassTypeSignature> {
+fn simple_type_sig(i: &str) -> IResult<'_, SimpleClassTypeSignature> {
     fn type_var_start(c: char) -> bool {
         c == '<' || c == '.' || c == ';'
     }
-    do_parse!(
-        i,
-        name: take_till1!(type_var_start)
-            >> type_arguments: type_args
-            >> (SimpleClassTypeSignature {
-                name: name.to_owned().into(),
-                type_arguments
-            })
-    )
+    let mut chars = i.chars();
+    let name = chars.by_ref().take_while(|&x| !type_var_start(x)).collect::<String>().into();
+    chars.next_back();
+    let (i, type_arguments) = type_args(chars.as_str())?;
+    Ok((i, SimpleClassTypeSignature { name, type_arguments }))
 }
 
-fn type_parameter(i: &str) -> IResult<&str, TypeParameter> {
-    do_parse!(
-        i,
-        ident: take_until1!(":")
-            >> char!(':')
-            >> class_bound: opt!(ref_type_sig)
-            >> interface_bounds: many0!(do_parse!(char!(':') >> res: ref_type_sig >> (res)))
-            >> (TypeParameter {
-                name: ident.to_owned().into(),
-                class_bound,
-                interface_bounds
-            })
-    )
+fn type_parameter(i: &str) -> IResult<'_, TypeParameter> {
+    let mut chars = i.chars();
+    let name = chars.by_ref().take_while(|&x| x != ':').collect::<String>().into();
+    let (mut i, class_bound) = if let Ok((i, class_bound)) = ref_type_sig(i) {
+        (i, Some(class_bound))
+    } else {
+        (i, None)
+    };
+    let mut interface_bounds = vec![];
+    while let Some(':') = chars.next() {
+        let (new_i, bound) = ref_type_sig(i)?;
+        interface_bounds.push(bound);
+        i = new_i;
+    }
+
+    Ok((i, TypeParameter {
+        name,
+        class_bound,
+        interface_bounds,
+    }))
 }
 
-fn type_parameters(mut i: &str) -> IResult<&str, Vec<TypeParameter>> {
+fn type_parameters(mut i: &str) -> IResult<'_, Vec<TypeParameter>> {
     let mut params = vec![];
     if i.as_bytes().get(0) == Some(&b'<') {
         i = &i[1..];
@@ -348,14 +368,14 @@ fn type_parameters(mut i: &str) -> IResult<&str, Vec<TypeParameter>> {
             i = res.0;
             params.push(res.1);
         }
-        let (i, _) = char!(i, '>')?;
+        let (i, _) = char::<'>'>(i)?;
         Ok((i, params))
     } else {
         Ok((i, Vec::new()))
     }
 }
 
-fn ret(i: &str) -> IResult<&str, Option<TypeSignature>> {
+fn ret(i: &str) -> IResult<'_, Option<TypeSignature>> {
     Ok(if i.as_bytes().get(0) == Some(&b'V') {
         (&i[1..], None)
     } else {
@@ -363,51 +383,43 @@ fn ret(i: &str) -> IResult<&str, Option<TypeSignature>> {
     })
 }
 
-fn method_sig(i: &str) -> IResult<&str, MethodSignature> {
-    do_parse!(
-        i,
-        type_parameters: type_parameters
-            >> char!('(')
-            >> parameters: many0!(type_sig)
-            >> char!(')')
-            >> return_type: ret
-            >> throws: many0!(complete!(throws))
-            >> (MethodSignature {
-                type_parameters,
-                parameters,
-                return_type,
-                throws
-            })
-    )
+fn method_sig(i: &str) -> IResult<'_, MethodSignature> {
+    let (i, type_parameters) = type_parameters(i)?;
+    let (mut i, ()) = char::<'('>(i)?;
+    let mut parameters = vec![];
+    while let Ok((new_i, param)) = type_sig(i) {
+        i = new_i;
+        parameters.push(param);
+    }
+    let (mut i, return_type) = ret(i)?;
+    let mut t = vec![];
+    while let Some('^') = i.chars().next() {
+        let (new_i, throw) = throws(&i[1..])?;
+        i = new_i;
+        t.push(throw);
+    }
+    Ok((i, MethodSignature {
+        type_parameters,
+        parameters,
+        return_type,
+        throws: t,
+    }))
 }
 
-fn class_sig(i: &str) -> IResult<&str, ClassSignature> {
-    do_parse!(
-        i,
-        type_parameters: type_parameters
-            >> super_class: class_type_sig
-            >> interfaces: many0!(complete!(class_type_sig))
-            >> (ClassSignature {
-                type_parameters,
-                super_class,
-                interfaces
-            })
-    )
-}
-
-macro_rules! convert_result {
-    ($s: expr, $i:expr) => {
-        match complete!($s, $i) {
-            Ok((i, r)) => {
-                if i.is_empty() {
-                    Ok(r)
-                } else {
-                    unexpected_end()
-                }
-            }
-            Err(e) => Err(Box::<dyn std::error::Error>::from(e.to_string()).into()),
-        }
-    };
+fn class_sig(i: &str) -> IResult<'_, ClassSignature> {
+    let (i, type_parameters) = type_parameters(i)?;
+    let (mut i, super_class) = class_type_sig(i)?;
+    let mut interfaces = vec![];
+    while let Some('L') = i.chars().next() {
+        let (new_i, interface) = class_type_sig(&i[1..])?;
+        i = new_i;
+        interfaces.push(interface);
+    }
+    Ok((i, ClassSignature {
+        type_parameters,
+        super_class,
+        interfaces,
+    }))
 }
 
 macro_rules! fromstr_impls {
@@ -417,7 +429,7 @@ macro_rules! fromstr_impls {
                 type Err = crate::error::Error;
 
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
-                    convert_result!(s, $fn)
+                    $fn(s).map(|(_, r)| r)
                 }
             }
         )*
