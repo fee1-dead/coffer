@@ -1,12 +1,13 @@
 //! Loadable values. These types can be loaded on to the stack, and it is usually stored in the constant pool.
 
 pub use crate::member::MemberRef;
+use crate::total_floats::{TotalF32, TotalF64};
 pub use crate::ty::Type;
 
 use crate::prelude::*;
 use crate::read_from;
 use std::convert::TryFrom;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 
 /// The kind of a method handle. It generally represents an instruction related to a member with one exception.
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, ReadWrite)]
@@ -55,7 +56,7 @@ impl TryFrom<u8> for MethodHandleKind {
 /// A method handle. It can be loaded on to the stack from the constant pool directly.
 ///
 /// There are some restrictions of its kind and its member, one can use [`check`](MethodHandle::check) to check the validity.
-#[derive(Clone, PartialEq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct MethodHandle {
     /// The kind of the handle.
     pub kind: MethodHandleKind,
@@ -134,6 +135,7 @@ impl MethodHandle {
         }
     }
 }
+
 impl ConstantPoolReadWrite for MethodHandle {
     fn read_from<C: ConstantPoolReader, R: Read>(
         cp: &mut C,
@@ -158,16 +160,16 @@ impl ConstantPoolReadWrite for MethodHandle {
 }
 
 /// A constant value that is located in the constant pool which can be loaded onto the stack.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Constant {
     /// A 32 bit integer.
     I32(i32),
     /// A single-precision floating-point number.
-    F32(f32),
+    F32(TotalF32),
     /// A 64 bit integer.
     I64(i64),
     /// A double-precision floating-point number.
-    F64(f64),
+    F64(TotalF64),
     /// A String.
     String(Cow<'static, str>),
     /// A class. The packages are seperated by `/` instead of `.` i.e. `java/lang/String` instead of `java.lang.String`.
@@ -212,24 +214,5 @@ impl ConstantPoolReadWrite for Constant {
 impl From<i32> for Constant {
     fn from(i: i32) -> Self {
         Self::I32(i)
-    }
-}
-
-#[allow(clippy::derive_hash_xor_eq)]
-// Hash cannot be directly derived for floating point types; hash by actual bits of the fp values because that is what will be written in byte form.
-impl Hash for Constant {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        std::mem::discriminant(self).hash(state);
-        match self {
-            Constant::I32(i) => i.hash(state),
-            Constant::F32(f) => (*f).to_bits().hash(state),
-            Constant::I64(i) => i.hash(state),
-            Constant::F64(f) => (*f).to_bits().hash(state),
-            Constant::String(s) => s.hash(state),
-            Constant::Class(s) => s.hash(state),
-            Constant::MethodType(s) => s.hash(state),
-            Constant::MethodHandle(m) => m.hash(state),
-            Constant::Member(mem) => mem.hash(state),
-        }
     }
 }

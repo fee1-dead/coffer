@@ -59,12 +59,12 @@ impl Conv {
             I::IConst4 => push(Constant::I32(4)),
             I::IConst5 => push(Constant::I32(5)),
 
-            I::FConst0 => push(Constant::F32(0.0)),
-            I::FConst1 => push(Constant::F32(1.0)),
-            I::FConst2 => push(Constant::F32(2.0)),
+            I::FConst0 => push(Constant::F32(0.0.into())),
+            I::FConst1 => push(Constant::F32(1.0.into())),
+            I::FConst2 => push(Constant::F32(2.0.into())),
 
-            I::DConst0 => push(Constant::F64(0.0)),
-            I::DConst1 => push(Constant::F64(1.0)),
+            I::DConst0 => push(Constant::F64(0.0.into())),
+            I::DConst1 => push(Constant::F64(1.0.into())),
 
             I::LConst0 => push(Constant::I64(0)),
             I::LConst1 => push(Constant::I64(1)),
@@ -420,7 +420,7 @@ impl Conv {
             ($op: expr, $($ext: ident => $ty: ident),+) => ({
                 use std::convert::TryFrom;
                 #[allow(unused_parens)]
-                if let ($(Ok($ext)),*) = ($($ty::try_from(*$ext)),*) {
+                if let ($(Ok($ext)),*) = ($($ty::try_from($ext)),*) {
                     $op.write_to(&mut cursor)?;
                     $(
                         $ext.write_to(&mut cursor)?;
@@ -434,7 +434,7 @@ impl Conv {
                 }
             });
         }
-        match insn {
+        match *insn {
             Instruction::NoOp => NOP.write_to(&mut cursor)?,
             Instruction::PushNull => ACONST_NULL.write_to(&mut cursor)?,
             Instruction::Push(OrDynamic::Static(Constant::I32(0))) => {
@@ -466,29 +466,29 @@ impl Conv {
             }
             Instruction::Push(OrDynamic::Static(Constant::I32(i @ -128..=127))) => {
                 BIPUSH.write_to(&mut cursor)?;
-                (*i as i8).write_to(&mut cursor)?;
+                (i as i8).write_to(&mut cursor)?;
             }
             Instruction::Push(OrDynamic::Static(Constant::I32(i @ -32768..=32767))) => {
                 SIPUSH.write_to(&mut cursor)?;
-                (*i as i16).write_to(&mut cursor)?;
+                (i as i16).write_to(&mut cursor)?;
             }
 
-            Instruction::Push(OrDynamic::Static(Constant::F32(f))) if f.eq(&0.0) => {
+            Instruction::Push(OrDynamic::Static(Constant::F32(f))) if f == 0.0 => {
                 FCONST_0.write_to(&mut cursor)?
             }
-            Instruction::Push(OrDynamic::Static(Constant::F32(f))) if f.eq(&1.0) => {
+            Instruction::Push(OrDynamic::Static(Constant::F32(f))) if f == 1.0 => {
                 FCONST_1.write_to(&mut cursor)?
             }
-            Instruction::Push(OrDynamic::Static(Constant::F32(f))) if f.eq(&2.0) => {
+            Instruction::Push(OrDynamic::Static(Constant::F32(f))) if f == 2.0 => {
                 FCONST_2.write_to(&mut cursor)?
             }
-            Instruction::Push(OrDynamic::Static(Constant::F64(f))) if f.eq(&0.0) => {
+            Instruction::Push(OrDynamic::Static(Constant::F64(f))) if f == 0.0 => {
                 DCONST_0.write_to(&mut cursor)?
             }
-            Instruction::Push(OrDynamic::Static(Constant::F64(f))) if f.eq(&1.0) => {
+            Instruction::Push(OrDynamic::Static(Constant::F64(f))) if f == 1.0 => {
                 DCONST_1.write_to(&mut cursor)?
             }
-            Instruction::Push(c) => {
+            Instruction::Push(ref c) => {
                 let idx = cp.insert_ordynamic(c.clone(), ConstantPoolWriter::insert_constant);
                 let wide = match c {
                     OrDynamic::Dynamic(d) => d.descriptor.is_wide(),
@@ -678,17 +678,17 @@ impl Conv {
                 DREM.write_to(&mut cursor)?
             }
             Instruction::Throw => ATHROW.write_to(&mut cursor)?,
-            Instruction::InstanceOf(ty) => {
+            Instruction::InstanceOf(ref ty) => {
                 INSTANCEOF.write_to(&mut cursor)?;
                 cp.insert_ordynamic(ty.clone(), ConstantPoolWriter::insert_class)
                     .write_to(&mut cursor)?;
             }
-            Instruction::CheckCast(ty) => {
+            Instruction::CheckCast(ref ty) => {
                 CHECKCAST.write_to(&mut cursor)?;
                 cp.insert_ordynamic(ty.clone(), ConstantPoolWriter::insert_class)
                     .write_to(&mut cursor)?;
             }
-            Instruction::New(ty) => {
+            Instruction::New(ref ty) => {
                 NEW.write_to(&mut cursor)?;
                 cp.insert_ordynamic(ty.clone(), ConstantPoolWriter::insert_class)
                     .write_to(&mut cursor)?;
@@ -748,7 +748,7 @@ impl Conv {
             Instruction::Return(Some(LocalType::Int)) => IRETURN.write_to(&mut cursor)?,
             Instruction::Return(Some(LocalType::Double)) => DRETURN.write_to(&mut cursor)?,
             Instruction::Return(Some(LocalType::Float)) => FRETURN.write_to(&mut cursor)?,
-            Instruction::Field(op, memty, mem) => {
+            Instruction::Field(op, memty, ref mem) => {
                 match (op, memty) {
                     (GetOrPut::Get, MemberType::Virtual) => GETFIELD,
                     (GetOrPut::Put, MemberType::Virtual) => PUTFIELD,
@@ -759,7 +759,7 @@ impl Conv {
                 cp.insert_ordynamic(mem.clone(), ConstantPoolWriter::insert_member)
                     .write_to(&mut cursor)?;
             }
-            Instruction::InvokeExact(memty, mem) => {
+            Instruction::InvokeExact(memty, ref mem) => {
                 match memty {
                     MemberType::Static => INVOKESTATIC,
                     MemberType::Virtual => INVOKEVIRTUAL,
@@ -768,17 +768,17 @@ impl Conv {
                 cp.insert_ordynamic(mem.clone(), ConstantPoolWriter::insert_member)
                     .write_to(&mut cursor)?;
             }
-            Instruction::InvokeSpecial(mem) => {
+            Instruction::InvokeSpecial(ref mem) => {
                 INVOKESPECIAL.write_to(&mut cursor)?;
                 cp.insert_ordynamic(mem.clone(), ConstantPoolWriter::insert_member)
                     .write_to(&mut cursor)?;
             }
-            Instruction::InvokeDynamic(dy) => {
+            Instruction::InvokeDynamic(ref dy) => {
                 INVOKEDYNAMIC.write_to(&mut cursor)?;
                 cp.insert_dynamic(dy.clone()).write_to(&mut cursor)?;
                 cursor.write_all(&[0, 0])?;
             }
-            Instruction::InvokeInterface(mem, count) => {
+            Instruction::InvokeInterface(ref mem, count) => {
                 INVOKEINTERFACE.write_to(&mut cursor)?;
                 cp.insert_ordynamic(mem.clone(), ConstantPoolWriter::insert_member)
                     .write_to(&mut cursor)?;
@@ -790,7 +790,7 @@ impl Conv {
             Instruction::Swap => SWAP.write_to(&mut cursor)?,
             Instruction::IntIncrement(l, inc) => wide_or_normal!(RET, l => u8, inc => i8),
             Instruction::LineNumber(ln) => {
-                line_numbers.insert(cursor.position() as usize, *ln);
+                line_numbers.insert(cursor.position() as usize, ln);
             }
             Instruction::LookupSwitch { .. }
             | Instruction::TableSwitch { .. }
@@ -801,7 +801,7 @@ impl Conv {
                 jumps.push(insn);
             }
             Instruction::Label(l) => {
-                labels.insert(*l, (buf.len(), cursor.position() as usize));
+                labels.insert(l, (buf.len(), cursor.position() as usize));
             }
         }
         Ok(cursor)

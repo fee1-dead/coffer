@@ -28,9 +28,9 @@ pub trait ConstantPoolWriter {
     fn insert_constant(&mut self, value: Constant) -> u16 {
         match value {
             Constant::I32(i) => self.insert_int(i),
-            Constant::F32(f) => self.insert_float(f),
+            Constant::F32(f) => self.insert_float(f.0),
             Constant::I64(l) => self.insert_long(l),
-            Constant::F64(d) => self.insert_double(d),
+            Constant::F64(d) => self.insert_double(d.0),
             Constant::String(s) => self.insert_indirect_str(8, s),
             Constant::Class(s) => self.insert_indirect_str(7, s),
             Constant::Member(mem) => self.insert_member(mem),
@@ -199,8 +199,8 @@ pub trait ConstantPoolReader {
         match self.read_raw(idx) {
             Some(RawConstantEntry::Int(i)) => Some(Constant::I32(i)),
             Some(RawConstantEntry::Long(l)) => Some(Constant::I64(l)),
-            Some(RawConstantEntry::Float(f)) => Some(Constant::F32(f)),
-            Some(RawConstantEntry::Double(d)) => Some(Constant::F64(d)),
+            Some(RawConstantEntry::Float(f)) => Some(Constant::F32(f.into())),
+            Some(RawConstantEntry::Double(d)) => Some(Constant::F64(d.into())),
             Some(RawConstantEntry::String(s)) => self.read_utf8(s).map(Constant::String),
             Some(RawConstantEntry::Class(c)) => self.read_utf8(c).map(Constant::Class),
             Some(RawConstantEntry::MethodType(m)) => self

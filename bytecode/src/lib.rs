@@ -39,7 +39,6 @@ pub mod cp;
 pub mod dynamic;
 pub mod error;
 pub mod flags;
-
 pub mod loadable;
 pub mod member;
 pub mod mod_utf8;
@@ -47,9 +46,9 @@ pub mod module;
 pub mod prelude;
 pub mod signature;
 pub mod ty;
-
 pub mod rw;
 pub mod version;
+pub mod total_floats;
 
 pub(crate) mod insn;
 #[cfg(test)]
