@@ -546,8 +546,7 @@ pub(crate) fn derive_readwrite_inner(
                                 .as_ref()
                                 .map(Group::stream)
                                 .map(parse2)
-                                .map(Result::ok)
-                                .flatten()
+                                .and_then(Result::ok)
                         })
                         .or_else(|| {
                             v.discriminant.clone().and_then(|(_, e)| {
