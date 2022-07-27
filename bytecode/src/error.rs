@@ -80,8 +80,8 @@ pub mod backtrace {
     impl std::fmt::Debug for ErrorTrace {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
             f.debug_struct("ErrorTrace")
-            .field("inner", &self.inner)
-            .finish()
+                .field("inner", &self.inner)
+                .finish()
         }
     }
     impl std::fmt::Display for ErrorTrace {

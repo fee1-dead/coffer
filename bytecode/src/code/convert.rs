@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::Cursor, str::FromStr, convert::TryFrom};
+use std::{collections::HashMap, convert::TryFrom, io::Cursor, str::FromStr};
 
 use super::{Instruction, Instruction::*};
 use crate::{
@@ -414,7 +414,7 @@ impl Conv {
         labels: &mut HashMap<Lbl, (usize, usize)>,
         line_numbers: &mut HashMap<usize, u16>,
         insn: &'a Instruction,
-        cp: &mut W
+        cp: &mut W,
     ) -> Result<Cursor<Vec<u8>>> {
         macro_rules! wide_or_normal {
             ($op: expr, $($ext: ident => $ty: ident),+) => ({
@@ -592,24 +592,14 @@ impl Conv {
             }
 
             Instruction::ArrayLength => ARRAYLENGTH.write_to(&mut cursor)?,
-            Instruction::IntOperation(IntType::Int, IOp::Subtract) => {
-                ISUB.write_to(&mut cursor)?
-            }
-            Instruction::IntOperation(IntType::Int, IOp::Add) => {
-                IADD.write_to(&mut cursor)?
-            }
-            Instruction::IntOperation(IntType::Int, IOp::Multiply) => {
-                IMUL.write_to(&mut cursor)?
-            }
-            Instruction::IntOperation(IntType::Int, IOp::Divide) => {
-                IDIV.write_to(&mut cursor)?
-            }
+            Instruction::IntOperation(IntType::Int, IOp::Subtract) => ISUB.write_to(&mut cursor)?,
+            Instruction::IntOperation(IntType::Int, IOp::Add) => IADD.write_to(&mut cursor)?,
+            Instruction::IntOperation(IntType::Int, IOp::Multiply) => IMUL.write_to(&mut cursor)?,
+            Instruction::IntOperation(IntType::Int, IOp::Divide) => IDIV.write_to(&mut cursor)?,
             Instruction::IntOperation(IntType::Int, IOp::Remainder) => {
                 IREM.write_to(&mut cursor)?
             }
-            Instruction::IntOperation(IntType::Int, IOp::Negate) => {
-                INEG.write_to(&mut cursor)?
-            }
+            Instruction::IntOperation(IntType::Int, IOp::Negate) => INEG.write_to(&mut cursor)?,
             Instruction::IntOperation(IntType::Int, IOp::ShiftRight) => {
                 ISHR.write_to(&mut cursor)?
             }
@@ -619,33 +609,23 @@ impl Conv {
             Instruction::IntOperation(IntType::Int, IOp::UnsignedShiftRight) => {
                 IUSHR.write_to(&mut cursor)?
             }
-            Instruction::IntOperation(IntType::Int, IOp::Or) => {
-                IOR.write_to(&mut cursor)?
-            }
+            Instruction::IntOperation(IntType::Int, IOp::Or) => IOR.write_to(&mut cursor)?,
             Instruction::IntOperation(IntType::Int, IOp::ExclusiveOr) => {
                 IXOR.write_to(&mut cursor)?
             }
-            Instruction::IntOperation(IntType::Int, IOp::And) => {
-                IAND.write_to(&mut cursor)?
-            }
+            Instruction::IntOperation(IntType::Int, IOp::And) => IAND.write_to(&mut cursor)?,
             Instruction::IntOperation(IntType::Long, IOp::Subtract) => {
                 LSUB.write_to(&mut cursor)?
             }
-            Instruction::IntOperation(IntType::Long, IOp::Add) => {
-                LADD.write_to(&mut cursor)?
-            }
+            Instruction::IntOperation(IntType::Long, IOp::Add) => LADD.write_to(&mut cursor)?,
             Instruction::IntOperation(IntType::Long, IOp::Multiply) => {
                 LMUL.write_to(&mut cursor)?
             }
-            Instruction::IntOperation(IntType::Long, IOp::Divide) => {
-                LDIV.write_to(&mut cursor)?
-            }
+            Instruction::IntOperation(IntType::Long, IOp::Divide) => LDIV.write_to(&mut cursor)?,
             Instruction::IntOperation(IntType::Long, IOp::Remainder) => {
                 LREM.write_to(&mut cursor)?
             }
-            Instruction::IntOperation(IntType::Long, IOp::Negate) => {
-                LNEG.write_to(&mut cursor)?
-            }
+            Instruction::IntOperation(IntType::Long, IOp::Negate) => LNEG.write_to(&mut cursor)?,
             Instruction::IntOperation(IntType::Long, IOp::ShiftRight) => {
                 LSHR.write_to(&mut cursor)?
             }
@@ -655,15 +635,11 @@ impl Conv {
             Instruction::IntOperation(IntType::Long, IOp::UnsignedShiftRight) => {
                 LUSHR.write_to(&mut cursor)?
             }
-            Instruction::IntOperation(IntType::Long, IOp::Or) => {
-                LOR.write_to(&mut cursor)?
-            }
+            Instruction::IntOperation(IntType::Long, IOp::Or) => LOR.write_to(&mut cursor)?,
             Instruction::IntOperation(IntType::Long, IOp::ExclusiveOr) => {
                 LXOR.write_to(&mut cursor)?
             }
-            Instruction::IntOperation(IntType::Long, IOp::And) => {
-                LAND.write_to(&mut cursor)?
-            }
+            Instruction::IntOperation(IntType::Long, IOp::And) => LAND.write_to(&mut cursor)?,
 
             Instruction::FloatOperation(FloatType::Float, FOp::Subtract) => {
                 FSUB.write_to(&mut cursor)?

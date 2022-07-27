@@ -61,7 +61,7 @@ pub struct Class {
     pub access: ClassFlags,
     pub name: Cow<'static, str>,
     /// The name of the super class for this class.
-    /// when it is unspecifiedi in the source code, it is `"java/lang/Object"`.
+    /// when it is unspecified in the source code, it is `"java/lang/Object"`.
     ///
     /// Although most java classes have their own superclasses,
     /// java/lang/Object has no superclass.

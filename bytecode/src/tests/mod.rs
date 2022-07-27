@@ -68,10 +68,15 @@ mod code {
     #[test]
     fn sample_read_write_read() {
         for (s, buf) in SAMPLE.iter().map(|(s, buf)| (s.as_str(), buf.clone())) {
-            fn handle_error<E: std::fmt::Display + std::fmt::Debug, P: std::fmt::UpperHex>(e: E, s: &str, buf: &[u8], pos: P, phase: u8) {
+            fn handle_error<E: std::fmt::Display + std::fmt::Debug, P: std::fmt::UpperHex>(
+                e: E,
+                s: &str,
+                buf: &[u8],
+                pos: P,
+                phase: u8,
+            ) {
                 let filename = s.split('/').last().unwrap();
-                let res =
-                    File::create(filename).and_then(|mut f| f.write_all(buf));
+                let res = File::create(filename).and_then(|mut f| f.write_all(buf));
                 let message = match res {
                     Ok(()) => format!("A file named {} has been created", filename),
                     Err(e) => format!("Unable to write to file: {:?}", e),
@@ -96,10 +101,10 @@ mod code {
                                 handle_error(e, s, reader.get_ref(), reader.position(), 3)
                             }
                         }
-                        Err(e) => handle_error(e, s, reader.get_ref(), writer.len(), 2)
+                        Err(e) => handle_error(e, s, reader.get_ref(), writer.len(), 2),
                     }
                 }
-                Err(e) => handle_error(e, s, reader.get_ref(), reader.position(), 1)
+                Err(e) => handle_error(e, s, reader.get_ref(), reader.position(), 1),
             }
         }
     }

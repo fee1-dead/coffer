@@ -1,4 +1,3 @@
-
 use proc_macro2::{Group, Ident, Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned, ToTokens};
 use syn::punctuated::Punctuated;

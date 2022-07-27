@@ -255,7 +255,7 @@ fn packages(i: &str) -> IResult<&str, Vec<Cow<'static, str>>> {
                 } else {
                     // Returns everything after the last slash.
                     Ok((&i[(last + 1)..], vec))
-                }
+                };
             }
             // Push this byte to build the string.
             Some(b) => str.push(*b),

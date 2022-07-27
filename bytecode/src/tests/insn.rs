@@ -1,4 +1,3 @@
-
 use crate::constants::insn::TABLESWITCH;
 use crate::insn::{Instruction, TableSwitch};
 use crate::ReadWrite;
