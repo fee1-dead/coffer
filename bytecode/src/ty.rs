@@ -132,7 +132,7 @@ impl FromStr for Type {
     type Err = crate::error::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        fn get_type(c: &mut std::str::Chars, st: &str) -> Result<Type, crate::error::Error> {
+        fn get_type(c: &mut std::str::Chars) -> Result<Type, crate::error::Error> {
             let next_char = c.next();
             Ok(match next_char {
                 Some('B') => Type::Byte,
@@ -160,13 +160,13 @@ impl FromStr for Type {
                         c.next();
                         dim += 1;
                     }
-                    let r = get_type(c, st)?;
+                    let r = get_type(c)?;
                     Type::ArrayRef(dim, Box::new(r))
                 }
                 Some('(') => {
                     let mut types = Vec::new();
                     while c.as_str().chars().next().unwrap_or(')') != ')' {
-                        types.push(get_type(c, st)?)
+                        types.push(get_type(c)?)
                     }
                     if c.next().is_none() {
                         return unexpected_end();
@@ -176,7 +176,7 @@ impl FromStr for Type {
                             ret: if let Some('V') = c.as_str().chars().next() {
                                 None
                             } else {
-                                Some(Box::new(get_type(c, st)?))
+                                Some(Box::new(get_type(c)?))
                             },
                         }
                     }
@@ -190,7 +190,7 @@ impl FromStr for Type {
                 None => return unexpected_end(),
             })
         }
-        get_type(&mut s.chars(), s)
+        get_type(&mut s.chars())
     }
 }
 impl ConstantPoolReadWrite for Cow<'static, str> {

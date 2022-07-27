@@ -261,14 +261,15 @@ pub trait ConstantPoolReader {
 
     fn read_indirect_str(&mut self, tag: u8, idx: u16) -> Option<Cow<'static, str>> {
         self.read_raw(idx)
-            .map(|c| match c {
+            .and_then(|c| match c {
+                RawConstantEntry::Module(u) if tag == 19 => self.read_utf8(u),
+                RawConstantEntry::Package(u) if tag == 20 => self.read_utf8(u),
                 RawConstantEntry::Module(u) if tag == 19 => self.read_utf8(u),
                 RawConstantEntry::Package(u) if tag == 20 => self.read_utf8(u),
                 RawConstantEntry::String(u) if tag == 8 => self.read_utf8(u),
                 RawConstantEntry::Class(u) if tag == 7 => self.read_utf8(u),
                 _ => None,
             })
-            .flatten()
             .map(Into::into)
     }
 

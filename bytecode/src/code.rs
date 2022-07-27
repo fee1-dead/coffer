@@ -272,7 +272,7 @@ impl ConstantPoolReadWrite for Code {
         let mut labels: HashMap<Label, (usize, usize)> = HashMap::new();
         macro_rules! get_label {
             ($label: expr) => {
-                *labels.get($label).ok_or_else(|| {
+                *labels.get(&$label).ok_or_else(|| {
                     Error::Invalid("referenced label", $label.0.to_string().into())
                 })?
             };
@@ -412,7 +412,7 @@ impl ConstantPoolReadWrite for Code {
                     tbl.sort_keys(); // lookup switch must be sorted
                     for (val, off) in tbl {
                         write_to!(&val, writer)?;
-                        write_to!(&resolve_label!(&off), writer)?;
+                        write_to!(&resolve_label!(off), writer)?;
                     }
                 }
                 Instruction::TableSwitch {
