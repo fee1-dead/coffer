@@ -9,6 +9,7 @@ mod code {
     use std::io::{Cursor, Write};
     use std::sync::Arc;
 
+    use class_sample::ClassInfo;
     use lazy_static::lazy_static;
     use once_cell::sync::OnceCell;
 
@@ -50,49 +51,41 @@ mod code {
     }
 
     lazy_static! {
-        static ref SAMPLE: Vec<(String, Vec<u8>)> = class_sample::get_sample_name_bytes(2 * 1024);
+        static ref SAMPLE: Vec<ClassInfo> = class_sample::get_sample_name_bytes(2 * 1024).expect("fetch sample");
     }
 
     #[test]
     fn sample_read_write_read() {
-        for (s, buf) in SAMPLE.iter().map(|(s, buf)| (s.as_str(), buf.clone())) {
+        for ClassInfo { file_name, bytes } in SAMPLE.iter() {
             fn handle_error<E: std::fmt::Display + std::fmt::Debug, P: std::fmt::UpperHex>(
-                e: E,
-                s: &str,
+                error: E,
+                path: &str,
                 buf: &[u8],
-                pos: P,
-                phase: u8,
-            ) {
-                let filename = s.split('/').last().unwrap();
+                cursor_position: P,
+                discr: &str,
+            ) -> ! {
+                let filename = path.split('/').last().unwrap();
                 let res = File::create(filename).and_then(|mut f| f.write_all(buf));
                 let message = match res {
                     Ok(()) => format!("A file named {} has been created", filename),
                     Err(e) => format!("Unable to write to file: {:?}", e),
                 };
                 panic!(
-                    "Failure in phase {} of read/write/read for {}: {} ({2:?})\ncursor position: 0x{:X}\n{}",
-                    phase,
-                    s,
-                    e,
-                    pos,
-                    message
+                    "Failure while {discr} {filename}: {error} ({error:?})\ncursor position: 0x{cursor_position:X}\n{message}"
                 )
             }
-            let mut reader = Cursor::new(buf);
-            match Class::read_from(&mut reader) {
-                Ok(c) => {
-                    let mut writer = Vec::new();
-                    match c.write_to(&mut writer) {
-                        Ok(()) => {
-                            reader = Cursor::new(writer);
-                            if let Err(e) = Class::read_from(&mut reader) {
-                                handle_error(e, s, reader.get_ref(), reader.position(), 3)
-                            }
-                        }
-                        Err(e) => handle_error(e, s, reader.get_ref(), writer.len(), 2),
-                    }
-                }
-                Err(e) => handle_error(e, s, reader.get_ref(), reader.position(), 1),
+            let mut reader = Cursor::new(bytes.as_slice());
+            let c = match Class::read_from(&mut reader) {
+                Ok(c) => c,
+                Err(e) => handle_error(e, file_name, bytes.as_slice(), reader.position(), "reading"),
+            };
+            let mut bytes = Vec::new();
+            if let Err(e) = c.write_to(&mut bytes) {
+                handle_error(e, file_name, bytes.as_slice(), bytes.len(), "rewriting deserialized class");
+            }
+            let mut reader = Cursor::new(bytes.as_slice());
+            if let Err(e) = Class::read_from(&mut reader) {
+                handle_error(e, file_name, &bytes, reader.position(), "rereading serialized class");
             }
         }
     }
