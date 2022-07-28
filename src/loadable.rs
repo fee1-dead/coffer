@@ -12,6 +12,7 @@ pub use crate::ty::Type;
 /// The kind of a method handle. It generally represents an instruction related to a member with one exception.
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, ReadWrite)]
 #[tag_type(u8)]
+#[repr(u8)]
 pub enum MethodHandleKind {
     /// A method handle reading from a virtual field.
     GetField = 1,

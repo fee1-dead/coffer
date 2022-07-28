@@ -5,10 +5,10 @@ use dashmap::DashSet;
 use tokio::join;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use tokio_stream::StreamExt;
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use zip::ZipArchive;
+use tokio_stream::StreamExt;
 use zip::read::ZipFile;
+use zip::ZipArchive;
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -24,7 +24,13 @@ struct MyZipFile<'a>(ZipFile<'a>);
 unsafe impl<'a> Send for MyZipFile<'a> {}
 
 pub async fn get_sample_name_bytes_async(distribution_size: u64) -> Result<Vec<ClassInfo>> {
-    fn spawn(s: &'static str, client: Arc<reqwest::Client>, sender: Arc<mpsc::UnboundedSender<ClassInfo>>, distribution_size: u64, sizes: Arc<DashSet<u64>>) -> JoinHandle<Result<()>> {
+    fn spawn(
+        s: &'static str,
+        client: Arc<reqwest::Client>,
+        sender: Arc<mpsc::UnboundedSender<ClassInfo>>,
+        distribution_size: u64,
+        sizes: Arc<DashSet<u64>>,
+    ) -> JoinHandle<Result<()>> {
         tokio::spawn(async move {
             let bytes = client.get(s).send().await?.bytes().await?;
             let bytes = bytes.as_ref();
@@ -53,7 +59,8 @@ pub async fn get_sample_name_bytes_async(distribution_size: u64) -> Result<Vec<C
     let junit = "https://repo1.maven.org/maven2/junit/junit/4.13.1/junit-4.13.1.jar";
     let kotlin = "https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-compiler/1.4.20-M1/kotlin-compiler-1.4.20-M1.jar";
     let scala = "https://repo1.maven.org/maven2/org/scala-lang/scala-compiler/2.13.3/scala-compiler-2.13.3.jar";
-    let bitcoinj = "https://repo1.maven.org/maven2/org/bitcoinj/bitcoinj-core/0.15.8/bitcoinj-core-0.15.8.jar";
+    let bitcoinj =
+        "https://repo1.maven.org/maven2/org/bitcoinj/bitcoinj-core/0.15.8/bitcoinj-core-0.15.8.jar";
 
     let (sender, mut receiver) = mpsc::unbounded_channel();
     let sender = Arc::new(sender);
@@ -76,5 +83,7 @@ pub async fn get_sample_name_bytes_async(distribution_size: u64) -> Result<Vec<C
 }
 
 pub fn get_sample_name_bytes(distribution_size: u64) -> Result<Vec<ClassInfo>> {
-    tokio::runtime::Runtime::new().unwrap().block_on(get_sample_name_bytes_async(distribution_size))
+    tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(get_sample_name_bytes_async(distribution_size))
 }

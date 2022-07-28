@@ -790,7 +790,7 @@ impl Conv {
 
             Instruction::Ret(i) => wide_or_normal!(RET, i => u8),
             Instruction::Swap => SWAP.write_to(&mut cursor)?,
-            Instruction::IntIncrement(l, inc) => wide_or_normal!(RET, l => u8, inc => i8),
+            Instruction::IntIncrement(l, inc) => wide_or_normal!(IINC, l => u8, inc => i8),
             Instruction::LineNumber(ln) => {
                 line_numbers.insert(cursor.position() as usize, ln);
             }

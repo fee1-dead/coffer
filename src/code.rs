@@ -286,8 +286,8 @@ impl ConstantPoolReadWrite for Code {
                 } => 15 + offsets.len() * 4, // +3 alignment
                 Instruction::Jsr(_) | Instruction::Jump(JumpCondition::Always, _) => 4, // goto_w/jsr_w i32
                 Instruction::Jump(_, _) => 7, // conditional jumps can't be wide, so there must be a conversion.
-                // SAFETY: other variants are not inserted
-                _ => unsafe { std::hint::unreachable_unchecked() },
+                // other variants are not inserted
+                _ => unreachable!(),
             };
             last_max_index += this_size_max + buf_iter.next().unwrap().len();
             index_hints.push(last_max_index);
@@ -309,7 +309,7 @@ impl ConstantPoolReadWrite for Code {
         // the index at the opcode byte of the jump instruction.
         let mut last_idx = 0;
         buf_iter = buf.iter();
-        let mut actual_sizes = Vec::new();
+        let mut sizes_of_jump_insns = Vec::new();
         for j in &jumps {
             last_idx += buf_iter.next().unwrap().len();
             let actual_size = 1 + match *j {
@@ -352,10 +352,10 @@ impl ConstantPoolReadWrite for Code {
                     }
                 }
                 // SAFETY: other variants are not inserted
-                _ => unsafe { std::hint::unreachable_unchecked() },
+                _ => unreachable!(),
             };
             last_idx += actual_size;
-            actual_sizes.push(actual_size);
+            sizes_of_jump_insns.push(actual_size);
             actual_indices.push(last_idx);
         }
         // The index of the second last `buf` element + length of last element.
@@ -364,9 +364,9 @@ impl ConstantPoolReadWrite for Code {
         let mut jumps_iter = jumps.into_iter();
         let mut buf_iter = buf.into_iter();
         writer.write_all(&buf_iter.next().unwrap())?;
-        for ((i, bytes), (idx, act)) in buf_iter
+        for ((i, bytes), (idx, size_of_jump_insn)) in buf_iter
             .enumerate()
-            .zip(actual_indices.iter().zip(actual_sizes.iter()))
+            .zip(actual_indices.iter().zip(sizes_of_jump_insns.iter()))
         {
             macro_rules! resolve_label {
                 ($label: expr) => {{
@@ -376,14 +376,14 @@ impl ConstantPoolReadWrite for Code {
                     } else {
                         actual_indices[buf_off - 1] as u32
                     }) + (inner_off as u32);
-                    (that_off as i32).wrapping_sub(*idx as i32) + *act as i32
+                    (that_off as i32).wrapping_sub(*idx as i32) + *size_of_jump_insn as i32
                 }};
             }
 
             macro_rules! wide {
                 ($label: ident, $off: ident => $non_wide: expr, $wide: expr) => {{
                     let $off = resolve_label!($label);
-                    if let Ok($off) = u16::try_from($off) {
+                    if let Ok($off) = i16::try_from($off) {
                         $non_wide
                     } else {
                         $wide
@@ -395,7 +395,7 @@ impl ConstantPoolReadWrite for Code {
                 Instruction::LookupSwitch { default, table } => {
                     LOOKUPSWITCH.write_to(writer)?;
                     writer
-                        .write_all(&vec![0; 3 - (actual_indices[i] - actual_sizes[i] + 1) % 4])?; // proper 4 byte alignment
+                        .write_all(&vec![0; 3 - (actual_indices[i] - sizes_of_jump_insns[i] + 1) % 4])?; // proper 4 byte alignment
                     write_to!(&resolve_label!(default), writer)?;
 
                     (table.len() as u32).write_to(writer)?;
@@ -413,7 +413,7 @@ impl ConstantPoolReadWrite for Code {
                 } => {
                     TABLESWITCH.write_to(writer)?;
                     writer
-                        .write_all(&vec![0; 3 - (actual_indices[i] - actual_sizes[i] + 1) % 4])?; // proper 4 byte alignment
+                        .write_all(&vec![0; 3 - (actual_indices[i] - sizes_of_jump_insns[i] + 1) % 4])?; // proper 4 byte alignment
                     write_to!(&resolve_label!(default), writer)?;
                     write_to!(low, writer)?;
                     write_to!(&(low + (offsets.len() - 1) as i32), writer)?;
@@ -444,15 +444,15 @@ impl ConstantPoolReadWrite for Code {
                         u8::write_to(&(*cond).into(), writer)?;
                         write_to!(&off, writer)?;
                     }, {
-                        // SAFETY: JumpCondition::Always is matched before this
-                        u8::write_to(&(-cond).unwrap_or_else(|| unsafe { std::hint::unreachable_unchecked() }).into(), writer)?;
+                        // JumpCondition::Always is matched before this
+                        u8::write_to(&(-cond).unwrap().into(), writer)?;
                         write_to!(&5i32, writer)?;
                         GOTO_W.write_to(writer)?;
                         write_to!(&off, writer)?;
                     })
                 }
-                // SAFETY: other variants are not inserted
-                _ => unsafe { std::hint::unreachable_unchecked() },
+                // other variants are not inserted
+                _ => unreachable!(),
             }
             writer.write_all(&bytes)?;
         }

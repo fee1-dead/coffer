@@ -42,10 +42,7 @@ pub trait ConstantPoolWriter {
             }
             Constant::MethodHandle(h) => {
                 let mem = self.insert_member(h.member);
-                self.insert_raw(RawConstantEntry::MethodHandle(
-                    unsafe { *(&h.kind as *const MethodHandleKind as *const u8) },
-                    mem,
-                ))
+                self.insert_raw(RawConstantEntry::MethodHandle(h.kind as u8, mem))
             }
         }
     }
@@ -100,13 +97,7 @@ pub trait ConstantPoolWriter {
             19 => RawConstantEntry::Module,
             20 => RawConstantEntry::Package,
             _ => {
-                #[cfg(debug_assertions)]
                 panic!("invalid tag for indirect string: {}", tag);
-
-                #[cfg(not(debug_assertions))]
-                unsafe {
-                    std::hint::unreachable_unchecked()
-                }
             }
         }(str_ref))
     }
@@ -357,23 +348,13 @@ pub trait ConstantPoolReader {
     /// The label is lazily inserted into the Code vector.
     #[inline]
     fn get_label(&mut self, _idx: u32) -> Label {
-        #[cfg(debug_assertions)]
         unimplemented!();
-        #[cfg(not(debug_assertions))]
-        unsafe {
-            core::hint::unreachable_unchecked();
-        }
     }
 
     /// Get a catch based on the element index. This is implemented using a wrapper when reading the `Code` struct.
     #[inline]
     fn get_catch(&mut self, _idx: u16) -> Option<Catch> {
-        #[cfg(debug_assertions)]
         unimplemented!();
-        #[cfg(not(debug_assertions))]
-        unsafe {
-            core::hint::unreachable_unchecked();
-        }
     }
 }
 

@@ -173,10 +173,12 @@ fn type_sig(i: &str) -> IResult<'_, TypeSignature> {
 fn ref_type_sig(i: &str) -> IResult<'_, RefTypeSignature> {
     match i.chars().next() {
         Some('[') => {
+            let mut dim: u8 = 0;
             let mut c = i.chars();
-            let dim = c.by_ref().take_while(|&x| x == '[').count();
-            // take_while takes the first non-`[` character, so we go back one character.
-            c.next_back();
+            while let Some('[') = c.as_str().chars().next() {
+                c.next();
+                dim += 1;
+            }
             let (i, t) = type_sig(c.as_str())?;
             Ok((i, RefTypeSignature::ArrayRef(dim as u8, Box::new(t))))
         }
@@ -200,7 +202,10 @@ fn ref_type_sig(i: &str) -> IResult<'_, RefTypeSignature> {
 fn char<const C: char>(i: &str) -> IResult<'_, ()> {
     match i.chars().next() {
         Some(c) if c == C => Ok((&i[1..], ())),
-        Some(other) => Err(invalid("character", format!("expected {C}, found {other}"))),
+        Some(other) => Err(invalid(
+            "character",
+            format!("expected '{C}', found '{other}'"),
+        )),
         None => Err(unexpected_end()),
     }
 }
@@ -261,9 +266,9 @@ fn packages(i: &str) -> IResult<'_, Vec<Cow<'static, str>>> {
         match bytes.get(n) {
             // If there is a slash, it is a package directive. Push to the vec and clear out the last string.
             Some(b'/') => {
-                unsafe {
-                    vec.push(Cow::Owned(String::from_utf8_unchecked(str)));
-                } // the parameter is &str, so it must be valid utf-8.
+                // the parameter is &str, so it must be valid utf-8.
+                vec.push(Cow::Owned(unsafe { String::from_utf8_unchecked(str) }));
+
                 str = Vec::new();
                 last = n;
             }
@@ -320,6 +325,7 @@ fn type_arg(i: &str) -> IResult<'_, TypeArgument> {
 }
 
 fn type_args(mut i: &str) -> IResult<'_, Vec<TypeArgument>> {
+    dbg!(i); // TODO rm
     let mut args = vec![];
     if i.as_bytes().get(0) == Some(&b'<') {
         i = &i[1..];
@@ -340,17 +346,20 @@ fn simple_type_sig(i: &str) -> IResult<'_, SimpleClassTypeSignature> {
         c == '<' || c == '.' || c == ';'
     }
     let mut chars = i.chars();
-    let name = chars
-        .by_ref()
-        .take_while(|&x| !type_var_start(x))
-        .collect::<String>()
-        .into();
-    chars.next_back();
+    let mut name = String::new();
+    while chars
+        .as_str()
+        .chars()
+        .next()
+        .map_or(false, |c| !type_var_start(c))
+    {
+        name.push(chars.next().unwrap());
+    }
     let (i, type_arguments) = type_args(chars.as_str())?;
     Ok((
         i,
         SimpleClassTypeSignature {
-            name,
+            name: name.into(),
             type_arguments,
         },
     ))
@@ -417,6 +426,7 @@ fn method_sig(i: &str) -> IResult<'_, MethodSignature> {
         i = new_i;
         parameters.push(param);
     }
+    let (i, ()) = char::<')'>(i)?;
     let (mut i, return_type) = ret(i)?;
     let mut t = vec![];
     while let Some('^') = i.chars().next() {
@@ -440,7 +450,7 @@ fn class_sig(i: &str) -> IResult<'_, ClassSignature> {
     let (mut i, super_class) = class_type_sig(i)?;
     let mut interfaces = vec![];
     while let Some('L') = i.chars().next() {
-        let (new_i, interface) = class_type_sig(&i[1..])?;
+        let (new_i, interface) = class_type_sig(i)?;
         i = new_i;
         interfaces.push(interface);
     }
@@ -473,7 +483,10 @@ macro_rules! cprw_impls {
         $(
             impl ConstantPoolReadWrite for $ty {
                 fn read_from<C: crate::ConstantPoolReader, R: std::io::Read>(cp: &mut C, reader: &mut R) -> crate::Result<Self> {
-                    FromStr::from_str(Cow::<'static, str>::read_from(cp, reader)?.as_ref())
+                    let s = Cow::<'static, str>::read_from(cp, reader)?;
+                    // TODO remove
+                    println!("{s}");
+                    FromStr::from_str(s.as_ref())
                 }
 
                 fn write_to<C: crate::ConstantPoolWriter, W: std::io::Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<()> {
