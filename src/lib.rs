@@ -44,11 +44,11 @@ pub mod member;
 pub mod mod_utf8;
 pub mod module;
 pub mod prelude;
-pub mod signature;
-pub mod ty;
 pub mod rw;
-pub mod version;
+pub mod signature;
 pub mod total_floats;
+pub mod ty;
+pub mod version;
 
 pub(crate) mod insn;
 #[cfg(test)]

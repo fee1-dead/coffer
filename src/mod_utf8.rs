@@ -1,4 +1,3 @@
-
 //! Module for converting between Java's Modified UTF-8 and UTF-8.
 //!
 //! Rust uses UTF-8 natively, so a conversion is needed for every string in Java.

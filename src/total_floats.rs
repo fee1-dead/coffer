@@ -1,7 +1,6 @@
 use std::hash::{Hash, Hasher};
 use std::{cmp, fmt};
 
-
 #[derive(Clone, Copy)]
 pub struct TotalF32(pub f32);
 
@@ -86,7 +85,7 @@ impl Hash for TotalF64 {
 
 impl From<f32> for TotalF32 {
     fn from(x: f32) -> Self {
-        Self(x)        
+        Self(x)
     }
 }
 

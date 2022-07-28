@@ -182,7 +182,10 @@ fn ref_type_sig(i: &str) -> IResult<'_, RefTypeSignature> {
         Some('T') => {
             let semi = i.find(';').ok_or_else(unexpected_end)?;
             let type_var = i[1..semi].to_string();
-            Ok((&i[semi + 1..], RefTypeSignature::TypeVariable(type_var.into())))
+            Ok((
+                &i[semi + 1..],
+                RefTypeSignature::TypeVariable(type_var.into()),
+            ))
         }
         Some('L') => {
             let (i, sig) = class_type_sig(i)?;
@@ -197,7 +200,7 @@ fn char<const C: char>(i: &str) -> IResult<'_, ()> {
     match i.chars().next() {
         Some(c) if c == C => Ok((&i[1..], ())),
         Some(other) => Err(invalid("character", format!("expected {C}, found {other}"))),
-        None => Err(unexpected_end())
+        None => Err(unexpected_end()),
     }
 }
 
@@ -305,7 +308,12 @@ fn type_arg(i: &str) -> IResult<'_, TypeArgument> {
             let (i, o) = ref_type_sig(i)?;
             (i, TypeArgument::Exact(o))
         }
-        Some(c) => return Err(invalid("type argument", format!("expected one of '*', '-', '+', 'T', 'L', '[, found {c}"))),
+        Some(c) => {
+            return Err(invalid(
+                "type argument",
+                format!("expected one of '*', '-', '+', 'T', 'L', '[, found {c}"),
+            ))
+        }
         None => return Err(unexpected_end()),
     })
 }
@@ -331,15 +339,29 @@ fn simple_type_sig(i: &str) -> IResult<'_, SimpleClassTypeSignature> {
         c == '<' || c == '.' || c == ';'
     }
     let mut chars = i.chars();
-    let name = chars.by_ref().take_while(|&x| !type_var_start(x)).collect::<String>().into();
+    let name = chars
+        .by_ref()
+        .take_while(|&x| !type_var_start(x))
+        .collect::<String>()
+        .into();
     chars.next_back();
     let (i, type_arguments) = type_args(chars.as_str())?;
-    Ok((i, SimpleClassTypeSignature { name, type_arguments }))
+    Ok((
+        i,
+        SimpleClassTypeSignature {
+            name,
+            type_arguments,
+        },
+    ))
 }
 
 fn type_parameter(i: &str) -> IResult<'_, TypeParameter> {
     let mut chars = i.chars();
-    let name = chars.by_ref().take_while(|&x| x != ':').collect::<String>().into();
+    let name = chars
+        .by_ref()
+        .take_while(|&x| x != ':')
+        .collect::<String>()
+        .into();
     let (mut i, class_bound) = if let Ok((i, class_bound)) = ref_type_sig(i) {
         (i, Some(class_bound))
     } else {
@@ -352,11 +374,14 @@ fn type_parameter(i: &str) -> IResult<'_, TypeParameter> {
         i = new_i;
     }
 
-    Ok((i, TypeParameter {
-        name,
-        class_bound,
-        interface_bounds,
-    }))
+    Ok((
+        i,
+        TypeParameter {
+            name,
+            class_bound,
+            interface_bounds,
+        },
+    ))
 }
 
 fn type_parameters(mut i: &str) -> IResult<'_, Vec<TypeParameter>> {
@@ -398,12 +423,15 @@ fn method_sig(i: &str) -> IResult<'_, MethodSignature> {
         i = new_i;
         t.push(throw);
     }
-    Ok((i, MethodSignature {
-        type_parameters,
-        parameters,
-        return_type,
-        throws: t,
-    }))
+    Ok((
+        i,
+        MethodSignature {
+            type_parameters,
+            parameters,
+            return_type,
+            throws: t,
+        },
+    ))
 }
 
 fn class_sig(i: &str) -> IResult<'_, ClassSignature> {
@@ -415,11 +443,14 @@ fn class_sig(i: &str) -> IResult<'_, ClassSignature> {
         i = new_i;
         interfaces.push(interface);
     }
-    Ok((i, ClassSignature {
-        type_parameters,
-        super_class,
-        interfaces,
-    }))
+    Ok((
+        i,
+        ClassSignature {
+            type_parameters,
+            super_class,
+            interfaces,
+        },
+    ))
 }
 
 macro_rules! fromstr_impls {

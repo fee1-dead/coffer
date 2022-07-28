@@ -1,4 +1,3 @@
-
 //! Basic Instruction Reading.
 //!
 //! Used for translating raw code to useful code.

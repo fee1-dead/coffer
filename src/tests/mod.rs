@@ -1,4 +1,3 @@
-
 mod exec;
 mod full_type;
 mod insn;
@@ -8,8 +7,12 @@ mod code {
     use crate::code::{Instruction::Label as Lbl, Instruction::*, Label, LocalType::Reference};
     use crate::prelude::*;
     use crate::{Class, ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite};
+    use lazy_static::lazy_static;
+    use once_cell::sync::OnceCell;
     use std::borrow::Cow;
+    use std::fs::File;
     use std::io::{Cursor, Write};
+    use std::sync::Arc;
 
     struct ArrCp<'a>(Cow<'a, [RawConstantEntry]>);
 
@@ -18,7 +21,7 @@ mod code {
             self.0.get(idx as usize - 1).cloned()
         }
 
-        fn resolve_later(&mut self, _bsm_idx: u16, _ptr: Rc<LazyBsm>) {
+        fn resolve_later(&mut self, _bsm_idx: u16, _ptr: Arc<OnceCell<BootstrapMethod>>) {
             unreachable!()
         }
 
@@ -42,9 +45,6 @@ mod code {
         ArrCp(inner.into())
     }
 
-    use lazy_static::lazy_static;
-    use std::fs::File;
-    use std::rc::Rc;
     lazy_static! {
         static ref SAMPLE: Vec<(String, Vec<u8>)> = class_sample::get_sample_name_bytes(2 * 1024);
     }

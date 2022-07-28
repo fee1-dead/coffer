@@ -1,9 +1,9 @@
-use once_cell::sync::OnceCell;
 use crate::prelude::*;
+use once_cell::sync::OnceCell;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BootstrapMethod {
     pub handle: MethodHandle,
     pub arguments: Vec<OrDynamic<Constant>>,
@@ -47,7 +47,7 @@ impl ConstantPoolReadWrite for BootstrapMethod {
 ///
 /// Note: dynamic computed constants are syntactically allowed to refer to themselves via the bootstrap method table but it will fail during resolution.
 /// Rust ownership rules prevent us from doing so.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct Dynamic {
     pub bsm: Arc<OnceCell<BootstrapMethod>>,
     /// The name of the bootstrap method that will compute the constant value.
@@ -76,6 +76,16 @@ impl Dynamic {
     }
 }
 
+impl PartialEq for Dynamic {
+    fn eq(&self, other: &Self) -> bool {
+        self.bsm.eq(&other.bsm)
+            && self.name.eq(&other.name)
+            && self.descriptor.eq(&other.descriptor)
+    }
+}
+
+impl Eq for Dynamic {}
+
 impl Hash for Dynamic {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.bsm.get().hash(state);
@@ -84,7 +94,7 @@ impl Hash for Dynamic {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum OrDynamic<T> {
     Dynamic(Dynamic),
     Static(T),
