@@ -1,5 +1,7 @@
 use std::convert::TryFrom;
-use std::rc::Rc;
+use std::sync::Arc;
+
+use once_cell::sync::OnceCell;
 
 use crate::prelude::*;
 
@@ -80,7 +82,7 @@ pub trait ConstantPoolWriter {
     ///
     /// Returns an index that points to the inserted entry.
     fn insert_dynamic(&mut self, d: Dynamic) -> u16 {
-        let bsm = self.insert_bsm(Rc::try_unwrap(d.bsm).unwrap().into_inner().unwrap());
+        let bsm = self.insert_bsm(d.get_bsm().clone());
         let e = if d.descriptor.is_method() {
             RawConstantEntry::InvokeDynamic
         } else {
@@ -280,7 +282,7 @@ pub trait ConstantPoolReader {
     fn read_invokedynamic(&mut self, idx: u16) -> Option<Dynamic> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::InvokeDynamic(s, a)) => {
-                let cell = Rc::new(LazyBsm::new());
+                let cell = Arc::new(OnceCell::default());
                 let (name, descriptor) = self.read_nameandtype(a)?;
                 self.resolve_later(s, cell.clone());
                 Some(Dynamic {
@@ -295,7 +297,7 @@ pub trait ConstantPoolReader {
     fn read_dynamic(&mut self, idx: u16) -> Option<Dynamic> {
         match self.read_raw(idx) {
             Some(RawConstantEntry::Dynamic(s, a)) => {
-                let cell = Rc::new(LazyBsm::new());
+                let cell = Arc::new(OnceCell::default());
                 let (name, descriptor) = self.read_nameandtype(a)?;
                 self.resolve_later(s, cell.clone());
                 Some(Dynamic {
@@ -345,7 +347,7 @@ pub trait ConstantPoolReader {
     }
 
     /// Registers a bootstrap method to be resolved.
-    fn resolve_later(&mut self, bsm_idx: u16, bsm: Rc<LazyBsm>);
+    fn resolve_later(&mut self, bsm_idx: u16, bsm: Arc<OnceCell<BootstrapMethod>>);
 
     /// Attempts to complete resolution of bootstrap methods by providing a list of bootstrap methods.
     fn bootstrap_methods(&mut self, bsms: &[BootstrapMethod]) -> Result<()>;

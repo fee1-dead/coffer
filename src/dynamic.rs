@@ -1,7 +1,7 @@
+use once_cell::sync::OnceCell;
 use crate::prelude::*;
-use std::cell::UnsafeCell;
 use std::hash::{Hash, Hasher};
-use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct BootstrapMethod {
@@ -47,9 +47,9 @@ impl ConstantPoolReadWrite for BootstrapMethod {
 ///
 /// Note: dynamic computed constants are syntactically allowed to refer to themselves via the bootstrap method table but it will fail during resolution.
 /// Rust ownership rules prevent us from doing so.
-#[derive(Debug, PartialEq, Hash)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Dynamic {
-    pub(crate) bsm: Rc<LazyBsm>,
+    pub bsm: Arc<OnceCell<BootstrapMethod>>,
     /// The name of the bootstrap method that will compute the constant value.
     pub name: Cow<'static, str>,
     /// The descriptor of the dynamically computed value. Must be a field descriptor.
@@ -64,39 +64,23 @@ impl Dynamic {
         descriptor: D,
     ) -> Dynamic {
         Self {
-            bsm: Rc::new(bsm.into()),
+            bsm: Arc::new(bsm.into()),
             name: name.into(),
             descriptor: descriptor.into(),
         }
     }
+
     /// Returns an immutable reference to the bootstrap method of this dynamic computed constant.
-    pub fn bsm(&self) -> &BootstrapMethod {
+    pub fn get_bsm(&self) -> &BootstrapMethod {
         self.bsm.get().expect("Expected bsm to be populated")
-    }
-
-    /// Returns a mutable reference to the bootstrap method of this dynamic computed constant.
-    pub fn bsm_mut(&mut self) -> &mut BootstrapMethod {
-        // This is safe because the Rc would only have one owner since the only other owner would be dropped
-        // After reading the entire class file.
-        unsafe { self.bsm.__get_mut() }.expect("Expected bsm to be populated")
-    }
-
-    pub fn into_inner(self) -> (Option<BootstrapMethod>, Cow<'static, str>, Type) {
-        (
-            Rc::try_unwrap(self.bsm).unwrap().into_inner(),
-            self.name,
-            self.descriptor,
-        )
     }
 }
 
-impl Clone for Dynamic {
-    fn clone(&self) -> Self {
-        Self {
-            bsm: Rc::new(self.bsm.as_ref().clone()),
-            name: self.name.clone(),
-            descriptor: self.descriptor.clone(),
-        }
+impl Hash for Dynamic {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.bsm.get().hash(state);
+        self.name.hash(state);
+        self.descriptor.hash(state);
     }
 }
 
@@ -136,69 +120,5 @@ impl From<MemberRef> for OrDynamic<MemberRef> {
     #[inline]
     fn from(t: MemberRef) -> Self {
         OrDynamic::Static(t)
-    }
-}
-
-/// A lazily populated bootstrap method.
-#[derive(Debug)]
-pub struct LazyBsm {
-    inner: UnsafeCell<Option<BootstrapMethod>>,
-}
-
-impl LazyBsm {
-    pub const fn new() -> LazyBsm {
-        Self {
-            inner: UnsafeCell::new(None),
-        }
-    }
-    pub fn get(&self) -> Option<&BootstrapMethod> {
-        unsafe { &*self.inner.get() }.as_ref()
-    }
-    pub fn get_mut(&mut self) -> Option<&mut BootstrapMethod> {
-        unsafe { &mut *self.inner.get() }.as_mut()
-    }
-    unsafe fn __get_mut(&self) -> Option<&mut BootstrapMethod> {
-        (&mut *self.inner.get()).as_mut()
-    }
-    pub fn into_inner(self) -> Option<BootstrapMethod> {
-        self.inner.into_inner()
-    }
-    pub(crate) fn fill(&self, value: BootstrapMethod) -> Result<(), BootstrapMethod> {
-        let slot = unsafe { &*self.inner.get() };
-        if slot.is_some() {
-            return Err(value);
-        }
-        let slot = unsafe { &mut *self.inner.get() };
-        *slot = Some(value);
-
-        Ok(())
-    }
-}
-
-impl Hash for LazyBsm {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.get().hash(state);
-    }
-}
-
-impl PartialEq for LazyBsm {
-    fn eq(&self, other: &Self) -> bool {
-        self.get().eq(&other.get())
-    }
-}
-
-impl Clone for LazyBsm {
-    fn clone(&self) -> Self {
-        Self {
-            inner: UnsafeCell::new(unsafe { &*self.inner.get() }.clone()),
-        }
-    }
-}
-
-impl From<BootstrapMethod> for LazyBsm {
-    fn from(b: BootstrapMethod) -> Self {
-        Self {
-            inner: UnsafeCell::new(Some(b)),
-        }
     }
 }

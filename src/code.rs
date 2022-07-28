@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::hash::Hash;
 use std::io::{Cursor, Read, Write};
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::prelude::*;
 use crate::{
@@ -19,6 +19,7 @@ mod convert;
 mod structure;
 
 use convert::*;
+use once_cell::sync::OnceCell;
 pub use structure::*;
 
 #[derive(Clone, PartialEq, Debug, Default)]
@@ -49,7 +50,7 @@ impl ConstantPoolReadWrite for Code {
                 self.inner.read_raw(idx)
             }
 
-            fn resolve_later(&mut self, bsm_idx: u16, bsm: Rc<LazyBsm>) {
+            fn resolve_later(&mut self, bsm_idx: u16, bsm: Arc<OnceCell<BootstrapMethod>>) {
                 self.inner.resolve_later(bsm_idx, bsm)
             }
 

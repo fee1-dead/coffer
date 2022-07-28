@@ -1,15 +1,17 @@
 //! This module contains structures representing a constant pool and its entries.
 
+use once_cell::sync::OnceCell;
+
 use crate::{
     mod_utf8,
-    prelude::{BootstrapMethod, LazyBsm, Read, Result, Write},
+    prelude::{BootstrapMethod, Read, Result, Write},
 };
 use crate::{ConstantPoolReader, ConstantPoolWriter, Error, ReadWrite};
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Clone, Debug, Copy)]
 pub struct StrRef<'a>(pub &'a str);
@@ -133,7 +135,7 @@ pub struct MapCp {
     /// The entries of this constant pool, represented as a hashmap
     /// as some entries may be absent when they are preceded by a double/long entry
     pub entries: HashMap<u16, RawConstantEntry>,
-    refs: HashMap<u16, Vec<Rc<LazyBsm>>>,
+    refs: HashMap<u16, Vec<Arc<OnceCell<BootstrapMethod>>>>,
 }
 
 /// A constant pool writer implementation using a vector and a number for tracking entries.
@@ -203,7 +205,7 @@ impl ConstantPoolReader for MapCp {
         self.entries.get(&idx).cloned()
     }
 
-    fn resolve_later(&mut self, bsm_idx: u16, bsm: Rc<LazyBsm>) {
+    fn resolve_later(&mut self, bsm_idx: u16, bsm: Arc<OnceCell<BootstrapMethod>>) {
         self.refs.entry(bsm_idx).or_default().push(bsm);
     }
 
@@ -211,7 +213,7 @@ impl ConstantPoolReader for MapCp {
         for (i, b) in bsms.iter().enumerate() {
             if let Entry::Occupied(bsm) = self.refs.entry(i as _) {
                 for reg in bsm.remove() {
-                    reg.fill(b.clone()).unwrap()
+                    reg.set(b.clone()).unwrap();
                 }
             }
         }

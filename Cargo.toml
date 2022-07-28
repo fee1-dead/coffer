@@ -1,5 +1,34 @@
 [workspace]
-
 members = [
-    "bytecode", "bytecode/macro"
+    "coffer_macros"
 ]
+
+[package]
+name = "coffer"
+version = "2.0.0"
+authors = ["Deadbeef"]
+edition = "2018"
+license = "Apache-2.0 or MIT"
+categories = ["parser-implementations", "encoding", "data-structures"]
+description = "A lightweight and fast library for reading and writing Java classes"
+repository = "https://gitlab.com/fee1-dead/coffer"
+homepage = "https://gitlab.com/fee1-dead/coffer"
+readme = "../README.md"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+thiserror = "1.0"
+bitflags = "1.0"
+coffer-macros = { path = "./coffer_macros", version = "1.0.0" }
+indexmap = "1.6.1"
+once_cell = "1.13.0"
+
+[dev-dependencies]
+class_sample = { git = "https://github.com/fee1-dead/class-sample-rs" }
+lazy_static = "1.4.0"
+tempfile = "3.2.0"
+
+[features]
+default = []
+backtrace = []
