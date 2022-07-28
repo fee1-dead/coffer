@@ -313,18 +313,39 @@ impl ConstantPoolReadWrite for Code {
         for j in &jumps {
             last_idx += buf_iter.next().unwrap().len();
             let actual_size = 1 + match *j {
-                // These switch instructions need a padding so that the address of the
-                // default offset is perfectly aligned (multiple of four). Therefore,
-                // their `index % 4` must equal 3, since we are using zero-based index.
-                // To calculate this, we just need to find `3 - (index + 1) % 4`.
                 Instruction::LookupSwitch { default: _, table } => {
-                    (3 - (last_idx + 1) % 4) + 8 + table.len() * 8
+                    // Here, `last_idx` is the opcode byte, and `last_idx + 1` is where the
+                    // default target begins if there was no padding. 
+
+                    // Calculate the modulus and find the padding.
+                    // 0 1 2 3 4
+                    // * * * * x -> * * * * x (0 -> 0)
+                    // * * * x   -> * * * p x (3 -> 1)
+                    // * * x     -> * * p p x (2 -> 2)
+                    // * x       -> * p p p x (1 -> 3)
+
+                    let modulus = (last_idx + 1) % 4;
+                    let padding = if modulus == 0 {
+                        0
+                    } else {
+                        4 - modulus
+                    };
+                    padding + 8 + table.len() * 8
                 }
                 Instruction::TableSwitch {
                     default: _,
                     low: _,
                     offsets,
-                } => (3 - (last_idx + 1) % 4) + 12 + offsets.len() * 4,
+                } => {
+                    // see comments above for finding the padding.
+                    let modulus = (last_idx + 1) % 4;
+                    let padding = if modulus == 0 {
+                        0
+                    } else {
+                        4 - modulus
+                    };
+                    padding + 12 + offsets.len() * 4
+                }
                 Instruction::Jsr(target) | Instruction::Jump(JumpCondition::Always, target) => {
                     let (buf_idx, buf_off) = get_label!(target);
                     let target_off = if buf_idx != 0 {
@@ -394,8 +415,15 @@ impl ConstantPoolReadWrite for Code {
             match jump {
                 Instruction::LookupSwitch { default, table } => {
                     LOOKUPSWITCH.write_to(writer)?;
+                    let current_idx = actual_indices[i] - sizes_of_jump_insns[i] + 1;
+                    let modulus = current_idx % 4;
+                    let padding = if modulus == 0 {
+                        0
+                    } else {
+                        4 - modulus
+                    };
                     writer
-                        .write_all(&vec![0; 3 - (actual_indices[i] - sizes_of_jump_insns[i] + 1) % 4])?; // proper 4 byte alignment
+                        .write_all(&vec![0; padding])?; // proper 4 byte alignment
                     write_to!(&resolve_label!(default), writer)?;
 
                     (table.len() as u32).write_to(writer)?;
@@ -412,8 +440,15 @@ impl ConstantPoolReadWrite for Code {
                     offsets,
                 } => {
                     TABLESWITCH.write_to(writer)?;
+                    let current_idx = actual_indices[i] - sizes_of_jump_insns[i] + 1;
+                    let modulus = current_idx % 4;
+                    let padding = if modulus == 0 {
+                        0
+                    } else {
+                        4 - modulus
+                    };
                     writer
-                        .write_all(&vec![0; 3 - (actual_indices[i] - sizes_of_jump_insns[i] + 1) % 4])?; // proper 4 byte alignment
+                        .write_all(&vec![0; padding])?; // proper 4 byte alignment
                     write_to!(&resolve_label!(default), writer)?;
                     write_to!(low, writer)?;
                     write_to!(&(low + (offsets.len() - 1) as i32), writer)?;

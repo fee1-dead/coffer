@@ -43,7 +43,6 @@ pub async fn get_sample_name_bytes_async(distribution_size: u64) -> Result<Vec<C
                     sizes.insert(size);
                     let mut bytes = vec![];
                     file.0.read_to_end(&mut bytes)?;
-                    drop(file);
                     sender.send(ClassInfo { file_name, bytes })?;
                 }
             }

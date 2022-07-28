@@ -154,22 +154,23 @@ fn code_writing() {
             0,
             255, // max_stack
             0,
-            254, // max_locals
+            254, // max_locals // x4
             0,
             0,
             0,
-            43, // code_length
+            44, // code_length // x4
             0,  // NOP
             1,  // null
             87, // pop
-            crate::constants::insn::BIPUSH,
+            crate::constants::insn::BIPUSH, // x4
             123,
             170,
-            0, // tableswitch with padding
+            0,
+            0, // x4 (tableswitch padding)
             0,
             0,
             0,
-            28, // default
+            29, // default
             0,
             0,
             0,
@@ -181,18 +182,18 @@ fn code_writing() {
             0,
             0,
             0,
-            32,
+            33,
             0,
             0,
             0,
-            36,
+            37,
             0,
             0,
             0,
             0,
             0,
             0,
-            1,
+            1, // aconst_null
             176,
             0,
             0,

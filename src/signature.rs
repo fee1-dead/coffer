@@ -325,7 +325,6 @@ fn type_arg(i: &str) -> IResult<'_, TypeArgument> {
 }
 
 fn type_args(mut i: &str) -> IResult<'_, Vec<TypeArgument>> {
-    dbg!(i); // TODO rm
     let mut args = vec![];
     if i.as_bytes().get(0) == Some(&b'<') {
         i = &i[1..];
