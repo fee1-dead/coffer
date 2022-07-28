@@ -4,15 +4,19 @@ mod insn;
 mod mutf8;
 
 mod code {
-    use crate::code::{Instruction::Label as Lbl, Instruction::*, Label, LocalType::Reference};
-    use crate::prelude::*;
-    use crate::{Class, ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite};
-    use lazy_static::lazy_static;
-    use once_cell::sync::OnceCell;
     use std::borrow::Cow;
     use std::fs::File;
     use std::io::{Cursor, Write};
     use std::sync::Arc;
+
+    use lazy_static::lazy_static;
+    use once_cell::sync::OnceCell;
+
+    use crate::code::Instruction::{Label as Lbl, *};
+    use crate::code::Label;
+    use crate::code::LocalType::Reference;
+    use crate::prelude::*;
+    use crate::{Class, ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite};
 
     struct ArrCp<'a>(Cow<'a, [RawConstantEntry]>);
 

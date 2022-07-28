@@ -2,8 +2,7 @@
 //! executed when a method is called.
 
 use std::collections::hash_map::Entry;
-use std::collections::BTreeMap;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
 use std::hash::Hash;
 use std::io::{Cursor, Read, Write};
@@ -36,9 +35,10 @@ impl ConstantPoolReadWrite for Code {
         cp: &mut C,
         reader: &mut R,
     ) -> crate::Result<Self, Error> {
+        use std::io::{Seek, SeekFrom};
+
         use crate::code::Instruction::*;
         use crate::code::{Label as Lbl, LocalVariable as LocalVar};
-        use std::io::{Seek, SeekFrom};
 
         struct Labeler<'a, T: ConstantPoolReader> {
             inner: &'a mut T,

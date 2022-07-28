@@ -8,10 +8,11 @@
 //! SomeGenericClass<Foo> field2 = ...; // Explicit type parameter
 //! SomeGenericClass<? implements AInterface> // type bound on type parameter
 //! ```
-use crate::Result;
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter, Write};
 use std::str::FromStr;
+
+use crate::Result;
 
 /// A type signature represents either a reference type or a primitive type.
 #[derive(Debug, Clone, Eq, PartialEq)]

@@ -1,4 +1,9 @@
 pub(crate) mod type_annotation;
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::convert::TryInto;
+use std::str::FromStr;
+
 pub use type_annotation::*;
 
 use super::Type;
@@ -7,10 +12,6 @@ use crate::{
     read_from, write_to, ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, Read,
     ReadWrite, Result, Write,
 };
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::str::FromStr;
 
 #[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
 pub struct ParameterAnnotations(#[vec_len_type(u16)] Vec<Annotation>);

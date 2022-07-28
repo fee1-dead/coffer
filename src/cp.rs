@@ -1,17 +1,15 @@
 //! This module contains structures representing a constant pool and its entries.
 
-use once_cell::sync::OnceCell;
-
-use crate::{
-    mod_utf8,
-    prelude::{BootstrapMethod, Read, Result, Write},
-};
-use crate::{ConstantPoolReader, ConstantPoolWriter, Error, ReadWrite};
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
+
+use once_cell::sync::OnceCell;
+
+use crate::prelude::{BootstrapMethod, Read, Result, Write};
+use crate::{mod_utf8, ConstantPoolReader, ConstantPoolWriter, Error, ReadWrite};
 
 #[derive(Clone, Debug, Copy)]
 pub struct StrRef<'a>(pub &'a str);

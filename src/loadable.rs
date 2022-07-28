@@ -1,13 +1,13 @@
 //! Loadable values. These types can be loaded on to the stack, and it is usually stored in the constant pool.
 
-pub use crate::member::MemberRef;
-use crate::total_floats::{TotalF32, TotalF64};
-pub use crate::ty::Type;
-
-use crate::prelude::*;
-use crate::read_from;
 use std::convert::TryFrom;
 use std::hash::Hash;
+
+pub use crate::member::MemberRef;
+use crate::prelude::*;
+use crate::read_from;
+use crate::total_floats::{TotalF32, TotalF64};
+pub use crate::ty::Type;
 
 /// The kind of a method handle. It generally represents an instruction related to a member with one exception.
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, ReadWrite)]

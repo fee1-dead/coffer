@@ -1,18 +1,26 @@
-use crate::code::{Code, GetOrPut::Get, Instruction::*, MemberType, MemberType::Static};
-use crate::flags::{ClassFlags, MethodFlags};
-use crate::loadable::Constant;
-use crate::member::{MemberRef, Method, MethodAttribute};
-use crate::prelude::*;
-use crate::prelude::{JavaVersion, Type};
-use crate::Class;
 use std::fs::File;
 use std::io::BufWriter;
 use std::process::{Command, Stdio};
+
 use tempfile::{tempdir, TempDir};
+
+use crate::code::GetOrPut::Get;
+use crate::code::Instruction::*;
+use crate::code::MemberType::Static;
+use crate::code::{Code, MemberType};
+use crate::flags::{ClassFlags, MethodFlags};
+use crate::loadable::Constant;
+use crate::member::{MemberRef, Method, MethodAttribute};
+use crate::prelude::{JavaVersion, Type, *};
+use crate::Class;
 
 /// skip if java is not installed.
 pub fn should_skip() -> bool {
-    if let Ok(status) = Command::new("java").arg("--version").stdout(Stdio::null()).status() {
+    if let Ok(status) = Command::new("java")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .status()
+    {
         if status.success() {
             return false;
         }
@@ -78,7 +86,7 @@ fn bake(code: Code) -> crate::Result<Execution> {
 #[test]
 fn execute_helloworld() -> crate::Result<()> {
     if should_skip() {
-        return Ok(())
+        return Ok(());
     }
     let mut exec = bake(Code {
         max_locals: 1,

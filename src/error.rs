@@ -1,6 +1,7 @@
 //! The error module contains errors that may be raised when invalid data is encountered.
 
 use std::borrow::Cow;
+
 use thiserror::Error;
 
 /// The base error type.
@@ -35,11 +36,12 @@ pub enum ErrorBase {
 /// The backtrace module containing an error type that holds a backtrace.
 #[cfg(any(feature = "backtrace", test, doc))]
 pub mod backtrace {
-    use crate::error::ErrorBase;
     use std::backtrace::Backtrace;
     use std::borrow::Cow;
     use std::error::Error;
     use std::fmt::Formatter;
+
+    use crate::error::ErrorBase;
 
     impl<T> From<T> for ErrorTrace
     where

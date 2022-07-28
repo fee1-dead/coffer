@@ -1,11 +1,10 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use crate::code::{Catch, Label};
-use crate::{ConstantPoolReadWrite, ReadWrite};
-
 use super::super::Type;
 use super::AnnotationValue;
+use crate::code::{Catch, Label};
+use crate::{ConstantPoolReadWrite, ReadWrite};
 
 /// Represents where a type annotation is annotated in a class.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ReadWrite)]

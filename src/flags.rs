@@ -1,8 +1,8 @@
 //! The flags module contains bitflag structures representing flags of java classes such as class access flags, field access flags, and module export flags.
 
-use crate::ReadWrite;
-use crate::Result;
 use std::io::{Read, Write};
+
+use crate::{ReadWrite, Result};
 
 bitflags! {
     /// Access flags for classes.

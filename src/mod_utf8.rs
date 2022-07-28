@@ -8,6 +8,7 @@
 //! Refer to the [JVM Spec](https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-4.html#jvms-4.4.7) for more info.
 
 use std::convert::TryFrom;
+
 use thiserror::Error;
 
 /// An error encountered during conversion.

@@ -1,5 +1,7 @@
-use crate::{annotation::CodeTypeAnnotation, prelude::*};
 use indexmap::map::IndexMap;
+
+use crate::annotation::CodeTypeAnnotation;
+use crate::prelude::*;
 
 /// Acts as a unique identifier to the code. Labels should be treated carefully because when labels become invalid (i.e. removed from the code array) it will become an error.
 #[derive(Debug, Eq, PartialOrd, PartialEq, Ord, Hash, Copy, Clone)]

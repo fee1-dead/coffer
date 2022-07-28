@@ -28,8 +28,7 @@ use prelude::*;
 pub use rw::*;
 
 use crate::constants::JVM_MAGIC;
-pub use crate::error::Error;
-pub use crate::error::Result;
+pub use crate::error::{Error, Result};
 
 pub mod annotation;
 pub mod attr;

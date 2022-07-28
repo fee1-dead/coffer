@@ -1,15 +1,17 @@
-use std::{collections::HashMap, convert::TryFrom, io::Cursor, str::FromStr};
+use std::collections::HashMap;
+use std::convert::TryFrom;
+use std::io::Cursor;
+use std::str::FromStr;
 
-use super::{Instruction, Instruction::*};
-use crate::{
-    constants::insn::*,
-    insn::{Instruction as I, SwitchEntry, TableSwitch as TblS, Wide},
-    prelude::{
-        FloatOperation as FOp, GetOrPut::*, IntOperation as IOp, Label as Lbl, LoadOrStore::*,
-        MemberType::*, *,
-    },
-    try_cp_read_idx,
-};
+use super::Instruction;
+use super::Instruction::*;
+use crate::constants::insn::*;
+use crate::insn::{Instruction as I, SwitchEntry, TableSwitch as TblS, Wide};
+use crate::prelude::GetOrPut::*;
+use crate::prelude::LoadOrStore::*;
+use crate::prelude::MemberType::*;
+use crate::prelude::{FloatOperation as FOp, IntOperation as IOp, Label as Lbl, *};
+use crate::try_cp_read_idx;
 
 pub struct Conv;
 

@@ -1,7 +1,9 @@
-use crate::prelude::*;
-use once_cell::sync::OnceCell;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
+
+use once_cell::sync::OnceCell;
+
+use crate::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BootstrapMethod {
