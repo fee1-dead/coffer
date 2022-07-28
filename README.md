@@ -1,8 +1,5 @@
 # Coffer - a lightweight and fast library for reading and writing Java classes
 
-[![Discord](https://img.shields.io/discord/721385143461478480?logo=discord)](https://discord.gg/Ddv9XUPYcK)
-[![pipeline status](https://gitlab.com/fee1-dead/coffer/badges/master/pipeline.svg)](https://gitlab.com/fee1-dead/coffer/-/commits/master)
-
 Except as otherwise noted (in individual files or in <COPYRIGHT.md>), Coffer is
 licensed under the Apache License, Version 2.0 <LICENSE-APACHE> or
 <http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
