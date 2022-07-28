@@ -10,14 +10,15 @@ use std::io::BufWriter;
 use std::process::{Command, Stdio};
 use tempfile::{tempdir, TempDir};
 
-macro_rules! ignored_tests {
-    ($($item: item)*) => {
-        $(
-        #[ignore]
-        #[test]
-        $item
-        )*
-    };
+/// skip if java is not installed.
+pub fn should_skip() -> bool {
+    if let Ok(status) = Command::new("java").arg("--version").stdout(Stdio::null()).status() {
+        if status.success() {
+            return false;
+        }
+    }
+
+    true
 }
 
 struct Execution(TempDir, Command);
@@ -74,54 +75,64 @@ fn bake(code: Code) -> crate::Result<Execution> {
     Ok(Execution(dir, cmd)) // Pass the dir back so it does not get deleted
 }
 
-// These tests are ignored by default.
-// To enable them, run cargo test -- --include-ignored.
-ignored_tests! {
-    fn execute_helloworld() -> crate::Result<()> {
-        let mut exec = bake(Code {
-            max_locals: 1,
-            max_stack: 2,
-            code: vec![
-                Field(Get, Static, MemberRef {
+#[test]
+fn execute_helloworld() -> crate::Result<()> {
+    if should_skip() {
+        return Ok(())
+    }
+    let mut exec = bake(Code {
+        max_locals: 1,
+        max_stack: 2,
+        code: vec![
+            Field(
+                Get,
+                Static,
+                MemberRef {
                     owner: "java/lang/System".into(),
                     name: "out".into(),
                     descriptor: Type::reference("java/io/PrintStream"),
-                    itfs: false
-                }.into()),
-                Push(Constant::string("Hello, World!").into()),
-                InvokeExact(MemberType::Virtual, MemberRef {
+                    itfs: false,
+                }
+                .into(),
+            ),
+            Push(Constant::string("Hello, World!").into()),
+            InvokeExact(
+                MemberType::Virtual,
+                MemberRef {
                     owner: "java/io/PrintStream".into(),
                     name: "print".into(),
                     descriptor: Type::method([Type::reference("java/lang/String")], None),
-                    itfs: false
-                }.into()),
-                Return(None)
-            ],
-            attrs: Default::default(),
-            catches: Default::default()
-        })?;
-        exec.case(true, [], "Hello, World!", [])?;
-        Ok(())
-    }
-    /*fn execute_tableswitch() -> crate::Result<()> {
-        let label1 = Lbl(0);
-        let label2 = Lbl(1);
-        let mut exec = bake(Code {
-            max_locals: 1,
-            max_stack: 2,
-            code: vec![
-                Push(Constant::string("Hello, World!").into()),
-                InvokeExact(MemberType::Virtual, MemberRef {
-                    owner: "java/io/PrintStream".into(),
-                    name: "println".into(),
-                    descriptor: Type::method([Type::reference("java/lang/String")], None),
-                    itfs: false
-                }.into()),
-                Return(None)
-            ],
-            attrs: Default::default(),
-            catches: Default::default()
-        });
-        Ok(())
-    }*/
+                    itfs: false,
+                }
+                .into(),
+            ),
+            Return(None),
+        ],
+        attrs: Default::default(),
+        catches: Default::default(),
+    })?;
+    exec.case(true, [], "Hello, World!", [])?;
+    Ok(())
 }
+
+/*fn execute_tableswitch() -> crate::Result<()> {
+    let label1 = Lbl(0);
+    let label2 = Lbl(1);
+    let mut exec = bake(Code {
+        max_locals: 1,
+        max_stack: 2,
+        code: vec![
+            Push(Constant::string("Hello, World!").into()),
+            InvokeExact(MemberType::Virtual, MemberRef {
+                owner: "java/io/PrintStream".into(),
+                name: "println".into(),
+                descriptor: Type::method([Type::reference("java/lang/String")], None),
+                itfs: false
+            }.into()),
+            Return(None)
+        ],
+        attrs: Default::default(),
+        catches: Default::default()
+    });
+    Ok(())
+}*/
