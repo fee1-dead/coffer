@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "coffer_macros",
-    "class_sample",
 ]
 
 [package]
@@ -26,7 +25,6 @@ indexmap = "1.6.1"
 once_cell = "1.13.0"
 
 [dev-dependencies]
-class_sample = { path = "./class_sample", version = "0.2" }
 lazy_static = "1.4.0"
 tempfile = "3.2.0"
 
