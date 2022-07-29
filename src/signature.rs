@@ -194,7 +194,7 @@ fn ref_type_sig(i: &str) -> IResult<'_, RefTypeSignature> {
             let (i, sig) = class_type_sig(i)?;
             Ok((i, RefTypeSignature::ClassType(sig)))
         }
-        Some(c) => Err(invalid("character for referenced tyep signature", c)),
+        Some(c) => Err(invalid("character for reference type signature", c)),
         None => Err(unexpected_end()),
     }
 }
@@ -371,8 +371,9 @@ fn type_parameter(i: &str) -> IResult<'_, TypeParameter> {
         .take_while(|&x| x != ':')
         .collect::<String>()
         .into();
-    let (mut i, class_bound) = if let Ok((i, class_bound)) = ref_type_sig(i) {
-        (i, Some(class_bound))
+    let (mut i, class_bound) = if let Some('T' | '[' | 'L') = chars.as_str().chars().next() {
+        let (newi, ref_ty_sig) = ref_type_sig(chars.as_str())?;
+        (newi, Some(ref_ty_sig))
     } else {
         (i, None)
     };
@@ -421,7 +422,10 @@ fn method_sig(i: &str) -> IResult<'_, MethodSignature> {
     let (i, type_parameters) = type_parameters(i)?;
     let (mut i, ()) = char::<'('>(i)?;
     let mut parameters = vec![];
-    while let Ok((new_i, param)) = type_sig(i) {
+    while let Some('B' | 'C' | 'D' | 'F' | 'I' | 'J' | 'S' | 'Z' | 'T' | 'L' | '[') =
+        i.chars().next()
+    {
+        let (new_i, param) = type_sig(i)?;
         i = new_i;
         parameters.push(param);
     }

@@ -315,7 +315,7 @@ impl ConstantPoolReadWrite for Code {
             let actual_size = 1 + match *j {
                 Instruction::LookupSwitch { default: _, table } => {
                     // Here, `last_idx` is the opcode byte, and `last_idx + 1` is where the
-                    // default target begins if there was no padding. 
+                    // default target begins if there was no padding.
 
                     // Calculate the modulus and find the padding.
                     // 0 1 2 3 4
@@ -325,11 +325,7 @@ impl ConstantPoolReadWrite for Code {
                     // * x       -> * p p p x (1 -> 3)
 
                     let modulus = (last_idx + 1) % 4;
-                    let padding = if modulus == 0 {
-                        0
-                    } else {
-                        4 - modulus
-                    };
+                    let padding = if modulus == 0 { 0 } else { 4 - modulus };
                     padding + 8 + table.len() * 8
                 }
                 Instruction::TableSwitch {
@@ -339,11 +335,7 @@ impl ConstantPoolReadWrite for Code {
                 } => {
                     // see comments above for finding the padding.
                     let modulus = (last_idx + 1) % 4;
-                    let padding = if modulus == 0 {
-                        0
-                    } else {
-                        4 - modulus
-                    };
+                    let padding = if modulus == 0 { 0 } else { 4 - modulus };
                     padding + 12 + offsets.len() * 4
                 }
                 Instruction::Jsr(target) | Instruction::Jump(JumpCondition::Always, target) => {
@@ -417,13 +409,8 @@ impl ConstantPoolReadWrite for Code {
                     LOOKUPSWITCH.write_to(writer)?;
                     let current_idx = actual_indices[i] - sizes_of_jump_insns[i] + 1;
                     let modulus = current_idx % 4;
-                    let padding = if modulus == 0 {
-                        0
-                    } else {
-                        4 - modulus
-                    };
-                    writer
-                        .write_all(&vec![0; padding])?; // proper 4 byte alignment
+                    let padding = if modulus == 0 { 0 } else { 4 - modulus };
+                    writer.write_all(&vec![0; padding])?; // proper 4 byte alignment
                     write_to!(&resolve_label!(default), writer)?;
 
                     (table.len() as u32).write_to(writer)?;
@@ -442,13 +429,8 @@ impl ConstantPoolReadWrite for Code {
                     TABLESWITCH.write_to(writer)?;
                     let current_idx = actual_indices[i] - sizes_of_jump_insns[i] + 1;
                     let modulus = current_idx % 4;
-                    let padding = if modulus == 0 {
-                        0
-                    } else {
-                        4 - modulus
-                    };
-                    writer
-                        .write_all(&vec![0; padding])?; // proper 4 byte alignment
+                    let padding = if modulus == 0 { 0 } else { 4 - modulus };
+                    writer.write_all(&vec![0; padding])?; // proper 4 byte alignment
                     write_to!(&resolve_label!(default), writer)?;
                     write_to!(low, writer)?;
                     write_to!(&(low + (offsets.len() - 1) as i32), writer)?;

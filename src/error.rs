@@ -19,7 +19,7 @@ pub enum ErrorBase {
     ///
     /// [`mod_utf8`]: crate::mod_utf8
     #[error(transparent)]
-    Mutf(#[from] crate::mod_utf8::MUTFError),
+    Mutf(#[from] crate::mod_utf8::MutfError),
 
     /// This error indicates that when reading the attribute, the data didn't conform to the set of the fields,
     /// therefore resulting in parts of the data not transformed to actual information.
@@ -85,6 +85,7 @@ pub mod backtrace {
             Some(&self.trace)
         }
     }
+
     macro_rules! functions {
         ($($(#[$doc:meta])* $i: ident($($arg_i: ident: $ty: ty),*)),*) => {
             $(
@@ -123,7 +124,7 @@ pub mod backtrace {
             ///
             /// [`ErrorTrace`]: ErrorTrace
             /// [ErrorBase enum variant]: ErrorBase::MUTF
-            Mutf(e: crate::mod_utf8::MUTFError),
+            Mutf(e: crate::mod_utf8::MutfError),
             /// Creates a new instance of [`ErrorTrace`].
             ///
             /// This is intentionally named the same as the [ErrorBase enum variant] so one can use `Error::AttributeLength` in any context.

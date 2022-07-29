@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "coffer_macros",
+    "wtf8",
 ]
 
 [package]
@@ -14,6 +15,7 @@ description = "A lightweight and fast library for reading and writing Java class
 repository = "https://gitlab.com/fee1-dead/coffer"
 homepage = "https://gitlab.com/fee1-dead/coffer"
 readme = "../README.md"
+include = ["src/**/*", "LICENSE-*", "COPYRIGHT.md", "README.md", "!**/tests/**/*"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -25,8 +27,10 @@ indexmap = "1.6.1"
 once_cell = "1.13.0"
 
 [dev-dependencies]
+cesu8 = "1.1.0"
 lazy_static = "1.4.0"
 tempfile = "3.2.0"
+zip = "0.6.2"
 
 [features]
 default = []

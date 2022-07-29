@@ -1,10 +1,9 @@
-
 use std::borrow::Cow;
+use std::error::Error;
 use std::fs::File;
-use std::io::{Cursor, Write};
+use std::io::{Cursor, Read, Write};
 use std::sync::Arc;
 
-use class_sample::ClassInfo;
 use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
 
@@ -51,14 +50,31 @@ fn arr_cp<'a, T: Into<Cow<'a, [RawConstantEntry]>>>(inner: T) -> ArrCp<'a> {
     ArrCp(inner.into())
 }
 
-lazy_static! {
-    static ref SAMPLE: Vec<ClassInfo> =
-        class_sample::get_sample_name_bytes(2 * 1024).expect("fetch sample");
+pub struct JarInfo {
+    file_name: &'static str,
+    bytes: &'static [u8],
 }
 
+macro_rules! sample {
+    ($name:literal) => {
+        JarInfo {
+            file_name: $name,
+            bytes: include_bytes!(concat!("jars/", $name)),
+        }
+    };
+}
+
+pub static SAMPLE: &[JarInfo] = &[
+    sample!("kotlin-compiler.jar"),
+    sample!("scala-library-2.13.8.jar"),
+    sample!("scala3-compiler_3-3.1.3.jar"),
+    sample!("scaladoc_3-3.1.3.jar"),
+];
+
 #[test]
-fn sample_read_write_read() {
-    for ClassInfo { file_name, bytes } in SAMPLE.iter() {
+fn sample_read_write_read() -> Result<(), Box<dyn Error>> {
+    for JarInfo { file_name, bytes } in SAMPLE.iter() {
+        let mut arc = zip::ZipArchive::new(Cursor::new(*bytes))?;
         fn handle_error<E: std::fmt::Display + std::fmt::Debug, P: std::fmt::UpperHex>(
             error: E,
             path: &str,
@@ -76,32 +92,45 @@ fn sample_read_write_read() {
                 "Failure while {discr} {filename}: {error} ({error:?})\ncursor position: 0x{cursor_position:X}\n{message}"
             )
         }
-        let mut reader = Cursor::new(bytes.as_slice());
-        let c = match Class::read_from(&mut reader) {
-            Ok(c) => c,
-            Err(e) => handle_error(e, file_name, bytes.as_slice(), reader.position(), "reading"),
-        };
-        let mut bytes = Vec::new();
-        if let Err(e) = c.write_to(&mut bytes) {
-            handle_error(
-                e,
-                file_name,
-                bytes.as_slice(),
-                bytes.len(),
-                "rewriting deserialized class",
-            );
-        }
-        let mut reader = Cursor::new(bytes.as_slice());
-        if let Err(e) = Class::read_from(&mut reader) {
-            handle_error(
-                e,
-                file_name,
-                &bytes,
-                reader.position(),
-                "rereading serialized class",
-            );
+        for i in 0..arc.len() {
+            let mut file = arc.by_index(i)?;
+            if !file.is_file() || !file.name().ends_with(".class") {
+                continue;
+            }
+            let mut bytes = vec![];
+            file.read_to_end(&mut bytes)?;
+            let file_name = file.name();
+
+            let mut reader = Cursor::new(bytes.as_slice());
+            let c = match Class::read_from(&mut reader) {
+                Ok(c) => c,
+                Err(e) => {
+                    handle_error(e, file_name, bytes.as_slice(), reader.position(), "reading")
+                }
+            };
+            let mut bytes = Vec::new();
+            if let Err(e) = c.write_to(&mut bytes) {
+                handle_error(
+                    e,
+                    file_name,
+                    bytes.as_slice(),
+                    bytes.len(),
+                    "rewriting deserialized class",
+                );
+            }
+            let mut reader = Cursor::new(bytes.as_slice());
+            if let Err(e) = Class::read_from(&mut reader) {
+                handle_error(
+                    e,
+                    file_name,
+                    &bytes,
+                    reader.position(),
+                    "rereading serialized class",
+                );
+            }
         }
     }
+    Ok(())
 }
 #[test]
 fn code_writing() {
@@ -158,10 +187,10 @@ fn code_writing() {
             0,
             0,
             0,
-            44, // code_length // x4
-            0,  // NOP
-            1,  // null
-            87, // pop
+            44,                             // code_length // x4
+            0,                              // NOP
+            1,                              // null
+            87,                             // pop
             crate::constants::insn::BIPUSH, // x4
             123,
             170,

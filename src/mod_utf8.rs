@@ -13,7 +13,14 @@ use thiserror::Error;
 
 /// An error encountered during conversion.
 #[derive(Debug, Error)]
-pub enum MUTFError {
+#[error("{kind} for {src:?}")]
+pub struct MutfError {
+    pub kind: MutfErrorKind,
+    pub src: Box<[u8]>,
+}
+
+#[derive(Debug, Error)]
+pub enum MutfErrorKind {
     /// The code point is 3 or 6 bytes long if the MUTF is valid,
     /// however it reached end of string, resulting in a partial
     /// code point at the end.
@@ -30,91 +37,98 @@ pub enum MUTFError {
 }
 
 /// Converts a modified utf-8 sequence to an owned rust string.
-pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MUTFError> {
-    let mut count: usize = 0;
+pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MutfError> {
+
+    let mut index: usize = 0;
 
     let len = buf.len();
-    let mut str: String = String::with_capacity(len);
+    let mut out = Vec::with_capacity(len);
 
-    'outer: while count < len {
-        let c = buf[count];
-        match c >> 4u8 {
-            0..=7 => {
-                count += 1;
-                str.push(c as char);
-            }
-            12 | 13 => {
-                let c = c as u32;
-                count += 2;
-                if count > len {
-                    return Err(MUTFError::PartialCharacterAtEnd);
+    let mut bytes = buf.iter().copied();
+    macro_rules! error {
+        () => {
+            error!(MutfErrorKind::AroundByte(index))
+        };
+        ($k:expr) => {
+            MutfError { kind: $k, src: buf.to_vec().into_boxed_slice() }
+        };
+    }
+    loop {
+        macro_rules! next {
+            () => {{
+                index += 1;
+                bytes
+                    .next()
+                    .ok_or_else(|| error!(MutfErrorKind::PartialCharacterAtEnd))?
+            }};
+        }
+        index += 1;
+        let c = match bytes.next() {
+            Some(c) => c,
+            None => break,
+        };
+        match c {
+            0b0000_0000..=0b0111_1111 => out.push(c),
+            // c1: 110x xxxx
+            // c2: 10xx xxxx
+            0b1100_0000..=0b1101_1111 => {
+                let c2 = next!();
+                if (c2 & 0b1100_0000) != 0b1000_0000 {
+                    return Err(error!());
                 }
-                let c2 = buf[count - 1] as u32;
-                if (c2 & 0xC0) != 0x80 {
-                    return Err(MUTFError::AroundByte(count));
-                }
-                str.push(
-                    char::try_from(((c & 0x1F) << 6) | (c2 & 0x3F))
-                        .ok()
-                        .ok_or(MUTFError::AroundByte(count))?,
-                )
+                out.extend_from_slice(&[c, c2]);
             }
-            14 => {
-                // Reason: Rust characters differ from java, in java a character is 2 bytes, and in rust it is 4.
-                // This means that rust is able to represent an emoji as one character (not two), whereas java will need two `char`s
-                if c == 0b1110_1101 {
-                    count += 6;
-                    if count <= len {
-                        let c2 = buf[count - 5];
-                        let c3 = buf[count - 4];
-                        let c4 = buf[count - 3];
-                        let c5 = buf[count - 2];
-                        let c6 = buf[count - 1];
-                        if c4 == 0b1110_1101 && c2 >> 4u8 == 0b1010 && c5 >> 4u8 == 0b1011 {
-                            let c2 = c2 as u32;
-                            let c3 = c3 as u32;
-                            let c5 = c5 as u32;
-                            let c6 = c6 as u32;
-                            str.push(
-                                char::try_from(
-                                    (((c2 & 0b1111) + 1) << 16)
-                                        | ((c3 & 0b111111) << 10)
-                                        | ((c5 & 0b1111) << 6)
-                                        | (c6 & 0b111111),
-                                )
-                                .ok()
-                                .ok_or(MUTFError::AroundByte(count))?,
-                            );
-                            continue 'outer;
-                        }
+            // c1: 1110 xxxx
+            // c2: 10xx xxxx
+            // c3: 10xx xxxx
+            0b1110_0000..=0b1110_1111 => {
+                let c2 = next!();
+                let c3 = next!();
+
+                if c3 & 0b1100_0000 != 0b1000_0000 || c2 & 0b1100_0000 != 0b1000_0000 {
+                    return Err(error!());
+                }
+
+                // c1: 1110 1101
+                // c2: 1010 xxxx (plus one when decoding)
+                // c3: 10xx xxxx
+                // c4: 1110 1101
+                // c5: 1011 xxxx
+                // c6: 10xx xxxx
+                if c == 0b1110_1101 && (c2 & 0b1111_0000) == 0b1010_0000 {
+                    let c4 = next!();
+                    let c5 = next!();
+                    let c6 = next!();
+                    let valid = c4 == 0b1110_1101
+                        && (c5 & 0b1111_0000) == 0b1011_0000
+                        && (c6 & 0b1100_0000) == 0b1000_0000;
+                    if !valid {
+                        return Err(error!());
                     }
-                    count -= 6;
-                }
-                let c = c as u32;
-                count += 3;
-                if count > len {
-                    return Err(MUTFError::PartialCharacterAtEnd);
-                }
-                let c2 = buf[count - 2];
-                let c3 = buf[count - 1];
 
-                if (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80 {
-                    return Err(MUTFError::AroundByte(count));
+                    let c2 = c2 as u32;
+                    let c3 = c3 as u32;
+                    let c5 = c5 as u32;
+                    let c6 = c6 as u32;
+                    
+                    let mut buf = [0; 4];
+                    let c = char::try_from(
+                        0x10000 |
+                        ((c2 & 0b1111) << 16) | ((c3 & 0b111111) << 10)
+                        | ((c5 & 0b1111) << 6)
+                        | (c6 & 0b111111)
+                    ).map_err(|_| error!())?;
+                    c.encode_utf8(&mut buf);
+                    out.extend_from_slice(&buf);
+                    continue;
                 }
-                let c2 = c2 as u32;
-                let c3 = c3 as u32;
 
-                str.push(
-                    char::try_from(((c & 0xF) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F))
-                        .ok()
-                        .ok_or(MUTFError::AroundByte(count))?,
-                )
+                out.extend_from_slice(&[c, c2, c3]);
             }
-            _ => return Err(MUTFError::AroundByte(count)),
+            _ => return Err(error!()),
         }
     }
-    str.shrink_to_fit();
-    Ok(str)
+    String::from_utf8(out).map_err(|e| error!(e.utf8_error().into()))
 }
 
 /// Converts a string to modified UTF-8.
