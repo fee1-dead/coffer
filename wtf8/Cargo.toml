@@ -9,5 +9,5 @@ edition = "2021"
 
 [features]
 alloc = []
-std = []
+std = ["alloc"]
 default = ["alloc"]

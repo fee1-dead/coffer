@@ -38,7 +38,6 @@ pub enum MutfErrorKind {
 
 /// Converts a modified utf-8 sequence to an owned rust string.
 pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MutfError> {
-
     let mut index: usize = 0;
 
     let len = buf.len();
@@ -50,7 +49,10 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MutfError> {
             error!(MutfErrorKind::AroundByte(index))
         };
         ($k:expr) => {
-            MutfError { kind: $k, src: buf.to_vec().into_boxed_slice() }
+            MutfError {
+                kind: $k,
+                src: buf.to_vec().into_boxed_slice(),
+            }
         };
     }
     loop {
@@ -110,14 +112,16 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MutfError> {
                     let c3 = c3 as u32;
                     let c5 = c5 as u32;
                     let c6 = c6 as u32;
-                    
+
                     let mut buf = [0; 4];
                     let c = char::try_from(
-                        0x10000 |
-                        ((c2 & 0b1111) << 16) | ((c3 & 0b111111) << 10)
-                        | ((c5 & 0b1111) << 6)
-                        | (c6 & 0b111111)
-                    ).map_err(|_| error!())?;
+                        0x10000
+                            | ((c2 & 0b1111) << 16)
+                            | ((c3 & 0b111111) << 10)
+                            | ((c5 & 0b1111) << 6)
+                            | (c6 & 0b111111),
+                    )
+                    .map_err(|_| error!())?;
                     c.encode_utf8(&mut buf);
                     out.extend_from_slice(&buf);
                     continue;
