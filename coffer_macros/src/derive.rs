@@ -17,11 +17,7 @@ pub(crate) fn generics(input: &DeriveInput) -> (TokenStream2, TokenStream2) {
         quote! { #where_clause },
     )
 }
-pub(crate) fn attr_enum(input: DeriveInput) -> Result<TokenStream2> {
-    let (generics, where_c) = generics(&input);
-    let span = input.span();
-    let ident = input.ident;
-
+pub(crate) fn attr_enum(input: synstructure::Structure) -> Result<TokenStream2> {
     if let Data::Enum(e) = input.data {
         let raw_variant = &e
             .variants
