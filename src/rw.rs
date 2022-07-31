@@ -2,6 +2,7 @@ use std::convert::TryFrom;
 use std::sync::Arc;
 
 use once_cell::sync::OnceCell;
+use wtf_8::{Wtf8String, Wtf8Str};
 
 use crate::prelude::*;
 
@@ -37,7 +38,7 @@ pub trait ConstantPoolWriter {
             Constant::Class(s) => self.insert_indirect_str(7, s),
             Constant::Member(mem) => self.insert_member(mem),
             Constant::MethodType(t) => {
-                let desc = self.insert_utf8(t.to_string());
+                let desc = self.insert_wtf8(t.to_string());
                 self.insert_raw(RawConstantEntry::MethodType(desc))
             }
             Constant::MethodHandle(h) => {
@@ -89,8 +90,8 @@ pub trait ConstantPoolWriter {
         self.insert_raw(e(bsm, name_and_type))
     }
     /// insert an indirect string such as String / Module / Package entry, used by the procedural macro.
-    fn insert_indirect_str<T: Into<Cow<'static, str>>>(&mut self, tag: u8, st: T) -> u16 {
-        let str_ref = self.insert_utf8(st.into().into_owned());
+    fn insert_indirect_str(&mut self, tag: u8, st: Cow<'static, Wtf8Str>) -> u16 {
+        let str_ref = self.insert_wtf8(st);
         self.insert_raw(match tag {
             7 => RawConstantEntry::Class,
             8 => RawConstantEntry::String,
@@ -101,24 +102,24 @@ pub trait ConstantPoolWriter {
             }
         }(str_ref))
     }
-    fn insert_utf8<T: Into<Cow<'static, str>>>(&mut self, st: T) -> u16 {
-        self.insert_raw(RawConstantEntry::UTF8(st.into()))
+    fn insert_wtf8(&mut self, st: Cow<'static, Wtf8Str>) -> u16 {
+        self.insert_raw(RawConstantEntry::WTF8(st))
     }
-    fn insert_nameandtype<T: Into<Cow<'static, str>>, T2: Into<Cow<'static, str>>>(
+    fn insert_nameandtype(
         &mut self,
-        name: T,
-        descriptor: T2,
+        name: Cow<'static, Wtf8Str>,
+        descriptor: Cow<'static, Wtf8Str>,
     ) -> u16 {
-        let a = self.insert_utf8(name);
-        let b = self.insert_utf8(descriptor);
+        let a = self.insert_wtf8(name);
+        let b = self.insert_wtf8(descriptor);
         self.insert_raw(RawConstantEntry::NameAndType(a, b))
     }
-    fn insert_class<T: Into<Cow<'static, str>>>(&mut self, c: T) -> u16 {
-        let idx = self.insert_utf8(c);
+    fn insert_class(&mut self, c: Cow<'static, Wtf8Str>) -> u16 {
+        let idx = self.insert_wtf8(c);
         self.insert_raw(RawConstantEntry::Class(idx))
     }
-    fn insert_package<T: Into<Cow<'static, str>>>(&mut self, c: T) -> u16 {
-        let idx = self.insert_utf8(c);
+    fn insert_package(&mut self, c: Cow<'static, Wtf8Str>) -> u16 {
+        let idx = self.insert_wtf8(c);
         self.insert_raw(RawConstantEntry::Package(idx))
     }
     fn insert_int(&mut self, i: i32) -> u16 {
@@ -176,12 +177,12 @@ pub trait ConstantPoolReader {
     fn read_raw(&mut self, idx: u16) -> Option<RawConstantEntry>;
 
     /// Reads a name and type tuple.
-    fn read_nameandtype(&mut self, idx: u16) -> Option<(Cow<'static, str>, Type)> {
+    fn read_nameandtype(&mut self, idx: u16) -> Option<(Cow<'static, Wtf8Str>, Type)> {
         match self.read_raw(idx) {
-            Some(RawConstantEntry::NameAndType(n, t)) => self.read_utf8(n).and_then(|n| {
-                self.read_utf8(t)
+            Some(RawConstantEntry::NameAndType(n, t)) => self.read_wtf8(n).and_then(|n| {
+                self.read_wtf8(t)
                     .as_deref()
-                    .map(str::parse)
+                    .map(crate::ty::parse_type)
                     .and_then(Result::ok)
                     .map(|t| (n, t))
             }),
@@ -194,10 +195,10 @@ pub trait ConstantPoolReader {
             Some(RawConstantEntry::Long(l)) => Some(Constant::I64(l)),
             Some(RawConstantEntry::Float(f)) => Some(Constant::F32(f.into())),
             Some(RawConstantEntry::Double(d)) => Some(Constant::F64(d.into())),
-            Some(RawConstantEntry::String(s)) => self.read_utf8(s).map(Constant::String),
-            Some(RawConstantEntry::Class(c)) => self.read_utf8(c).map(Constant::Class),
+            Some(RawConstantEntry::String(s)) => self.read_wtf8(s).map(Constant::String),
+            Some(RawConstantEntry::Class(c)) => self.read_wtf8(c).map(Constant::Class),
             Some(RawConstantEntry::MethodType(m)) => self
-                .read_utf8(m)
+                .read_wtf8(m)
                 .as_deref()
                 .map(str::parse)
                 .and_then(Result::ok)
@@ -235,27 +236,27 @@ pub trait ConstantPoolReader {
         }
     }
 
-    fn read_indirect_str(&mut self, tag: u8, idx: u16) -> Option<Cow<'static, str>> {
+    fn read_indirect_str(&mut self, tag: u8, idx: u16) -> Option<Cow<'static, Wtf8Str>> {
         self.read_raw(idx)
             .and_then(|c| match c {
-                RawConstantEntry::Module(u) if tag == 19 => self.read_utf8(u),
-                RawConstantEntry::Package(u) if tag == 20 => self.read_utf8(u),
-                RawConstantEntry::Module(u) if tag == 19 => self.read_utf8(u),
-                RawConstantEntry::Package(u) if tag == 20 => self.read_utf8(u),
-                RawConstantEntry::String(u) if tag == 8 => self.read_utf8(u),
-                RawConstantEntry::Class(u) if tag == 7 => self.read_utf8(u),
+                RawConstantEntry::Module(u) if tag == 19 => self.read_wtf8(u),
+                RawConstantEntry::Package(u) if tag == 20 => self.read_wtf8(u),
+                RawConstantEntry::Module(u) if tag == 19 => self.read_wtf8(u),
+                RawConstantEntry::Package(u) if tag == 20 => self.read_wtf8(u),
+                RawConstantEntry::String(u) if tag == 8 => self.read_wtf8(u),
+                RawConstantEntry::Class(u) if tag == 7 => self.read_wtf8(u),
                 _ => None,
             })
             .map(Into::into)
     }
 
-    fn read_class(&mut self, idx: u16) -> Option<Cow<'static, str>> {
+    fn read_class(&mut self, idx: u16) -> Option<Cow<'static, Wtf8Str>> {
         self.read_indirect_str(7, idx)
     }
 
-    fn read_utf8(&mut self, idx: u16) -> Option<Cow<'static, str>> {
+    fn read_wtf8(&mut self, idx: u16) -> Option<Cow<'static, Wtf8Str>> {
         match self.read_raw(idx) {
-            Some(RawConstantEntry::UTF8(s)) => Some(s),
+            Some(RawConstantEntry::WTF8(s)) => Some(s),
             _ => None,
         }
     }
@@ -443,7 +444,7 @@ macro_rules! impl_readwrite_nums {
 
 impl_readwrite_nums! { (u8, 1),  (i8, 1),  (u16, 2),  (i16, 2),  (u32, 4),  (i32, 4),  (f32, 4),  (u64, 8),  (i64, 8),  (f64, 8),  (u128, 16),  (i128, 16) }
 
-impl ReadWrite for String {
+impl ReadWrite for Wtf8String {
     fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
         let length = u16::read_from(reader)?;
         let mut buf = vec![0; length as usize];
@@ -459,7 +460,7 @@ impl ReadWrite for String {
     }
 }
 
-impl<'a> ReadWrite for Cow<'a, str> {
+impl<'a> ReadWrite for Cow<'a, Wtf8Str> {
     fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
         Ok(Cow::Owned(read_from!(reader)?))
     }

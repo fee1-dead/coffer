@@ -29,7 +29,7 @@ pub(crate) fn attr_enum(input: DeriveInput) -> Result<TokenStream2> {
             .find(|v| {
                 v.attrs
                     .iter()
-                    .any(|a| a.path.to_token_stream().to_string() == "raw_variant")
+                    .any(|a| a.path.is_ident("raw_variant"))
             })
             .ok_or_else(|| {
                 Error::new(
@@ -49,8 +49,11 @@ pub(crate) fn attr_enum(input: DeriveInput) -> Result<TokenStream2> {
             .collect::<Vec<_>>();
         let attr_names = new_variants
             .iter()
-            .map(|v| v.ident.to_string())
-            .map(|s| quote! { #s })
+            .map(|v| {
+                let ident = &v.ident;
+                let stringified = quote!(stringify!());
+                (quote! { ::std::borrow::Cow::Borrowed(::wtf_8::Wtf8Str::new(stringify!(#ident))) })
+            })
             .collect::<Vec<_>>();
         let variant_fields_idents = new_variants
             .iter()
@@ -163,7 +166,7 @@ pub(crate) fn attr_enum(input: DeriveInput) -> Result<TokenStream2> {
             impl #generics crate::ConstantPoolReadWrite for #ident #generics #where_c {
                 fn read_from<C: crate::ConstantPoolReader, R: std::io::Read>(cp: &mut C, reader: &mut R) -> crate::Result<Self> {
                     let idx = u16::read_from(reader)?;
-                    let attribute_name = cp.read_utf8(idx).ok_or_else(|| crate::error::Error::Invalid("attribute index", Into::into(idx.to_string())))?;
+                    let attribute_name = cp.read_wtf8(idx).ok_or_else(|| crate::error::Error::Invalid("attribute index", Into::into(idx.to_string())))?;
                     match attribute_name.as_ref() {
                         #(
                                     #attr_names => {
@@ -184,13 +187,13 @@ pub(crate) fn attr_enum(input: DeriveInput) -> Result<TokenStream2> {
                     match self {
                         #(
                             #variant_match_arms {
-                                u16::write_to(&cp.insert_utf8(#attr_names), writer)?;
+                                u16::write_to(&cp.insert_wtf8(#attr_names), writer)?;
                                 #variant_write_bodies
                                 Ok(())
                             }
                         )*
                         Self::#raw_variant(crate::prelude::RawAttribute { keep: true, ref name, ref inner }) => {
-                            u16::write_to(&cp.insert_utf8(name.clone()), writer)?;
+                            u16::write_to(&cp.insert_wtf8(name.clone()), writer)?;
                             crate::write_to!(&(inner.len() as u32), writer)?;
                             writer.write_all(inner)?;
                             Ok(())
@@ -352,11 +355,11 @@ pub(crate) fn gen_read_and_write<T: ToTokens>(
                 if idx == 0 {
                     None
                 } else {
-                    Some(cp.read_utf8(idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index (expected UTF8)", Into::into(idx.to_string())))?)
+                    Some(cp.read_wtf8(idx).ok_or_else(|| crate::error::Error::Invalid("constant pool entry index (expected UTF8)", Into::into(idx.to_string())))?)
                 }}},
                 quote! {
                     if let Some(s) = #receiver {
-                        cp.insert_utf8(s.clone()).write_to(#writer)?;
+                        cp.insert_wtf8(s.clone()).write_to(#writer)?;
                     } else {
                         0u16.write_to(#writer)?;
                     }

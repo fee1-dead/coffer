@@ -20,6 +20,7 @@ mod structure;
 use convert::*;
 use once_cell::sync::OnceCell;
 pub use structure::*;
+use wtf_8::Wtf8Str;
 
 #[derive(Clone, PartialEq, Debug, Default)]
 pub struct Code {
@@ -149,7 +150,7 @@ impl ConstantPoolReadWrite for Code {
         let mut local_vars: HashMap<LocalVarKey, LocalVar> = HashMap::new();
 
         #[derive(Hash, Eq, PartialEq)]
-        struct LocalVarKey(Lbl, Lbl, u16, Cow<'static, str>);
+        struct LocalVarKey(Lbl, Lbl, u16, Cow<'static, Wtf8Str>);
 
         for _ in 0..numattrs {
             match CodeAttr::read_from(&mut labeler, reader)? {
@@ -608,7 +609,7 @@ pub enum VerificationType {
     Double,
     Null,
     UninitializedThis,
-    Object(#[str_type(Class)] Cow<'static, str>),
+    Object(#[str_type(Class)] Cow<'static, Wtf8Str>),
     /// Following the label, must be a `NEW` instruction.
     UninitializedVariable(Label),
 }

@@ -7,16 +7,12 @@ use std::sync::Arc;
 use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
 
-use crate::code::Instruction::{LineNumber, *};
+use crate::code::Instruction::*;
 use crate::code::Label as Lbl;
 use crate::code::LocalType::Reference;
 use crate::prelude::{
-    BootstrapMethod, Code, Constant, MemberRef, Method, OrDynamic, RawConstantEntry, Result,
+    BootstrapMethod, Code, Constant, OrDynamic, RawConstantEntry, Result,
 };
-use crate::Constant::*;
-use crate::GetOrPut::{Get, Put};
-use crate::LoadOrStore::{Load, Store};
-use crate::MemberType::{Static, Virtual};
 use crate::{Class, ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite};
 
 struct ArrCp<'a>(Cow<'a, [RawConstantEntry]>);

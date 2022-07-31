@@ -29,6 +29,7 @@ use core::iter::FusedIterator;
 use core::num::NonZeroU8;
 use core::{char, fmt, ops, slice, str};
 
+use alloc::borrow::Cow;
 use std_internal::next_code_point;
 
 const UTF8_REPLACEMENT_CHARACTER: &str = "\u{FFFD}";
@@ -110,6 +111,18 @@ impl Codepoint {
     #[inline]
     pub fn to_char_lossy(&self) -> char {
         self.to_char().unwrap_or('\u{FFFD}')
+    }
+}
+
+impl PartialEq<char> for Codepoint {
+    fn eq(&self, other: &char) -> bool {
+        self.to_u32() == (*other) as u32
+    }
+}
+
+impl From<char> for Codepoint {
+    fn from(c: char) -> Self {
+        Self::from_char(c)
     }
 }
 
@@ -265,7 +278,7 @@ impl Wtf8Str {
 
     /// Returns an iterator for the string’s code points.
     #[inline]
-    pub fn code_points(&self) -> Wtf8CodePoints<'_> {
+    pub fn codepoints(&self) -> Wtf8CodePoints<'_> {
         Wtf8CodePoints {
             bytes: self.bytes.iter(),
         }
@@ -295,7 +308,7 @@ impl Wtf8Str {
     #[inline]
     pub fn encode_wide(&self) -> EncodeWide<'_> {
         EncodeWide {
-            code_points: self.code_points(),
+            code_points: self.codepoints(),
             extra: 0,
         }
     }
@@ -958,13 +971,13 @@ impl ops::Index<ops::RangeFull> for Wtf8Str {
 }
 
 #[inline]
-fn decode_surrogate(second_byte: u8, third_byte: u8) -> u16 {
+pub fn decode_surrogate(second_byte: u8, third_byte: u8) -> u16 {
     // The first byte is assumed to be 0xED
     0xD800 | (second_byte as u16 & 0x3F) << 6 | third_byte as u16 & 0x3F
 }
 
 #[inline]
-fn decode_surrogate_pair(lead: u16, trail: u16) -> char {
+pub fn decode_surrogate_pair(lead: u16, trail: u16) -> char {
     let code_point = 0x10000 + ((((lead - 0xD800) as u32) << 10) | (trail - 0xDC00) as u32);
     unsafe { char::from_u32_unchecked(code_point) }
 }
@@ -1007,6 +1020,13 @@ fn slice_error_fail(s: &Wtf8Str, begin: usize, end: usize) -> ! {
 #[derive(Clone)]
 pub struct Wtf8CodePoints<'a> {
     bytes: slice::Iter<'a, u8>,
+}
+
+impl<'a> Wtf8CodePoints<'a> {
+    pub fn as_str(&self) -> &'a Wtf8Str {
+        // SAFETY: codepoints are consumed fully, leaving a valid WTF-8 sequence after each iteration.
+        unsafe { Wtf8Str::from_bytes_unchecked(self.bytes.as_slice()) }
+    }
 }
 
 impl<'a> Iterator for Wtf8CodePoints<'a> {
@@ -1219,5 +1239,11 @@ impl Hash for Wtf8Str {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write(&self.bytes);
         0xfeu8.hash(state)
+    }
+}
+
+impl PartialEq<str> for Wtf8Str {
+    fn eq(&self, other: &str) -> bool {
+        self.as_bytes().eq(other.as_bytes())
     }
 }

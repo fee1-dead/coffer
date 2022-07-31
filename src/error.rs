@@ -51,7 +51,7 @@ pub mod backtrace {
         fn from(t: T) -> Self {
             Self {
                 inner: t.into(),
-                trace: Backtrace::force_capture(),
+                trace: Backtrace::capture(),
             }
         }
     }
@@ -72,7 +72,9 @@ pub mod backtrace {
     }
     impl std::fmt::Display for ErrorTrace {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            write!(f, "{}\nBacktrace:\n{}", self.inner, self.trace)
+            let Self { inner, trace } = self;
+            writeln!(f, "{inner}")?;
+            writeln!(f, "Backtrace:\n{trace}")
         }
     }
 
@@ -95,7 +97,7 @@ pub mod backtrace {
                 pub fn $i($($arg_i: $ty),*) -> ErrorTrace {
                     ErrorTrace {
                         inner: ErrorBase::$i($($arg_i),*),
-                        trace: Backtrace::force_capture()
+                        trace: Backtrace::capture(),
                     }
                 }
             )*

@@ -7,6 +7,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use once_cell::sync::OnceCell;
+use wtf_8::Wtf8Str;
 
 use crate::prelude::{BootstrapMethod, Read, Result, Write};
 use crate::{mod_utf8, ConstantPoolReader, ConstantPoolWriter, Error, ReadWrite};
@@ -57,7 +58,7 @@ pub enum ConstEntryRef<'a> {
 #[tag_type(u8)]
 pub enum RawConstantEntry {
     #[tag(1)]
-    UTF8(Cow<'static, str>),
+    WTF8(Cow<'static, Wtf8Str>),
     #[tag(3)]
     Int(i32),
     Float(f32),
@@ -81,7 +82,7 @@ impl Hash for RawConstantEntry {
     fn hash<H: Hasher>(&self, state: &mut H) {
         std::mem::discriminant(self).hash(state);
         match self {
-            RawConstantEntry::UTF8(ref s) => s.hash(state),
+            RawConstantEntry::WTF8(ref s) => s.hash(state),
             RawConstantEntry::Int(ref i) => i.hash(state),
             RawConstantEntry::Float(ref f) => f.to_bits().hash(state),
             RawConstantEntry::Long(ref l) => l.hash(state),

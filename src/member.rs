@@ -1,6 +1,8 @@
 //! Members of a java class
 //!
 //! They can be fields or methods.
+use wtf_8::Wtf8Str;
+
 use crate::annotation::{
     Annotation, AnnotationValue, FieldTypeAnnotation, MethodTypeAnnotation, ParameterAnnotations,
 };
@@ -11,9 +13,9 @@ use crate::prelude::*;
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct MemberRef {
     /// The class holding this member.
-    pub owner: Cow<'static, str>,
+    pub owner: Cow<'static, Wtf8Str>,
     /// The name of this member.
-    pub name: Cow<'static, str>,
+    pub name: Cow<'static, Wtf8Str>,
     /// The descriptor of this member.
     ///
     /// Can be a field descriptor or a method descriptor.
@@ -105,7 +107,7 @@ pub enum MethodAttribute {
 pub struct Method {
     #[use_normal_rw]
     pub access: MethodFlags,
-    pub name: Cow<'static, str>,
+    pub name: Cow<'static, Wtf8Str>,
     pub descriptor: Type,
     #[vec_len_type(u16)]
     pub attributes: Vec<MethodAttribute>,

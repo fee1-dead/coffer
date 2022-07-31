@@ -2,6 +2,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use once_cell::sync::OnceCell;
+use wtf_8::Wtf8Str;
 
 use crate::prelude::*;
 
@@ -53,14 +54,14 @@ impl ConstantPoolReadWrite for BootstrapMethod {
 pub struct Dynamic {
     pub bsm: Arc<OnceCell<BootstrapMethod>>,
     /// The name of the bootstrap method that will compute the constant value.
-    pub name: Cow<'static, str>,
+    pub name: Cow<'static, Wtf8Str>,
     /// The descriptor of the dynamically computed value. Must be a field descriptor.
     pub descriptor: Type,
 }
 
 impl Dynamic {
     /// Creates a new dynamic computed constant.
-    pub fn new<N: Into<Cow<'static, str>>, D: Into<Type>>(
+    pub fn new<N: Into<Cow<'static, Wtf8Str>>, D: Into<Type>>(
         bsm: BootstrapMethod,
         name: N,
         descriptor: D,

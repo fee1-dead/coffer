@@ -487,8 +487,6 @@ macro_rules! cprw_impls {
             impl ConstantPoolReadWrite for $ty {
                 fn read_from<C: crate::ConstantPoolReader, R: std::io::Read>(cp: &mut C, reader: &mut R) -> crate::Result<Self> {
                     let s = Cow::<'static, str>::read_from(cp, reader)?;
-                    // TODO remove
-                    println!("{s}");
                     FromStr::from_str(s.as_ref())
                 }
 

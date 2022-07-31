@@ -1,4 +1,5 @@
 use indexmap::map::IndexMap;
+use wtf_8::Wtf8Str;
 
 use crate::annotation::CodeTypeAnnotation;
 use crate::prelude::*;
@@ -325,7 +326,7 @@ pub enum Instruction {
 pub struct LocalVariable {
     pub start: Label,
     pub end: Label,
-    pub name: Cow<'static, str>,
+    pub name: Cow<'static, Wtf8Str>,
     pub descriptor: Option<Type>,
     pub signature: Option<FieldSignature>,
     pub index: u16,
@@ -341,7 +342,7 @@ pub(super) struct LocalVar {
     pub start: u16,
     #[use_normal_rw]
     pub len: u16,
-    pub name: Cow<'static, str>,
+    pub name: Cow<'static, Wtf8Str>,
     pub descriptor: Type,
     #[use_normal_rw]
     pub index: u16,
@@ -353,7 +354,7 @@ pub struct LocalVarType {
     pub start: u16,
     #[use_normal_rw]
     pub len: u16,
-    pub name: Cow<'static, str>,
+    pub name: Cow<'static, Wtf8Str>,
     pub signature: FieldSignature,
     #[use_normal_rw]
     pub index: u16,
@@ -389,7 +390,7 @@ pub struct Catch {
     pub start: Label,
     pub end: Label,
     pub handler: Label,
-    pub catch: Option<Cow<'static, str>>,
+    pub catch: Option<Cow<'static, Wtf8Str>>,
 }
 
 impl ConstantPoolReadWrite for Catch {

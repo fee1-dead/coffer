@@ -1,3 +1,5 @@
+use wtf_8::Wtf8Str;
+
 use crate::annotation::{Annotation, ClassTypeAnnotation};
 use crate::mod_utf8::{modified_utf8_to_string, string_to_modified_utf8};
 use crate::module::Module;
@@ -11,7 +13,7 @@ pub struct RawAttribute {
     /// Attributes that are related to local variables will default to `false`, whereas newly created attributes will be `true`.
     pub(crate) keep: bool,
     /// The name of this attribute.
-    pub name: Cow<'static, str>,
+    pub name: Cow<'static, Wtf8Str>,
     /// The inner data of this attribute.
     pub inner: Cow<'static, [u8]>,
 }
@@ -20,7 +22,7 @@ impl RawAttribute {
     /// Creates a new raw attribute with name and inner data.
     ///
     /// `String` and `Vec<u8>`, string literal and array literal are all accepted because this uses a Cow.
-    pub fn new<S: Into<Cow<'static, str>>, B: Into<Cow<'static, [u8]>>>(name: S, inner: B) -> Self {
+    pub fn new<S: Into<Cow<'static, Wtf8Str>>, B: Into<Cow<'static, [u8]>>>(name: S, inner: B) -> Self {
         Self {
             keep: true,
             name: name.into(),
@@ -28,7 +30,7 @@ impl RawAttribute {
         }
     }
     /// Used by the procedural macro.
-    pub(crate) fn __new(name: Cow<'static, str>, inner: Vec<u8>) -> Self {
+    pub(crate) fn __new(name: Cow<'static, Wtf8Str>, inner: Vec<u8>) -> Self {
         Self {
             keep: false,
             name,
@@ -37,7 +39,7 @@ impl RawAttribute {
     }
 }
 
-impl ConstantPoolReadWrite for Option<(Cow<'static, str>, Type)> {
+impl ConstantPoolReadWrite for Option<(Cow<'static, Wtf8Str>, Type)> {
     fn read_from<C: ConstantPoolReader, R: Read>(
         cp: &mut C,
         reader: &mut R,
@@ -104,11 +106,11 @@ pub enum ClassAttribute {
     Signature(ClassSignature),
     Synthetic,
     Deprecated,
-    SourceFile(Cow<'static, str>),
+    SourceFile(Cow<'static, Wtf8Str>),
     InnerClasses(#[vec_len_type(u16)] Vec<InnerClass>),
     EnclosingMethod(
-        #[str_type(Class)] Cow<'static, str>,
-        Option<(Cow<'static, str>, Type)>,
+        #[str_type(Class)] Cow<'static, Wtf8Str>,
+        Option<(Cow<'static, Wtf8Str>, Type)>,
     ),
     SourceDebugExtension(#[use_normal_rw] SourceDebugExtension),
     BootstrapMethods(#[vec_len_type(u16)] Vec<BootstrapMethod>),
@@ -116,14 +118,14 @@ pub enum ClassAttribute {
     ModulePackages(
         #[vec_len_type(u16)]
         #[str_type(Package)]
-        Vec<Cow<'static, str>>,
+        Vec<Cow<'static, Wtf8Str>>,
     ),
-    ModuleMainClass(#[str_type(Class)] Cow<'static, str>),
-    NestHost(#[str_type(Class)] Cow<'static, str>),
+    ModuleMainClass(#[str_type(Class)] Cow<'static, Wtf8Str>),
+    NestHost(#[str_type(Class)] Cow<'static, Wtf8Str>),
     NestMembers(
         #[vec_len_type(u16)]
         #[str_type(Class)]
-        Vec<Cow<'static, str>>,
+        Vec<Cow<'static, Wtf8Str>>,
     ),
     RuntimeVisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),
     RuntimeInvisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),

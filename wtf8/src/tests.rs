@@ -376,7 +376,7 @@ fn wtf8_code_points() {
     }
     fn cp(string: &Wtf8String) -> Vec<Option<char>> {
         string
-            .code_points()
+            .codepoints()
             .map(|c| c.to_char())
             .collect::<Vec<_>>()
     }

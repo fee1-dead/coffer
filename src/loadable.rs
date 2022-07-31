@@ -3,6 +3,8 @@
 use std::convert::TryFrom;
 use std::hash::Hash;
 
+use wtf_8::Wtf8Str;
+
 pub use crate::member::MemberRef;
 use crate::prelude::*;
 use crate::read_from;
@@ -119,14 +121,14 @@ impl MethodHandle {
             | MethodHandleKind::InvokeStatic
             | MethodHandleKind::InvokeSpecial
             | MethodHandleKind::InvokeInterface
-                if self.member.name == "<init>" || self.member.name == "<clinit>" =>
+                if &*self.member.name == "<init>" || &*self.member.name == "<clinit>" =>
             {
                 Err(Error::Invalid(
                     "MethodHandle",
                     Cow::Borrowed("name must not be <init> or <clinit>"),
                 ))
             }
-            MethodHandleKind::NewInvokeSpecial if self.member.name != "<init>" => {
+            MethodHandleKind::NewInvokeSpecial if &*self.member.name != "<init>" => {
                 Err(Error::Invalid(
                     "MethodHandle",
                     Cow::Borrowed("name for NewInvokeSpecial must be <init>"),
@@ -172,9 +174,9 @@ pub enum Constant {
     /// A double-precision floating-point number.
     F64(TotalF64),
     /// A String.
-    String(Cow<'static, str>),
+    String(Cow<'static, Wtf8Str>),
     /// A class. The packages are seperated by `/` instead of `.` i.e. `java/lang/String` instead of `java.lang.String`.
-    Class(Cow<'static, str>),
+    Class(Cow<'static, Wtf8Str>),
     /// A member, can be a field or a method.
     Member(MemberRef),
     /// A method descriptor.
@@ -194,7 +196,7 @@ impl Constant {
 
     /// Creates an instance of Constant that is a string.
     #[inline]
-    pub fn string<T: Into<Cow<'static, str>>>(s: T) -> Self {
+    pub fn string<T: Into<Cow<'static, Wtf8Str>>>(s: T) -> Self {
         Self::String(s.into())
     }
 }

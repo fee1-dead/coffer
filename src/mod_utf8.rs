@@ -10,17 +10,11 @@
 use std::convert::TryFrom;
 
 use thiserror::Error;
+use wtf_8::{Wtf8String, Wtf8Error};
 
 /// An error encountered during conversion.
 #[derive(Debug, Error)]
-#[error("{kind} for {src:?}")]
-pub struct MutfError {
-    pub kind: MutfErrorKind,
-    pub src: Box<[u8]>,
-}
-
-#[derive(Debug, Error)]
-pub enum MutfErrorKind {
+pub enum MutfError {
     /// The code point is 3 or 6 bytes long if the MUTF is valid,
     /// however it reached end of string, resulting in a partial
     /// code point at the end.
@@ -33,11 +27,11 @@ pub enum MutfErrorKind {
 
     /// The modified utf-8 buffer becomes an invalid UTF-8 sequence when decoded.
     #[error(transparent)]
-    UTF8Error(#[from] std::str::Utf8Error),
+    WTF8Error(#[from] Wtf8Error),
 }
 
-/// Converts a modified utf-8 sequence to an owned rust string.
-pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MutfError> {
+/// Converts a modified utf-8 sequence to an owned wtf-8 string.
+pub fn modified_utf8_to_string(buf: &[u8]) -> Result<Wtf8String, MutfError> {
     let mut index: usize = 0;
 
     let len = buf.len();
@@ -46,25 +40,17 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MutfError> {
     let mut bytes = buf.iter().copied();
     macro_rules! error {
         () => {
-            error!(MutfErrorKind::AroundByte(index))
-        };
-        ($k:expr) => {
-            MutfError {
-                kind: $k,
-                src: buf.to_vec().into_boxed_slice(),
-            }
+            MutfError::AroundByte(index)
         };
     }
     loop {
         macro_rules! next {
             () => {{
-                index += 1;
                 bytes
                     .next()
-                    .ok_or_else(|| error!(MutfErrorKind::PartialCharacterAtEnd))?
+                    .ok_or(MutfError::PartialCharacterAtEnd)?
             }};
         }
-        index += 1;
         let c = match bytes.next() {
             Some(c) => c,
             None => break,
@@ -73,12 +59,8 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MutfError> {
             0b0000_0000..=0b0111_1111 => out.push(c),
             // c1: 110x xxxx
             // c2: 10xx xxxx
-            0b1100_0000..=0b1101_1111 => {
-                let c2 = next!();
-                if (c2 & 0b1100_0000) != 0b1000_0000 {
-                    return Err(error!());
-                }
-                out.extend_from_slice(&[c, c2]);
+            0xC0 if next!() == 0x80 => {
+                out.push(0);
             }
             // c1: 1110 xxxx
             // c2: 10xx xxxx
@@ -87,10 +69,6 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MutfError> {
                 let c2 = next!();
                 let c3 = next!();
 
-                if c3 & 0b1100_0000 != 0b1000_0000 || c2 & 0b1100_0000 != 0b1000_0000 {
-                    return Err(error!());
-                }
-
                 // c1: 1110 1101
                 // c2: 1010 xxxx (plus one when decoding)
                 // c3: 10xx xxxx
@@ -98,32 +76,36 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MutfError> {
                 // c5: 1011 xxxx
                 // c6: 10xx xxxx
                 if c == 0b1110_1101 && (c2 & 0b1111_0000) == 0b1010_0000 {
-                    let c4 = next!();
-                    let c5 = next!();
-                    let c6 = next!();
-                    let valid = c4 == 0b1110_1101
-                        && (c5 & 0b1111_0000) == 0b1011_0000
-                        && (c6 & 0b1100_0000) == 0b1000_0000;
-                    if !valid {
-                        return Err(error!());
+                    if bytes.len() >= 3 {
+                        let c4 = next!();
+                        let c5 = next!();
+                        let c6 = next!();
+                        let valid = c4 == 0b1110_1101
+                            && (c5 & 0b1111_0000) == 0b1011_0000
+                            && (c6 & 0b1100_0000) == 0b1000_0000;
+                        if valid {
+                            let c2 = c2 as u32;
+                            let c3 = c3 as u32;
+                            let c5 = c5 as u32;
+                            let c6 = c6 as u32;
+        
+                            let mut buf = [0; 4];
+                            let c = char::try_from(
+                                0x10000
+                                    | ((c2 & 0b1111) << 16)
+                                    | ((c3 & 0b111111) << 10)
+                                    | ((c5 & 0b1111) << 6)
+                                    | (c6 & 0b111111),
+                            )
+                            .map_err(|_| error!())?;
+                            c.encode_utf8(&mut buf);
+                            out.extend_from_slice(&buf);
+                        } else {
+                            out.extend_from_slice(&[c, c2, c3, c4, c5, c6]);
+                            continue;
+                        }
                     }
 
-                    let c2 = c2 as u32;
-                    let c3 = c3 as u32;
-                    let c5 = c5 as u32;
-                    let c6 = c6 as u32;
-
-                    let mut buf = [0; 4];
-                    let c = char::try_from(
-                        0x10000
-                            | ((c2 & 0b1111) << 16)
-                            | ((c3 & 0b111111) << 10)
-                            | ((c5 & 0b1111) << 6)
-                            | (c6 & 0b111111),
-                    )
-                    .map_err(|_| error!())?;
-                    c.encode_utf8(&mut buf);
-                    out.extend_from_slice(&buf);
                     continue;
                 }
 
@@ -132,7 +114,8 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<String, MutfError> {
             _ => return Err(error!()),
         }
     }
-    String::from_utf8(out).map_err(|e| error!(e.utf8_error().into()))
+
+    Wtf8String::from_bytes(out).map_err(Into::into)
 }
 
 /// Converts a string to modified UTF-8.
