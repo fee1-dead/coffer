@@ -38,6 +38,7 @@ use syn::{DeriveInput, Error};
 #[proc_macro_derive(
     ConstantPoolReadWrite,
     attributes(
+        coffer,
         tag_type,
         tag,
         attr_enum,
@@ -51,11 +52,11 @@ use syn::{DeriveInput, Error};
 )]
 pub fn derive_cp_readwrite(item: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(item as DeriveInput);
-    let is_enum = input
+    let is_attr = input
         .attrs
         .iter()
         .any(|a| a.path.to_token_stream().to_string() == "attr_enum");
-    if is_enum {
+    if is_attr {
         // Enum variants as Attribute names, also `attr_raw` creates an exhaustive match.
         attr_enum(input)
     } else {

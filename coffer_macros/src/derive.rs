@@ -3,6 +3,120 @@ use quote::{quote, quote_spanned, ToTokens};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::*;
+use synstructure::{Structure, VariantInfo};
+
+#[derive(Default)]
+pub struct DeriveConfig {
+    pub is_attr_enum: bool,
+    pub variants: Vec<VariantConfig>,
+    pub raw_variant: Option<usize>,
+    pub tag_type: Option<Ident>,
+}
+
+#[derive(Default)]
+pub struct VariantConfig {
+    pub estimated_size: Option<usize>,
+    pub tag: Option<u128>,
+    pub fields: Vec<FieldConfig>,
+}
+
+pub enum StrType {
+    Package,
+    Module,
+    String,
+    Class,
+}
+
+#[derive(Default)]
+pub struct FieldConfig {
+    pub str_type: Option<StrType>,
+    pub str_optional: bool,
+    pub use_normal_rw: bool,
+}
+
+macro_rules! bail {
+    ($s: expr, $msg: literal) => {{
+        return Err(syn::Error::new_spanned($s, $msg));
+    }};
+}
+
+fn parse_common<F>(attrs: &[syn::Attribute], mut func: F) -> syn::Result<()> where F: FnMut(Meta) -> syn::Result<()> {
+    for attr in attrs {
+        if !attr.path.is_ident("coffer") {
+            continue;
+        }
+        let meta = attr.parse_meta()?;
+
+        let list = match meta {
+            Meta::List(list) => list,
+            _ => bail!(meta, "Usage: `#[coffer(options..)]`"),
+        };
+
+        for meta in list.nested {
+            let meta = match meta {
+                NestedMeta::Lit(_) => bail!(meta, "literals are not allowed here"),
+                NestedMeta::Meta(meta) => meta,
+            };
+            func(meta)?;
+        }
+    }
+    Ok(())
+}
+
+impl DeriveConfig {
+    pub fn parse(s: &Structure) -> syn::Result<Self> {
+        let mut cfg = Self::default();
+        parse_common(&s.ast().attrs, |meta| {
+            match meta {
+                Meta::Path(path) if path.is_ident("attr_enum") => {
+                    cfg.is_attr_enum = true;
+                }
+                Meta::List(MetaList { path, nested, .. }) if path.is_ident("tag_type") => {
+                    if nested.len() == 1 {
+                        match nested.first().unwrap() {
+                            NestedMeta::Meta(Meta::Path(path)) => if let Some(i) = path.get_ident() {
+                                cfg.tag_type = Some(i.clone());
+                            } else {},
+                            _ => bail!(nested, "invalid `tag_type` value"),
+                        }
+                    } else {
+                        bail!(nested, "too many values");
+                    }
+                }
+                _ => bail!(meta, "unrecognized or invalid configuration"),
+            }
+            Ok(())
+        })?;
+        for (i, variant) in s.variants().iter().enumerate() {
+            let (variant, is_raw) = VariantConfig::parse(variant)?;
+            cfg.variants.push(variant);
+            if is_raw {
+                if let Some(variant) = cfg.raw_variant {
+                    bail!(s.variants()[variant].ast().ident, "duplicated raw attribute variant");
+                } else {
+                    cfg.raw_variant = Some(i);
+                }
+            }
+        }
+        Ok(cfg)
+    }
+}
+
+impl VariantConfig {
+    pub fn parse(v: &VariantInfo) -> syn::Result<(Self, bool)> {
+        let mut cfg = Self::default();
+        let mut is_raw = false;
+        parse_common(v.ast().attrs, |meta| {
+            match meta {
+                Meta::Path(p) if p.is_ident("raw_variant") => {
+                    is_raw = true;
+                }
+            }
+            Ok(())
+        })?;
+        todo!()
+    }
+}
 
 pub(crate) fn generics(input: &DeriveInput) -> (TokenStream2, TokenStream2) {
     let generics = &input.generics;
