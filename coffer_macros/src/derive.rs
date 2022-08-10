@@ -1,6 +1,6 @@
 use proc_macro2::{Group, Ident, Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned, ToTokens};
-use syn::punctuated::Punctuated;
+use syn::punctuated::{Punctuated, Iter};
 use syn::spanned::Spanned;
 use syn::*;
 use synstructure::{Structure, VariantInfo};
@@ -106,16 +106,60 @@ impl VariantConfig {
     pub fn parse(v: &VariantInfo) -> syn::Result<(Self, bool)> {
         let mut cfg = Self::default();
         let mut is_raw = false;
+
         parse_common(v.ast().attrs, |meta| {
             match meta {
                 Meta::Path(p) if p.is_ident("raw_variant") => {
                     is_raw = true;
                 }
+                Meta::NameValue(MetaNameValue { path, lit: Lit::Int(lit_int), .. }) if path.is_ident("tag") => {
+                    cfg.tag = Some(lit_int.base10_parse()?);
+                }
+                Meta::NameValue(MetaNameValue { path, lit: Lit::Int(lit_int), .. }) if path.is_ident("estimated_size") => {
+                    cfg.estimated_size = Some(lit_int.base10_parse()?)
+                }
+                _ => bail!(meta, "unrecognized or invalid configuration"),
             }
             Ok(())
         })?;
-        todo!()
+
+        for f in v.ast().fields.iter() {
+            cfg.fields.push(FieldConfig::parse(f)?);
+        }
+
+        Ok((cfg, is_raw))
     }
+}
+
+impl FieldConfig {
+    pub fn parse(f: &Field) -> syn::Result<Self> {
+        let mut cfg = FieldConfig::default();
+        parse_common(&f.attrs, |meta| {
+            match meta {
+                Meta::Path(p) if p.is_ident("optional") => {
+                    cfg.str_optional = true;
+                }
+                Meta::Path(p) if p.is_ident("class") => {
+                    cfg.str_type = Some(StrType::Class);
+                }
+                Meta::Path(p) if p.is_ident("package") => {
+                    cfg.str_type = Some(StrType::Package);
+                }
+                Meta::Path(p) if p.is_ident("string") => {
+                    cfg.str_type = Some(StrType::String);
+                }
+                Meta::Path(p) if p.is_ident("module") => {
+                    cfg.str_type = Some(StrType::Module);
+                }
+                Meta::Path(p) if p.is_ident("normal_rw") => {
+                    cfg.use_normal_rw = true;
+                }
+                _ => bail!(meta, "unrecognized or invalid configuration"),
+            }
+            Ok(())
+        });
+        todo!()
+    } 
 }
 
 pub(crate) fn generics(input: &DeriveInput) -> (TokenStream2, TokenStream2) {
@@ -131,8 +175,10 @@ pub(crate) fn generics(input: &DeriveInput) -> (TokenStream2, TokenStream2) {
         quote! { #where_clause },
     )
 }
-pub(crate) fn attr_enum(input: synstructure::Structure) -> Result<TokenStream2> {
-    if let Data::Enum(e) = input.data {
+pub(crate) fn attr_enum(s: synstructure::Structure, cfg: DeriveConfig) -> Result<TokenStream2> {
+    let config = DeriveConfig::parse(&s)?;
+
+    if let Data::Enum(e) = &s.ast().data {
         let raw_variant = &e
             .variants
             .iter()
