@@ -1,9 +1,15 @@
+//! Total equality for floating point types.
+//!
+//! The raw bits are compared, making certain NaN values equal.
+
 use std::hash::{Hash, Hasher};
 use std::{cmp, fmt};
 
+/// Total equality wrapper for `f32`.
 #[derive(Clone, Copy)]
 pub struct TotalF32(pub f32);
 
+/// Total equality wrapper for `f64`.
 #[derive(Clone, Copy)]
 pub struct TotalF64(pub f64);
 
