@@ -40,18 +40,16 @@ synstructure::decl_derive!(
     derive_cp_readwrite
 );
 fn derive_cp_readwrite(s: Structure) -> TokenStream {
-    let ret = derive_constant_pool_readwrite_impl(s)
+    derive_constant_pool_readwrite_impl(s)
         .unwrap_or_else(Error::into_compile_error)
-        .into();
-    ret
+        .into()
 }
 
 synstructure::decl_derive!([AttributeEnum, attributes(coffer)] => derive_attr_enum);
 fn derive_attr_enum(s: Structure) -> TokenStream {
-    let ret = attr_enum(s)
+    attr_enum(s)
         .unwrap_or_else(Error::into_compile_error)
-        .into();
-    ret
+        .into()
 }
 
 synstructure::decl_derive!(

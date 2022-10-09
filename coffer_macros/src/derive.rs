@@ -187,7 +187,7 @@ pub(crate) fn attr_enum(s: synstructure::Structure) -> Result<TokenStream2> {
                 let fields: TokenStream2 = variant.bindings().iter().enumerate().map(|(idx, x)| {
                     let fcfg = &v.fields[idx];
                     let ty = &x.ast().ty;
-                    let ret = if let Some(as_) = &fcfg.as_ {
+                    if let Some(as_) = &fcfg.as_ {
                         quote! {
                             <#as_ as crate::helper::ConstantPoolReadWriteAs<#ty>>::write_to(#x, #cp, #inner_writer)?;
                         }
@@ -195,8 +195,7 @@ pub(crate) fn attr_enum(s: synstructure::Structure) -> Result<TokenStream2> {
                         quote! {
                             <#ty as crate::rw::ConstantPoolReadWrite>::write_to(#x, #cp, #inner_writer)?;
                         }
-                    };
-                    ret
+                    }
                 }).collect();
                 quote! {
                     u16::write_to(&#cp.insert_wtf8(::std::borrow::Cow::Borrowed(::wtf_8::Wtf8Str::new(stringify!(#attr_name)))), #writer)?;

@@ -6,7 +6,7 @@ use crate::module::Module;
 use crate::prelude::*;
 
 /// An unrecognized, unknown raw attribute.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RawAttribute {
     /// Whether to keep this attribute upon writing.
     ///

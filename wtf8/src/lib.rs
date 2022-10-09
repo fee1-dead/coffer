@@ -632,7 +632,7 @@ mod alloc_impl {
         #[inline]
         pub fn push_wtf8(&mut self, other: &Wtf8Str) {
             match (
-                (&*self).final_lead_surrogate(),
+                (*self).final_lead_surrogate(),
                 other.initial_trail_surrogate(),
             ) {
                 // Replace newly paired surrogates by a supplementary code point.
@@ -664,7 +664,7 @@ mod alloc_impl {
         #[inline]
         pub fn push(&mut self, code_point: Codepoint) {
             if let trail @ 0xDC00..=0xDFFF = code_point.to_u32() {
-                if let Some(lead) = (&*self).final_lead_surrogate() {
+                if let Some(lead) = (*self).final_lead_surrogate() {
                     let len_without_lead_surrogate = self.len() - 3;
                     self.bytes.truncate(len_without_lead_surrogate);
                     self.push_char(decode_surrogate_pair(lead, trail as u16));
@@ -918,7 +918,7 @@ mod alloc_impl {
     }
     impl PartialEq<Wtf8String> for Wtf8Str {
         fn eq(&self, other: &Wtf8String) -> bool {
-            &*self == &**other
+            *self == **other
         }
     }
     impl<'a> PartialEq<&'a Wtf8Str> for Wtf8String {
@@ -928,7 +928,7 @@ mod alloc_impl {
     }
     impl<'a> PartialEq<Wtf8String> for &'a Wtf8Str {
         fn eq(&self, other: &Wtf8String) -> bool {
-            &**self == &**other
+            **self == **other
         }
     }
     impl PartialEq<str> for Wtf8String {
