@@ -157,6 +157,33 @@ impl ConstantPoolReadWrite for Cow<'static, Wtf8Str> {
         cp.insert_wtf8(self.clone()).write_to(writer)
     }
 }
+
+impl ConstantPoolReadWrite for Option<Cow<'static, Wtf8Str>> {
+    fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self> {
+        let idx = ReadWrite::read_from(reader)?;
+        if idx == 0 {
+            Ok(None)
+        } else {
+            cp.read_wtf8(idx)
+                .ok_or_else(|| {
+                    crate::error::Error::Invalid(
+                        "constant pool entry index",
+                        idx.to_string().into(),
+                    )
+                })
+                .map(Into::into)
+        }
+    }
+
+    fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()> {
+        if let Some(this) = self {
+            cp.insert_wtf8(this.clone()).write_to(writer)
+        } else {
+            0u16.write_to(writer)
+        }
+    }
+}
+
 impl ConstantPoolReadWrite for Type {
     fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self> {
         parse_type(&*crate::try_cp_read!(cp, reader, read_wtf8)?)

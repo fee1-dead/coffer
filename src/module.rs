@@ -7,58 +7,55 @@
 //! See [the Java Language Spec](https://docs.oracle.com/javase/specs/jls/se16/html/jls-7.html#jls-7.7) and
 //! [the JVM Spec](https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-4.html#jvms-4.7.25) for more details.
 
+use wtf_8::Wtf8Str;
+
 use crate::flags::{ModuleFlags, RequireFlags};
 use crate::prelude::*;
 
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
 pub struct Require {
-    #[str_type(Module)]
-    pub module: Cow<'static, str>,
-    #[use_normal_rw]
+    #[coffer(as = "h::Module")]
+    pub module: Cow<'static, Wtf8Str>,
+    #[coffer(as = "h::Normal")]
     pub flags: RequireFlags,
-    #[str_optional]
-    pub version: Option<Cow<'static, str>>,
+    pub version: Option<Cow<'static, Wtf8Str>>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
 pub struct Provide {
-    #[str_type(Class)]
-    pub class: Cow<'static, str>,
-    #[vec_len_type(u16)]
-    #[str_type(Class)]
-    pub with: Vec<Cow<'static, str>>,
+    #[coffer(as = "h::Class")]
+    pub class: Cow<'static, Wtf8Str>,
+    #[coffer(as = "h::Vec16<h::Class>")]
+    pub with: Vec<Cow<'static, Wtf8Str>>,
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, ConstantPoolReadWrite)]
 pub struct Module {
-    #[str_type(Module)]
-    pub name: Cow<'static, str>,
-    #[use_normal_rw]
+    #[coffer(as = "h::Module")]
+    pub name: Cow<'static, Wtf8Str>,
+    #[coffer(as = "h::Normal")]
     pub flags: ModuleFlags,
-    #[str_optional]
-    pub version: Option<Cow<'static, str>>,
-    #[vec_len_type(u16)]
+    pub version: Option<Cow<'static, Wtf8Str>>,
+    #[coffer(as = "h::Vec16")]
     pub requires: Vec<Require>,
-    #[vec_len_type(u16)]
+    #[coffer(as = "h::Vec16")]
     pub exports: Vec<Export>,
-    #[vec_len_type(u16)]
+    #[coffer(as = "h::Vec16")]
     pub opens: Vec<Open>,
-    #[vec_len_type(u16)]
-    #[str_type(Class)]
-    pub uses: Vec<Cow<'static, str>>,
-    #[vec_len_type(u16)]
+    #[coffer(as = "h::Vec16<h::Class>")]
+    pub uses: Vec<Cow<'static, Wtf8Str>>,
+    #[coffer(as = "h::Vec16")]
     pub provides: Vec<Provide>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
 pub struct Export {
-    #[str_type(Package)]
-    pub package: Cow<'static, str>,
-    #[use_normal_rw]
+    #[coffer(as = "h::Package")]
+    pub package: Cow<'static, Wtf8Str>,
+    #[coffer(as = "h::Normal")]
     pub flags: ExOpFlags,
-    #[vec_len_type(u16)]
-    #[str_type(Module)]
-    pub to: Vec<Cow<'static, str>>,
+    #[coffer(as = "h::Vec16<h::Module>")]
+    pub to: Vec<Cow<'static, Wtf8Str>>,
 }
 
 impl Export {
@@ -66,9 +63,9 @@ impl Export {
     ///
     /// [`Export`]: Export
     pub fn new<
-        ToStr: Into<Cow<'static, str>>,
+        ToStr: Into<Cow<'static, Wtf8Str>>,
         ToOp: Into<ExOpFlags>,
-        ToVec: Into<Vec<Cow<'static, str>>>,
+        ToVec: Into<Vec<Cow<'static, Wtf8Str>>>,
     >(
         pkg: ToStr,
         flags: ToOp,
@@ -84,11 +81,10 @@ impl Export {
 
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
 pub struct Open {
-    #[str_type(Package)]
-    pub package: Cow<'static, str>,
-    #[use_normal_rw]
+    #[coffer(as = "h::Package")]
+    pub package: Cow<'static, Wtf8Str>,
+    #[coffer(as = "h::Normal")]
     pub flags: ExOpFlags,
-    #[vec_len_type(u16)]
-    #[str_type(Module)]
-    pub to: Vec<Cow<'static, str>>,
+    #[coffer(as = "h::Vec16<h::Module>")]
+    pub to: Vec<Cow<'static, Wtf8Str>>,
 }

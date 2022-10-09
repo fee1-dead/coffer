@@ -1,13 +1,10 @@
-use proc_macro2::{Group, Ident, Span, TokenStream as TokenStream2};
-use quote::{quote, quote_spanned, ToTokens};
-use syn::punctuated::{Punctuated, Iter};
-use syn::spanned::Spanned;
+use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
+use quote::quote;
 use syn::*;
 use synstructure::{Structure, VariantInfo};
 
 #[derive(Default)]
 pub struct DeriveConfig {
-    pub is_attr_enum: bool,
     pub variants: Vec<VariantConfig>,
     pub raw_variant: Option<usize>,
     pub tag_type: Option<Ident>,
@@ -29,9 +26,7 @@ pub enum StrType {
 
 #[derive(Default)]
 pub struct FieldConfig {
-    pub str_type: Option<StrType>,
-    pub str_optional: bool,
-    pub use_normal_rw: bool,
+    pub as_: Option<Type>,
 }
 
 macro_rules! bail {
@@ -40,7 +35,10 @@ macro_rules! bail {
     }};
 }
 
-fn parse_common<F>(attrs: &[syn::Attribute], mut func: F) -> syn::Result<()> where F: FnMut(Meta) -> syn::Result<()> {
+fn parse_common<F>(attrs: &[syn::Attribute], mut func: F) -> syn::Result<()>
+where
+    F: FnMut(Meta) -> syn::Result<()>,
+{
     for attr in attrs {
         if !attr.path.is_ident("coffer") {
             continue;
@@ -68,15 +66,15 @@ impl DeriveConfig {
         let mut cfg = Self::default();
         parse_common(&s.ast().attrs, |meta| {
             match meta {
-                Meta::Path(path) if path.is_ident("attr_enum") => {
-                    cfg.is_attr_enum = true;
-                }
                 Meta::List(MetaList { path, nested, .. }) if path.is_ident("tag_type") => {
                     if nested.len() == 1 {
                         match nested.first().unwrap() {
-                            NestedMeta::Meta(Meta::Path(path)) => if let Some(i) = path.get_ident() {
-                                cfg.tag_type = Some(i.clone());
-                            } else {},
+                            NestedMeta::Meta(Meta::Path(path)) => {
+                                if let Some(i) = path.get_ident() {
+                                    cfg.tag_type = Some(i.clone());
+                                } else {
+                                }
+                            }
                             _ => bail!(nested, "invalid `tag_type` value"),
                         }
                     } else {
@@ -92,7 +90,10 @@ impl DeriveConfig {
             cfg.variants.push(variant);
             if is_raw {
                 if let Some(variant) = cfg.raw_variant {
-                    bail!(s.variants()[variant].ast().ident, "duplicated raw attribute variant");
+                    bail!(
+                        s.variants()[variant].ast().ident,
+                        "duplicated raw attribute variant"
+                    );
                 } else {
                     cfg.raw_variant = Some(i);
                 }
@@ -112,10 +113,18 @@ impl VariantConfig {
                 Meta::Path(p) if p.is_ident("raw_variant") => {
                     is_raw = true;
                 }
-                Meta::NameValue(MetaNameValue { path, lit: Lit::Int(lit_int), .. }) if path.is_ident("tag") => {
+                Meta::NameValue(MetaNameValue {
+                    path,
+                    lit: Lit::Int(lit_int),
+                    ..
+                }) if path.is_ident("tag") => {
                     cfg.tag = Some(lit_int.base10_parse()?);
                 }
-                Meta::NameValue(MetaNameValue { path, lit: Lit::Int(lit_int), .. }) if path.is_ident("estimated_size") => {
+                Meta::NameValue(MetaNameValue {
+                    path,
+                    lit: Lit::Int(lit_int),
+                    ..
+                }) if path.is_ident("estimated_size") => {
                     cfg.estimated_size = Some(lit_int.base10_parse()?)
                 }
                 _ => bail!(meta, "unrecognized or invalid configuration"),
@@ -136,30 +145,19 @@ impl FieldConfig {
         let mut cfg = FieldConfig::default();
         parse_common(&f.attrs, |meta| {
             match meta {
-                Meta::Path(p) if p.is_ident("optional") => {
-                    cfg.str_optional = true;
-                }
-                Meta::Path(p) if p.is_ident("class") => {
-                    cfg.str_type = Some(StrType::Class);
-                }
-                Meta::Path(p) if p.is_ident("package") => {
-                    cfg.str_type = Some(StrType::Package);
-                }
-                Meta::Path(p) if p.is_ident("string") => {
-                    cfg.str_type = Some(StrType::String);
-                }
-                Meta::Path(p) if p.is_ident("module") => {
-                    cfg.str_type = Some(StrType::Module);
-                }
-                Meta::Path(p) if p.is_ident("normal_rw") => {
-                    cfg.use_normal_rw = true;
+                Meta::NameValue(MetaNameValue {
+                    path,
+                    eq_token: _,
+                    lit: Lit::Str(s),
+                }) if path.is_ident("as") => {
+                    cfg.as_ = Some(parse_str(&s.value())?);
                 }
                 _ => bail!(meta, "unrecognized or invalid configuration"),
             }
             Ok(())
-        });
-        todo!()
-    } 
+        })?;
+        Ok(cfg)
+    }
 }
 
 pub(crate) fn generics(input: &DeriveInput) -> (TokenStream2, TokenStream2) {
@@ -175,195 +173,130 @@ pub(crate) fn generics(input: &DeriveInput) -> (TokenStream2, TokenStream2) {
         quote! { #where_clause },
     )
 }
-pub(crate) fn attr_enum(s: synstructure::Structure, cfg: DeriveConfig) -> Result<TokenStream2> {
+
+pub(crate) fn attr_enum(s: synstructure::Structure) -> Result<TokenStream2> {
     let config = DeriveConfig::parse(&s)?;
 
-    if let Data::Enum(e) = &s.ast().data {
-        let raw_variant = &e
-            .variants
-            .iter()
-            .find(|v| {
-                v.attrs
-                    .iter()
-                    .any(|a| a.path.is_ident("raw_variant"))
-            })
-            .ok_or_else(|| {
-                Error::new(
-                    e.variants.span(),
-                    "Expected raw variant annotated with #[raw_variant]",
-                )
-            })?
-            .ident;
-        let new_variants = e
-            .variants
-            .iter()
-            .filter(|v| {
-                !v.attrs
-                    .iter()
-                    .any(|a| a.path.to_token_stream().to_string() == "raw_variant")
-            })
-            .collect::<Vec<_>>();
-        let attr_names = new_variants
-            .iter()
-            .map(|v| {
-                let ident = &v.ident;
-                let stringified = quote!(stringify!());
-                (quote! { ::std::borrow::Cow::Borrowed(::wtf_8::Wtf8Str::new(stringify!(#ident))) })
-            })
-            .collect::<Vec<_>>();
-        let variant_fields_idents = new_variants
-            .iter()
-            .map(|v| &v.fields)
-            .map(generate_idents_for_fields)
-            .collect::<Vec<_>>();
-        let variant_match_arms =
-            new_variants
-                .iter()
-                .zip(variant_fields_idents.iter())
-                .map(|(v, idents)| {
-                    let variant_ident = &v.ident;
-                    match &v.fields {
-                        Fields::Named(_) => {
-                            quote! { Self::#variant_ident{ #(ref #idents),* } => }
-                        }
-                        Fields::Unnamed(_) => {
-                            quote! { Self::#variant_ident( #(ref #idents),* ) => }
-                        }
-                        Fields::Unit => {
-                            quote! { Self::#variant_ident => }
-                        }
+    if let Data::Enum(_) = &s.ast().data {
+        let raw_variant = config.raw_variant.expect("raw variant");
+        let raw_variant_name = &s.variants()[raw_variant].ast().ident;
+        let cp = Ident::new("cp", Span::call_site());
+        let reader = Ident::new("reader", Span::call_site());
+        let writer = Ident::new("writer", Span::call_site());
+        let mut variant_index = 0;
+        let write_match = s.each_variant(|variant| {
+            let v = &config.variants[variant_index];
+            let ret = if variant_index == raw_variant {
+                let raw_attr = &variant.bindings()[0];
+                quote! {
+                    if !#raw_attr.keep {
+                        return Ok(());
                     }
-                });
-        let variant_constructs =
-            new_variants
-                .iter()
-                .zip(variant_fields_idents.iter())
-                .map(|(v, idents)| {
-                    let variant_ident = &v.ident;
-                    match &v.fields {
-                        Fields::Named(_) => {
-                            quote! { Self::#variant_ident { #(#idents),* } }
-                        }
-                        Fields::Unnamed(_) => {
-                            quote! { Self::#variant_ident( #(#idents),* ) }
-                        }
-                        Fields::Unit => {
-                            quote! { Self::#variant_ident }
-                        }
-                    }
-                });
-        let (v_r, v_w): (Vec<Vec<_>>, Vec<Vec<_>>) = new_variants
-            .iter()
-            .zip(variant_fields_idents.iter())
-            .map(|(v, idents)| {
-                v.fields
-                    .iter()
-                    .zip(idents.iter())
-                    .map(|(f, i)| {
-                        gen_read_and_write(
-                            f,
-                            i,
-                            quote! { crate::ConstantPoolReadWrite },
-                            quote! { cp,inner_reader },
-                            quote! { cp,inner_writer },
-                        )
-                    })
-                    .collect::<Result<Vec<_>>>()
-            })
-            .collect::<Result<Vec<Vec<_>>>>()?
-            .into_iter()
-            .map(|v| v.into_iter().unzip())
-            .unzip();
-
-        let estimated_sizes = new_variants.iter().map(|v| {
-            v.attrs.iter().find_map(|a| {
-                if a.path.to_token_stream().to_string() == "attr_normal_size" {
-                    Some(parse2::<Group>(a.tokens.clone()).map(|g| g.stream()))
-                } else {
-                    None
+                    u16::write_to(&#cp.insert_wtf8(#raw_attr.name.clone()), #writer)?;
+                    crate::write_to!(&(#raw_attr.inner.len() as u32), #writer)?;
+                    #writer.write_all(&#raw_attr.inner)?;
                 }
-            })
-        });
-        let mut variant_write_bodies = vec![];
-        for (tk, est) in v_w.iter().zip(estimated_sizes) {
-            let def = {
-                if let Some(r) = est {
-                    let cap = r?;
-                    quote! { let mut vec = Vec::with_capacipy(#cap); }
+            } else {
+                let attr_name = variant.ast().ident;
+                let vec = Ident::new("vec", Span::call_site());
+                let inner_writer = Ident::new("inner_writer", Span::call_site());
+                let construct = if let Some(size) = v.estimated_size {
+                    quote! { Vec::with_capacity(#size) }
                 } else {
-                    quote! { let mut vec = Vec::new(); }
+                    quote! { Vec::new() }
+                };
+                let fields: TokenStream2 = variant.bindings().iter().enumerate().map(|(idx, x)| {
+                    let fcfg = &v.fields[idx];
+                    let ty = &x.ast().ty;
+                    let ret = if let Some(as_) = &fcfg.as_ {
+                        quote! {
+                            <#as_ as crate::helper::ConstantPoolReadWriteAs<#ty>>::write_to(#x, #cp, #inner_writer)?;
+                        }
+                    } else {
+                        quote! {
+                            <#ty as crate::rw::ConstantPoolReadWrite>::write_to(#x, #cp, #inner_writer)?;
+                        }
+                    };
+                    ret
+                }).collect();
+                quote! {
+                    u16::write_to(&#cp.insert_wtf8(::std::borrow::Cow::Borrowed(::wtf_8::Wtf8Str::new(stringify!(#attr_name)))), #writer)?;
+                    let mut #vec = #construct;
+                    let mut __inner_writer = ::std::io::Cursor::new(&mut #vec);
+                    let mut #inner_writer = &mut __inner_writer;
+                    #fields
+                    u32::write_to(&(#vec.len() as u32), #writer)?;
+                    #writer.write_all(&#vec)?;
                 }
             };
-            let write = quote! {
-                #def
-                let mut __inner_writer = std::io::Cursor::new(&mut vec);
-                let mut inner_writer = &mut __inner_writer;
-                #(#tk)*
-                u32::write_to(&(vec.len() as u32), writer)?;
-                writer.write_all(&vec)?;
-            };
-            variant_write_bodies.push(write);
-        }
-
-        let variant_read_bodies = v_r.iter().zip(variant_fields_idents.iter()).zip(new_variants.iter().map(|v| &v.ident)).map(|((r,i), id)| {
-            quote! {
-                let len = u32::read_from(reader)?;
-                let mut vec = vec![0; len as usize];
-                reader.read_exact(&mut vec)?;
-                let mut __inner_reader: &[u8] = vec.as_ref();
-                let inner_reader = &mut __inner_reader;
-                #(let #i = #r;)*
-                if !inner_reader.is_empty() {
-                    return Err(crate::error::Error::AttributeLength(len, len - (inner_reader.len() as u32), stringify!(#id)))
-                }
-            }
+            variant_index += 1;
+            ret
         });
-        let res = quote! {
-            impl #generics crate::ConstantPoolReadWrite for #ident #generics #where_c {
-                fn read_from<C: crate::ConstantPoolReader, R: std::io::Read>(cp: &mut C, reader: &mut R) -> crate::Result<Self> {
-                    let idx = u16::read_from(reader)?;
+        let mut variant_index = 0;
+        let (constants, read_match): (TokenStream2, TokenStream2) = s.variants().iter().filter(|x| x.ast().ident != *raw_variant_name).map(|variant| {
+            let v = &config.variants[variant_index];
+            let inner_reader = Ident::new("inner_reader", Span::call_site());
+            let id = variant.ast().ident;
+            let construct = variant.construct(|field, i| {
+                let ty = &field.ty;
+                let f = &v.fields[i];
+                if let Some(as_) = &f.as_ {
+                    quote! {
+                        <#as_ as crate::helper::ConstantPoolReadWriteAs<#ty>>::read_from(#cp, #inner_reader)?
+                    }
+                } else {
+                    quote! {
+                        <#ty as crate::ConstantPoolReadWrite>::read_from(#cp, #inner_reader)?
+                    }
+                }
+            });
+            let ident = Ident::new(&format!("WTF8_ATTR_{id}"), Span::call_site());
+            let ret = (quote!{
+                const #ident: &'static [u8] = stringify!(#id).as_bytes();
+            }, quote! {
+                #ident => {
+                    let len = u32::read_from(#reader)?;
+                    let mut vec = vec![0; len as usize];
+                    #reader.read_exact(&mut vec)?;
+                    let mut __inner_reader: &[u8] = vec.as_ref();
+                    let #inner_reader = &mut __inner_reader;
+                    let ret = #construct;
+                    if !inner_reader.is_empty() {
+                        return Err(crate::error::Error::AttributeLength(len, len - (inner_reader.len() as u32), stringify!(#id)))
+                    }
+                    Ok(ret)
+                }
+            });
+            variant_index += 1;
+            ret
+        }).unzip();
+        Ok(s.gen_impl(quote! {
+            gen impl crate::ConstantPoolReadWrite for @Self {
+                fn read_from<C: crate::ConstantPoolReader, R: std::io::Read>(cp: &mut C, #reader: &mut R) -> crate::Result<Self> {
+                    #constants
+                    let idx = u16::read_from(#reader)?;
                     let attribute_name = cp.read_wtf8(idx).ok_or_else(|| crate::error::Error::Invalid("attribute index", Into::into(idx.to_string())))?;
-                    match attribute_name.as_ref() {
-                        #(
-                                    #attr_names => {
-                                        #variant_read_bodies
-                                        Ok(#variant_constructs)
-                                    }
-                        )*
+                    match attribute_name.as_bytes() {
+                        #read_match
                         _ => {
-                                        let byte_size = u32::read_from(reader)?;
-                                        let mut bytes = vec![0; byte_size as usize];
-                                        reader.read_exact(&mut bytes)?;
-                                        let raw_attr = crate::prelude::RawAttribute::__new(attribute_name, bytes);
-                                        Ok(Self::#raw_variant(raw_attr))
+                            let byte_size = u32::read_from(#reader)?;
+                            let mut bytes = vec![0; byte_size as usize];
+                            #reader.read_exact(&mut bytes)?;
+                            let raw_attr = crate::prelude::RawAttribute::__new(attribute_name, bytes);
+                            Ok(Self::#raw_variant_name(raw_attr))
                         }
                     }
                 }
                 fn write_to<C: crate::ConstantPoolWriter, W: std::io::Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<()> {
                     match self {
-                        #(
-                            #variant_match_arms {
-                                u16::write_to(&cp.insert_wtf8(#attr_names), writer)?;
-                                #variant_write_bodies
-                                Ok(())
-                            }
-                        )*
-                        Self::#raw_variant(crate::prelude::RawAttribute { keep: true, ref name, ref inner }) => {
-                            u16::write_to(&cp.insert_wtf8(name.clone()), writer)?;
-                            crate::write_to!(&(inner.len() as u32), writer)?;
-                            writer.write_all(inner)?;
-                            Ok(())
-                        }
-                        _ => {
-                            Ok(())
-                        }
+                        #write_match
                     }
+                    Ok(())
                 }
             }
-        };
-        Ok(res)
+        }))
     } else {
-        Err(Error::new(span, "Must be an enum."))
+        Err(Error::new(Span::call_site(), "Must be an enum."))
     }
 }
 
@@ -447,6 +380,7 @@ pub(crate) fn add_one(litint: LitInt) -> LitInt {
         LitInt::new(&str, litint.span())
     }
 }
+/*
 pub(crate) fn gen_read_and_write<T: ToTokens>(
     f: &Field,
     receiver: &T,
@@ -616,7 +550,313 @@ pub(crate) fn gen_read_and_write<T: ToTokens>(
         }
     }
     rw(receiver.to_token_stream(), ty)
+}*/
+
+pub(crate) fn derive_readwrite_impl(s: Structure) -> Result<TokenStream2> {
+    let cfg = DeriveConfig::parse(&s)?;
+    let writer = Ident::new("writer", Span::call_site());
+    let reader = Ident::new("reader", Span::call_site());
+    match s.ast().data {
+        Data::Struct(_) => {
+            let variant = &s.variants()[0];
+            let cfg = &cfg.variants[0];
+            let mut field = 0;
+            let write = s.each(|x| {
+                let fcfg = &cfg.fields[field];
+                field += 1;
+                let ty = &x.ast().ty;
+                if let Some(as_) = &fcfg.as_ {
+                    quote! {
+                        <#as_ as crate::helper::ReadWriteAs<#ty>>::write_to(#x, #writer)?;
+                    }
+                } else {
+                    quote! {
+                        <#ty as crate::ReadWrite>::write_to(#x, #writer)?;
+                    }
+                }
+            });
+            let read = variant.construct(|f, i| {
+                let fcfg = &cfg.fields[i];
+                let ty = &f.ty;
+                if let Some(as_) = &fcfg.as_ {
+                    quote! {
+                        <#as_ as crate::helper::ReadWriteAs<#ty>>::read_from(#reader)?
+                    }
+                } else {
+                    quote! {
+                        <#ty as crate::ReadWrite>::read_from(#reader)?
+                    }
+                }
+            });
+
+            Ok(s.gen_impl(quote! {
+                gen impl crate::ReadWrite for @Self {
+                    fn read_from<R: std::io::Read>(#reader: &mut R) -> crate::error::Result<Self> {
+                        Ok(#read)
+                    }
+                    fn write_to<W: std::io::Write>(&self, #writer: &mut W) -> crate::error::Result<()> {
+                        match self {
+                            #write
+                        }
+                        Ok(())
+                    }
+                }
+            }))
+        }
+        Data::Enum(_) => {
+            // this is a tagged enum
+            let tags: Vec<_> = s
+                .variants()
+                .iter()
+                .enumerate()
+                .scan(0, |fallback, (i, v)| {
+                    // #[coffer(tag = 1)] -> A = 1 -> fallback (prev tag + 1)
+                    let tag = if let Some(tag) = cfg.variants[i].tag {
+                        tag
+                    } else if let Some((
+                        _,
+                        Expr::Lit(ExprLit {
+                            lit: Lit::Int(i), ..
+                        }),
+                    )) = v.ast().discriminant
+                    {
+                        i.base10_parse().unwrap()
+                    } else {
+                        *fallback
+                    };
+                    *fallback = tag + 1;
+                    Some(tag)
+                })
+                .collect();
+            let tag_type = cfg.tag_type.as_ref().expect("expected tag_type on enum");
+            let mut v = 0;
+            let write = s.each_variant(|x| {
+                let vcfg = &cfg.variants[v];
+                let tag = tags[v];
+                let tag = LitInt::new(&format!("{tag}"), Span::call_site());
+                v += 1;
+                let mut field = 0;
+                let fields = x.bindings().iter().map(|x| {
+                    let fcfg = &vcfg.fields[field];
+                    let ty = &x.ast().ty;
+                    field += 1;
+                    if let Some(as_) = &fcfg.as_ {
+                        quote! {
+                            <#as_ as crate::helper::ReadWriteAs<#ty>>::write_to(#x, #writer)?;
+                        }
+                    } else {
+                        quote! {
+                            <#ty as crate::ReadWrite>::write_to(#x, #writer)?;
+                        }
+                    }
+                });
+                quote! {
+                    #tag_type::write_to(&#tag, #writer)?;
+                    #(#fields)*
+                }
+            });
+            let read: TokenStream2 = s
+                .variants()
+                .iter()
+                .enumerate()
+                .map(|(i, x)| {
+                    let vcfg = &cfg.variants[i];
+                    let tag = tags[i];
+                    let tag = LitInt::new(&format!("{tag}"), Span::call_site());
+                    let construct = x.construct(|field, i| {
+                        let fcfg = &vcfg.fields[i];
+                        let ty = &field.ty;
+                        if let Some(as_) = &fcfg.as_ {
+                            quote! {
+                                <#as_ as crate::helper::ReadWriteAs<#ty>>::read_from(#reader)?
+                            }
+                        } else {
+                            quote! {
+                                <#ty as crate::ReadWrite>::read_from(#reader)?
+                            }
+                        }
+                    });
+                    quote! {
+                        #tag => {
+                            #construct
+                        }
+                    }
+                })
+                .collect();
+            Ok(s.gen_impl(quote! {
+                gen impl crate::ReadWrite for @Self {
+                    fn read_from<R: std::io::Read>(#reader: &mut R) -> crate::error::Result<Self> {
+                        Ok(match <#tag_type as crate::ReadWrite>::read_from(#reader)? {
+                            #read
+                            tag => {
+                                return Err(crate::error::Error::Invalid("tag", Into::into(tag.to_string())))
+                            }
+                        })
+                    }
+                    fn write_to<W: std::io::Write>(&self, #writer: &mut W) -> crate::error::Result<()> {
+                        match self {
+                            #write
+                        }
+                        Ok(())
+                    }
+                }
+            }))
+        }
+        _ => panic!(),
+    }
 }
+
+pub(crate) fn derive_constant_pool_readwrite_impl(s: Structure) -> Result<TokenStream2> {
+    let cfg = DeriveConfig::parse(&s)?;
+    let cp = Ident::new("cp", Span::call_site());
+    let writer = Ident::new("writer", Span::call_site());
+    let reader = Ident::new("reader", Span::call_site());
+    match s.ast().data {
+        Data::Struct(_) => {
+            let variant = &s.variants()[0];
+            let cfg = &cfg.variants[0];
+            let mut field = 0;
+            let write = s.each(|x| {
+                let fcfg = &cfg.fields[field];
+                field += 1;
+                let ty = &x.ast().ty;
+                if let Some(as_) = &fcfg.as_ {
+                    quote! {
+                        <#as_ as crate::helper::ConstantPoolReadWriteAs<#ty>>::write_to(#x, #cp, #writer)?;
+                    }
+                } else {
+                    quote! {
+                        <#ty as crate::ConstantPoolReadWrite>::write_to(#x, #cp, #writer)?;
+                    }
+                }
+            });
+            let read = variant.construct(|f, i| {
+                let fcfg = &cfg.fields[i];
+                let ty = &f.ty;
+                if let Some(as_) = &fcfg.as_ {
+                    quote! {
+                        <#as_ as crate::helper::ConstantPoolReadWriteAs<#ty>>::read_from(#cp, #reader)?
+                    }
+                } else {
+                    quote! {
+                        <#ty as crate::ConstantPoolReadWrite>::read_from(#cp, #reader)?
+                    }
+                }
+            });
+
+            Ok(s.gen_impl(quote! {
+                gen impl crate::ConstantPoolReadWrite for @Self {
+                    fn read_from<C: crate::prelude::ConstantPoolReader, R: std::io::Read>(#cp: &mut C, #reader: &mut R) -> crate::error::Result<Self> {
+                        Ok(#read)
+                    }
+                    fn write_to<C: crate::prelude::ConstantPoolWriter, W: std::io::Write>(&self, #cp: &mut C, #writer: &mut W) -> crate::error::Result<()> {
+                        match self {
+                            #write
+                        }
+                        Ok(())
+                    }
+                }
+            }))
+        }
+        Data::Enum(_) => {
+            // this is a tagged enum
+            let tags: Vec<_> = s
+                .variants()
+                .iter()
+                .enumerate()
+                .scan(0, |fallback, (i, v)| {
+                    // #[coffer(tag = 1)] -> A = 1 -> fallback (prev tag + 1)
+                    let tag = if let Some(tag) = cfg.variants[i].tag {
+                        tag
+                    } else if let Some((
+                        _,
+                        Expr::Lit(ExprLit {
+                            lit: Lit::Int(i), ..
+                        }),
+                    )) = v.ast().discriminant
+                    {
+                        i.base10_parse().unwrap()
+                    } else {
+                        *fallback
+                    };
+                    *fallback = tag + 1;
+                    Some(tag)
+                })
+                .collect();
+            let tag_type = cfg.tag_type.as_ref().expect("expected tag_type on enum");
+            let mut v = 0;
+            let write = s.each_variant(|x| {
+                let vcfg = &cfg.variants[v];
+                let tag = tags[v];
+                let tag = LitInt::new(&format!("{tag}"), Span::call_site());
+                v += 1;
+                let mut field = 0;
+                let fields = x.bindings().iter().map(|x| {
+                    let fcfg = &vcfg.fields[field];
+                    let ty = &x.ast().ty;
+                    field += 1;
+                    if let Some(as_) = &fcfg.as_ {
+                        quote! {
+                            <#as_ as crate::helper::ConstantPoolReadWriteAs<#ty>>::write_to(#x, #cp, #writer)?;
+                        }
+                    } else {
+                        quote! {
+                            <#ty as crate::ConstantPoolReadWrite>::write_to(#x, #cp, #writer)?;
+                        }
+                    }
+                });
+                quote! {
+                    #tag_type::write_to(&#tag, #writer)?;
+                    #(#fields)*
+                }
+            });
+            let read: TokenStream2 = s.variants().iter().enumerate().map(|(i, x)| {
+                let vcfg = &cfg.variants[i];
+                let tag = tags[i];
+                let tag = LitInt::new(&format!("{tag}"), Span::call_site());
+                let construct = x.construct(|field, i| {
+                    let fcfg = &vcfg.fields[i];
+                    let ty = &field.ty;
+                    if let Some(as_) = &fcfg.as_ {
+                        quote! {
+                            <#as_ as crate::helper::ConstantPoolReadWriteAs<#ty>>::read_from(#cp, #reader)?
+                        }
+                    } else {
+                        quote! {
+                            <#ty as crate::ConstantPoolReadWrite>::read_from(#cp, #reader)?
+                        }
+                    }
+                });
+                quote! {
+                    #tag => {
+                        #construct
+                    }
+                }
+            }).collect();
+            Ok(s.gen_impl(quote! {
+                gen impl crate::ConstantPoolReadWrite for @Self {
+                    fn read_from<C: crate::prelude::ConstantPoolReader, R: std::io::Read>(#cp: &mut C, #reader: &mut R) -> crate::error::Result<Self> {
+                        Ok(match <#tag_type as crate::ReadWrite>::read_from(#reader)? {
+                            #read
+
+                            tag => {
+                                return Err(crate::error::Error::Invalid("tag", Into::into(tag.to_string())));
+                            }
+                        })
+                    }
+                    fn write_to<C: crate::prelude::ConstantPoolWriter, W: std::io::Write>(&self, #cp: &mut C, #writer: &mut W) -> crate::error::Result<()> {
+                        match self {
+                            #write
+                        }
+                        Ok(())
+                    }
+                }
+            }))
+        }
+        _ => panic!(),
+    }
+}
+/*
 pub(crate) fn derive_readwrite_inner(
     mut input: DeriveInput,
     trait_ty: TokenStream2,
@@ -835,4 +1075,4 @@ pub(crate) fn derive_readwrite_inner(
             "This macro should not be used on a union type",
         )),
     }
-}
+}*/

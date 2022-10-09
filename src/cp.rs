@@ -13,7 +13,7 @@ use crate::prelude::{BootstrapMethod, Read, Result, Write};
 use crate::{mod_utf8, ConstantPoolReader, ConstantPoolWriter, Error, ReadWrite};
 
 #[derive(Clone, Debug, Copy)]
-pub struct StrRef<'a>(pub &'a str);
+pub struct StrRef<'a>(pub &'a Wtf8Str);
 
 impl<'a> ReadWrite for StrRef<'a> {
     fn read_from<T: Read>(_reader: &mut T) -> Result<Self> {
@@ -30,10 +30,10 @@ impl<'a> ReadWrite for StrRef<'a> {
 }
 
 #[derive(ReadWrite, Debug, Clone, Copy)]
-#[tag_type(u8)]
+#[coffer(tag_type(u8))]
 pub enum ConstEntryRef<'a> {
     UTF8(StrRef<'a>),
-    #[tag(3)]
+    #[coffer(tag = 3)]
     Int(i32),
     Float(f32),
     Long(i64),
@@ -44,7 +44,7 @@ pub enum ConstEntryRef<'a> {
     Method(u16, u16),
     InterfaceMethod(u16, u16),
     NameAndType(u16, u16),
-    #[tag(15)]
+    #[coffer(tag = 15)]
     MethodHandle(u8, u16),
     MethodType(u16),
     Dynamic(u16, u16),
@@ -55,11 +55,11 @@ pub enum ConstEntryRef<'a> {
 
 /// A raw constant entry that has unresolved indices to other entries.
 #[derive(ReadWrite, Debug, Clone)]
-#[tag_type(u8)]
+#[coffer(tag_type(u8))]
 pub enum RawConstantEntry {
-    #[tag(1)]
+    #[coffer(tag = 1)]
     WTF8(Cow<'static, Wtf8Str>),
-    #[tag(3)]
+    #[coffer(tag = 3)]
     Int(i32),
     Float(f32),
     Long(i64),
@@ -70,7 +70,7 @@ pub enum RawConstantEntry {
     Method(u16, u16),
     InterfaceMethod(u16, u16),
     NameAndType(u16, u16),
-    #[tag(15)]
+    #[coffer(tag = 15)]
     MethodHandle(u8, u16),
     MethodType(u16),
     Dynamic(u16, u16),

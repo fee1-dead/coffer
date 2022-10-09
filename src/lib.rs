@@ -30,15 +30,16 @@ pub use rw::*;
 
 pub use crate::error::{Error, Result};
 
-pub mod annotation;
+// pub mod annotation;
 pub mod attr;
+pub mod clazz;
 pub mod code;
 pub mod constants;
 pub mod cp;
-pub mod clazz;
 pub mod dynamic;
 pub mod error;
 pub mod flags;
+pub mod helper;
 pub mod loadable;
 pub mod member;
 pub mod mod_utf8;

@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 use std::sync::Arc;
 
 use once_cell::sync::OnceCell;
-use wtf_8::{Wtf8String, Wtf8Str};
+use wtf_8::{Wtf8Str, Wtf8String};
 
 use crate::prelude::*;
 
@@ -38,7 +38,7 @@ pub trait ConstantPoolWriter {
             Constant::Class(s) => self.insert_indirect_str(7, s),
             Constant::Member(mem) => self.insert_member(mem),
             Constant::MethodType(t) => {
-                let desc = self.insert_wtf8(t.to_string());
+                let desc = self.insert_wtf8(Cow::Owned(t.to_string().into()));
                 self.insert_raw(RawConstantEntry::MethodType(desc))
             }
             Constant::MethodHandle(h) => {
@@ -86,7 +86,7 @@ pub trait ConstantPoolWriter {
         } else {
             RawConstantEntry::Dynamic
         };
-        let name_and_type = self.insert_nameandtype(d.name, d.descriptor);
+        let name_and_type = self.insert_nameandtype(d.name, Cow::Owned(d.descriptor.to_string().into()));
         self.insert_raw(e(bsm, name_and_type))
     }
     /// insert an indirect string such as String / Module / Package entry, used by the procedural macro.
@@ -141,7 +141,7 @@ pub trait ConstantPoolWriter {
             _ => RawConstantEntry::Field,
         }(
             self.insert_class(mem.owner),
-            self.insert_nameandtype(mem.name, mem.descriptor),
+            self.insert_nameandtype(mem.name, Cow::Owned(mem.descriptor.to_string().into())),
         );
         self.insert_raw(entry)
     }
@@ -200,7 +200,7 @@ pub trait ConstantPoolReader {
             Some(RawConstantEntry::MethodType(m)) => self
                 .read_wtf8(m)
                 .as_deref()
-                .map(str::parse)
+                .map(parse_type)
                 .and_then(Result::ok)
                 .map(Constant::MethodType),
             Some(RawConstantEntry::MethodHandle(k, m)) => MethodHandleKind::try_from(k)

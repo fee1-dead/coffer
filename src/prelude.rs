@@ -10,6 +10,7 @@ pub use crate::code::*;
 pub use crate::cp::*;
 pub use crate::dynamic::*;
 pub use crate::flags::*;
+pub(crate) use crate::helper as h;
 pub use crate::loadable::*;
 pub use crate::member::*;
 pub use crate::module::*;

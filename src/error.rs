@@ -83,9 +83,9 @@ pub mod backtrace {
             self.inner.source()
         }
 
-        fn backtrace(&self) -> Option<&Backtrace> {
+        /*fn backtrace(&self) -> Option<&Backtrace> {
             Some(&self.trace)
-        }
+        }*/
     }
 
     macro_rules! functions {

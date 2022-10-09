@@ -486,12 +486,12 @@ macro_rules! cprw_impls {
         $(
             impl ConstantPoolReadWrite for $ty {
                 fn read_from<C: crate::ConstantPoolReader, R: std::io::Read>(cp: &mut C, reader: &mut R) -> crate::Result<Self> {
-                    let s = Cow::<'static, str>::read_from(cp, reader)?;
-                    FromStr::from_str(s.as_ref())
+                    let s = Cow::<'static, wtf_8::Wtf8Str>::read_from(cp, reader)?;
+                    FromStr::from_str(&s.to_string_lossy())
                 }
 
                 fn write_to<C: crate::ConstantPoolWriter, W: std::io::Write>(&self, cp: &mut C, writer: &mut W) -> crate::Result<()> {
-                    Cow::<'static, str>::write_to(&self.to_string().into(), cp, writer)
+                    Cow::<'static, wtf_8::Wtf8Str>::write_to(&Cow::Owned(wtf_8::Wtf8String::from_string(self.to_string())), cp, writer)
                 }
             }
         )*

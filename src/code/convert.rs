@@ -357,7 +357,7 @@ impl Conv {
                     r,
                     labeler.read_or_dynamic(r, ConstantPoolReader::read_class)
                 )?
-                .map_static(|c| c.parse().unwrap_or(Type::Ref(c))),
+                .map_static(|c| parse_type(&*c).unwrap_or(Type::Ref(c))),
                 1,
             ),
             I::MultiANewArray(r, dim) => NewArray(
@@ -365,7 +365,7 @@ impl Conv {
                     r,
                     labeler.read_or_dynamic(r, ConstantPoolReader::read_class)
                 )?
-                .map_static(|c| c.parse().unwrap_or(Type::Ref(c))),
+                .map_static(|c| parse_type(&*c).unwrap_or(Type::Ref(c))),
                 dim,
             ),
             I::CheckCast(r) => CheckCast(
@@ -374,16 +374,18 @@ impl Conv {
                     labeler.read_or_dynamic(r, ConstantPoolReader::read_class)
                 )
                 .and_then(|t| match t {
-                    OrDynamic::Static(c) => Ok(OrDynamic::Static(if c.starts_with('[') {
-                        if let Type::ArrayRef(dim, ty) = Type::from_str(c.as_ref())? {
-                            ClassType::Array(dim, *ty)
+                    OrDynamic::Static(c) => Ok(OrDynamic::Static(
+                        if c.codepoints().next().map_or(false, |x| x == '[') {
+                            if let Type::ArrayRef(dim, ty) = parse_type(&*c)? {
+                                ClassType::Array(dim, *ty)
+                            } else {
+                                // SAFETY: Must be array because string starts with '['.
+                                unsafe { std::hint::unreachable_unchecked() }
+                            }
                         } else {
-                            // SAFETY: Must be array because string starts with '['.
-                            unsafe { std::hint::unreachable_unchecked() }
-                        }
-                    } else {
-                        ClassType::Object(c)
-                    })),
+                            ClassType::Object(c)
+                        },
+                    )),
                     OrDynamic::Dynamic(d) => Ok(OrDynamic::Dynamic(d)),
                 })?,
             ),
@@ -393,8 +395,8 @@ impl Conv {
                     labeler.read_or_dynamic(r, ConstantPoolReader::read_class)
                 )
                 .and_then(|t| match t {
-                    OrDynamic::Static(c) => Ok(OrDynamic::Static(if c.starts_with('[') {
-                        if let Type::ArrayRef(dim, ty) = Type::from_str(c.as_ref())? {
+                    OrDynamic::Static(c) => Ok(OrDynamic::Static(if c.codepoints().next().map_or(false, |x| x == '[') {
+                        if let Type::ArrayRef(dim, ty) = parse_type(&*c)? {
                             ClassType::Array(dim, *ty)
                         } else {
                             // SAFETY: Must be array because string starts with '['.
@@ -682,17 +684,17 @@ impl Conv {
             Instruction::Throw => ATHROW.write_to(&mut cursor)?,
             Instruction::InstanceOf(ref ty) => {
                 INSTANCEOF.write_to(&mut cursor)?;
-                cp.insert_ordynamic(ty.clone(), ConstantPoolWriter::insert_class)
+                cp.insert_ordynamic(ty.clone(), |w, x| w.insert_class(x.into()))
                     .write_to(&mut cursor)?;
             }
             Instruction::CheckCast(ref ty) => {
                 CHECKCAST.write_to(&mut cursor)?;
-                cp.insert_ordynamic(ty.clone(), ConstantPoolWriter::insert_class)
+                cp.insert_ordynamic(ty.clone(), |w, x| w.insert_class(x.into()))
                     .write_to(&mut cursor)?;
             }
             Instruction::New(ref ty) => {
                 NEW.write_to(&mut cursor)?;
-                cp.insert_ordynamic(ty.clone(), ConstantPoolWriter::insert_class)
+                cp.insert_ordynamic(ty.clone(), |w, x| w.insert_class(x.into()))
                     .write_to(&mut cursor)?;
             }
             Instruction::NewArray(_, _) => {}

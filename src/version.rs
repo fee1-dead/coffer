@@ -20,7 +20,7 @@ impl JavaVersion {
 
 /// Major version of a java class.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, ReadWrite)]
-#[tag_type(u16)]
+#[coffer(tag_type(u16))]
 pub enum MajorVersion {
     /// Java version 1.0.2/1.1
     J1 = 45,

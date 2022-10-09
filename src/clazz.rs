@@ -1,11 +1,9 @@
 use std::borrow::Cow;
 
-use crate::constants::JVM_MAGIC;
-use crate::prelude::*;
 use wtf_8::Wtf8Str;
 
-
-
+use crate::constants::JVM_MAGIC;
+use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct Class {
@@ -26,21 +24,19 @@ pub struct Class {
 
 #[derive(ConstantPoolReadWrite)]
 struct ClassWrapper {
-    #[use_normal_rw]
+    #[coffer(as = "h::Normal")]
     pub access: ClassFlags,
-    #[str_type(Class)]
+    #[coffer(as = "h::Class")]
     pub name: Cow<'static, Wtf8Str>,
-    #[str_optional]
-    #[str_type(Class)]
+    #[coffer(as = "h::Class")]
     pub super_name: Option<Cow<'static, Wtf8Str>>,
-    #[vec_len_type(u16)]
-    #[str_type(Class)]
+    #[coffer(as = "h::Vec16<h::Class>")]
     pub interfaces: Vec<Cow<'static, Wtf8Str>>,
-    #[vec_len_type(u16)]
+    #[coffer(as = "h::Vec16")]
     pub fields: Vec<Field>,
-    #[vec_len_type(u16)]
+    #[coffer(as = "h::Vec16")]
     pub methods: Vec<Method>,
-    #[vec_len_type(u16)]
+    #[coffer(as = "h::Vec16")]
     pub attributes: Vec<ClassAttribute>,
 }
 
@@ -53,7 +49,7 @@ impl ReadWrite for Class {
                 let c = ClassWrapper::read_from(&mut cp, reader)?;
                 for attr in &c.attributes {
                     if let ClassAttribute::BootstrapMethods(b) = attr {
-                        cp.bootstrap_methods(b)?;
+                        cp.bootstrap_methods(&b)?;
                         break;
                     }
                 }
@@ -122,7 +118,11 @@ impl ReadWrite for Class {
                     bsm.write_to(&mut cp, &mut buf2)?;
                 }
             }
-            write_to!(&Cow::Borrowed(Wtf8Str::new("BootstrapMethods")), &mut cp, &mut buf)?;
+            write_to!(
+                &Cow::Borrowed(Wtf8Str::new("BootstrapMethods")),
+                &mut cp,
+                &mut buf
+            )?;
             (buf2.len() as u32).write_to(&mut buf)?;
             i.write_to(&mut buf)?;
             buf.write_all(&buf2)?;

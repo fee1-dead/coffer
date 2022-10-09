@@ -3,9 +3,10 @@
 //! They can be fields or methods.
 use wtf_8::Wtf8Str;
 
+/* 
 use crate::annotation::{
     Annotation, AnnotationValue, FieldTypeAnnotation, MethodTypeAnnotation, ParameterAnnotations,
-};
+};*/
 use crate::code::Code;
 use crate::prelude::*;
 
@@ -46,69 +47,62 @@ impl ConstantPoolReadWrite for MemberRef {
 }
 
 /// Completed
-#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
-#[attr_enum]
+#[derive(PartialEq, Debug, Clone, AttributeEnum)]
 pub enum FieldAttribute {
     Deprecated,
     Synthetic,
     Signature(FieldSignature),
     ConstantValue(Constant),
-    RuntimeVisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),
-    RuntimeInvisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),
-    RuntimeVisibleTypeAnnotations(#[vec_len_type(u16)] Vec<FieldTypeAnnotation>),
-    RuntimeInvisibleTypeAnnotations(#[vec_len_type(u16)] Vec<FieldTypeAnnotation>),
-    #[raw_variant]
+    /*RuntimeVisibleAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>),
+    RuntimeInvisibleAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>),
+    RuntimeVisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<FieldTypeAnnotation>),
+    RuntimeInvisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<FieldTypeAnnotation>),*/
+    #[coffer(raw_variant)]
     Raw(RawAttribute),
 }
 
 #[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
 pub struct Field {
-    #[use_normal_rw]
+    #[coffer(as = "h::Normal")]
     pub access: FieldFlags,
-    pub name: Cow<'static, str>,
+    pub name: Cow<'static, Wtf8Str>,
     pub descriptor: Type,
-    #[vec_len_type(u16)]
+    #[coffer(as = "h::Vec16")]
     pub attrs: Vec<FieldAttribute>,
 }
 
 #[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
 pub struct MethodParameter {
-    #[str_optional]
-    name: Option<Cow<'static, str>>,
-    #[use_normal_rw]
+    name: Option<Cow<'static, Wtf8Str>>,
+    #[coffer(as = "h::Normal")]
     access: MethodParameterFlags,
 }
 
-#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
-#[attr_enum]
+#[derive(PartialEq, Debug, Clone, AttributeEnum)]
 pub enum MethodAttribute {
     Code(Code),
     Deprecated,
     Synthetic,
     Signature(MethodSignature),
-    RuntimeVisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),
-    RuntimeInvisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),
-    RuntimeVisibleTypeAnnotations(#[vec_len_type(u16)] Vec<MethodTypeAnnotation>),
-    RuntimeInvisibleTypeAnnotations(#[vec_len_type(u16)] Vec<MethodTypeAnnotation>),
-    RuntimeVisibleParameterAnnotations(#[vec_len_type(u8)] Vec<ParameterAnnotations>),
-    RuntimeInvisibleParameterAnnotations(#[vec_len_type(u8)] Vec<ParameterAnnotations>),
-    Exceptions(
-        #[vec_len_type(u16)]
-        #[str_type(Class)]
-        Vec<Cow<'static, str>>,
-    ),
-    AnnotationDefault(AnnotationValue),
-    MethodParameters(#[vec_len_type(u8)] Vec<MethodParameter>),
-    #[raw_variant]
+    /*RuntimeVisibleAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>),
+    RuntimeInvisibleAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>),
+    RuntimeVisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<MethodTypeAnnotation>),
+    RuntimeInvisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<MethodTypeAnnotation>),
+    RuntimeVisibleParameterAnnotations(#[coffer(as = "h::Vec8")] Vec<ParameterAnnotations>),
+    RuntimeInvisibleParameterAnnotations(#[coffer(as = "h::Vec8")] Vec<ParameterAnnotations>),*/
+    Exceptions(#[coffer(as = "h::Vec16<h::Class>")] Vec<Cow<'static, Wtf8Str>>),
+    // AnnotationDefault(AnnotationValue),
+    MethodParameters(#[coffer(as = "h::Vec8")] Vec<MethodParameter>),
+    #[coffer(raw_variant)]
     Raw(RawAttribute),
 }
 
 #[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
 pub struct Method {
-    #[use_normal_rw]
+    #[coffer(as = "h::Normal")]
     pub access: MethodFlags,
     pub name: Cow<'static, Wtf8Str>,
     pub descriptor: Type,
-    #[vec_len_type(u16)]
+    #[coffer(as = "h::Vec16")]
     pub attributes: Vec<MethodAttribute>,
 }

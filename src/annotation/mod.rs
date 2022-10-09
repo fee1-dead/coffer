@@ -5,16 +5,18 @@ use std::convert::TryInto;
 use std::str::FromStr;
 
 pub use type_annotation::*;
+use wtf_8::Wtf8Str;
 
 use super::Type;
 use crate::error::Error;
+use crate::prelude::parse_type;
 use crate::{
     read_from, write_to, ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, Read,
     ReadWrite, Result, Write,
 };
 
 #[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
-pub struct ParameterAnnotations(#[vec_len_type(u16)] Vec<Annotation>);
+pub struct ParameterAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>);
 
 impl std::ops::Deref for ParameterAnnotations {
     type Target = Vec<Annotation>;
@@ -52,9 +54,9 @@ pub enum AnnotationValue {
     /// Represents a boolean, this will get sign-extended into an integer in the constant pool.
     Boolean(bool),
     /// Represents a string literal.
-    String(Cow<'static, str>),
+    String(Cow<'static, Wtf8Str>),
     /// A field descriptor representing this enum, and the name of the variant.
-    Enum(Type, Cow<'static, str>),
+    Enum(Type, Cow<'static, Wtf8Str>),
     /// None = void.class
     Class(Option<Type>),
     /// Represents an annotation.
@@ -112,13 +114,13 @@ impl ConstantPoolReadWrite for AnnotationValue {
                         idx.to_string().into(),
                     )
                 })?;
-                AnnotationValue::Class(if str == "V" {
+                AnnotationValue::Class(if &*str == "V" {
                     None
                 } else {
-                    Some(Type::from_str(str.as_ref())?)
+                    Some(parse_type(&str)?)
                 })
             }
-            '@' => AnnotationValue::Annotation(Annotation::read_from(cp, reader)?),
+            '@' => AnnotationValue::Annotation(parse_annotation(cp, reader)?),
             '[' => {
                 let num = u16::read_from(reader)?;
                 let mut values = Vec::with_capacity(num as usize);

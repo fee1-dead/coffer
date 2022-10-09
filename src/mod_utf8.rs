@@ -10,7 +10,7 @@
 use std::convert::TryFrom;
 
 use thiserror::Error;
-use wtf_8::{Wtf8String, Wtf8Error};
+use wtf_8::{Wtf8Error, Wtf8Str, Wtf8String};
 
 /// An error encountered during conversion.
 #[derive(Debug, Error)]
@@ -32,23 +32,19 @@ pub enum MutfError {
 
 /// Converts a modified utf-8 sequence to an owned wtf-8 string.
 pub fn modified_utf8_to_string(buf: &[u8]) -> Result<Wtf8String, MutfError> {
-    let mut index: usize = 0;
-
     let len = buf.len();
     let mut out = Vec::with_capacity(len);
 
     let mut bytes = buf.iter().copied();
     macro_rules! error {
         () => {
-            MutfError::AroundByte(index)
+            MutfError::AroundByte(len - bytes.len())
         };
     }
     loop {
         macro_rules! next {
             () => {{
-                bytes
-                    .next()
-                    .ok_or(MutfError::PartialCharacterAtEnd)?
+                bytes.next().ok_or(MutfError::PartialCharacterAtEnd)?
             }};
         }
         let c = match bytes.next() {
@@ -88,7 +84,7 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<Wtf8String, MutfError> {
                             let c3 = c3 as u32;
                             let c5 = c5 as u32;
                             let c6 = c6 as u32;
-        
+
                             let mut buf = [0; 4];
                             let c = char::try_from(
                                 0x10000
@@ -122,10 +118,10 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<Wtf8String, MutfError> {
 ///
 /// This will never error because `&str` is guarenteed to be in UTF-8,
 /// therefore it will always be able to convert to modified UTF-8.
-pub fn string_to_modified_utf8(str: &str) -> Vec<u8> {
+pub fn string_to_modified_utf8(str: &Wtf8Str) -> Vec<u8> {
     let mut utflen: usize = 0;
-    for c in str.chars() {
-        utflen += match c as u32 {
+    for c in str.codepoints() {
+        utflen += match c.to_u32() {
             0x1..=0x7F => 1,
             0x0 | 0x80..=0x7FF => 2,
             0x800..=0x7FFF => 3,
@@ -133,8 +129,8 @@ pub fn string_to_modified_utf8(str: &str) -> Vec<u8> {
         }
     }
     let mut vec = Vec::with_capacity(utflen);
-    for c in str.chars() {
-        let c = c as u32;
+    for c in str.codepoints() {
+        let c = c.to_u32();
 
         #[allow(clippy::unusual_byte_groupings)]
         match c {

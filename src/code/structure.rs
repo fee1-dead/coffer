@@ -1,7 +1,7 @@
 use indexmap::map::IndexMap;
 use wtf_8::Wtf8Str;
 
-use crate::annotation::CodeTypeAnnotation;
+// use crate::annotation::CodeTypeAnnotation;
 use crate::prelude::*;
 
 /// Acts as a unique identifier to the code. Labels should be treated carefully because when labels become invalid (i.e. removed from the code array) it will become an error.
@@ -243,15 +243,17 @@ pub enum MonitorOperation {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ClassType {
-    Object(Cow<'static, str>),
+    Object(Cow<'static, Wtf8Str>),
     Array(u8, Type),
 }
 
-impl From<ClassType> for Cow<'static, str> {
+impl From<ClassType> for Cow<'static, Wtf8Str> {
     fn from(t: ClassType) -> Self {
         match t {
             ClassType::Object(s) => s,
-            ClassType::Array(dim, ty) => Cow::Owned(format!("{}{}", "[".repeat(dim as usize), ty)),
+            ClassType::Array(dim, ty) => {
+                Cow::Owned(format!("{}{}", "[".repeat(dim as usize), ty).into())
+            }
         }
     }
 }
@@ -294,7 +296,7 @@ pub enum Instruction {
     InstanceOf(OrDynamic<ClassType>),
     NewArray(OrDynamic<Type>, u8),
     Monitor(MonitorOperation),
-    New(OrDynamic<Cow<'static, str>>),
+    New(OrDynamic<Cow<'static, Wtf8Str>>),
     /// Conversion of the same types have no effect, it will not result in an instruction.
     Conversion(NumberType, NumberType),
     ConvertInt(BitType),
@@ -338,49 +340,44 @@ pub struct LineNumber(pub u16, pub u16);
 
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
 pub(super) struct LocalVar {
-    #[use_normal_rw]
+    #[coffer(as = "h::Normal")]
     pub start: u16,
-    #[use_normal_rw]
+    #[coffer(as = "h::Normal")]
     pub len: u16,
     pub name: Cow<'static, Wtf8Str>,
     pub descriptor: Type,
-    #[use_normal_rw]
+    #[coffer(as = "h::Normal")]
     pub index: u16,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, ConstantPoolReadWrite)]
 pub struct LocalVarType {
-    #[use_normal_rw]
+    #[coffer(as = "h::Normal")]
     pub start: u16,
-    #[use_normal_rw]
+    #[coffer(as = "h::Normal")]
     pub len: u16,
     pub name: Cow<'static, Wtf8Str>,
     pub signature: FieldSignature,
-    #[use_normal_rw]
+    #[coffer(as = "h::Normal")]
     pub index: u16,
 }
 
-#[derive(Clone, PartialEq, Debug, ConstantPoolReadWrite)]
-#[attr_enum]
+#[derive(Clone, PartialEq, Debug, AttributeEnum)]
 pub(super) enum CodeAttr {
-    LineNumberTable(
-        #[vec_len_type(u16)]
-        #[use_normal_rw]
-        Vec<LineNumber>,
-    ),
-    LocalVariableTable(#[vec_len_type(u16)] Vec<LocalVar>),
-    LocalVariableTypeTable(#[vec_len_type(u16)] Vec<LocalVarType>),
-    RuntimeInvisibleTypeAnnotations(#[vec_len_type(u16)] Vec<CodeTypeAnnotation>),
-    RuntimeVisibleTypeAnnotations(#[vec_len_type(u16)] Vec<CodeTypeAnnotation>),
-    StackMapTable(#[vec_len_type(u16)] Vec<RawFrame>),
-    #[raw_variant]
+    LineNumberTable(#[coffer(as = "h::Vec16<h::Normal>")] Vec<LineNumber>),
+    LocalVariableTable(#[coffer(as = "h::Vec16")] Vec<LocalVar>),
+    LocalVariableTypeTable(#[coffer(as = "h::Vec16")] Vec<LocalVarType>),
+    /*RuntimeInvisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<CodeTypeAnnotation>),
+    RuntimeVisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<CodeTypeAnnotation>),*/
+    StackMapTable(#[coffer(as = "h::Vec16")] Vec<RawFrame>),
+    #[coffer(raw_variant)]
     Raw(RawAttribute),
 }
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum CodeAttribute {
-    VisibleTypeAnnotations(Vec<CodeTypeAnnotation>),
-    InvisibleTypeAnnotations(Vec<CodeTypeAnnotation>),
+    /*VisibleTypeAnnotations(Vec<CodeTypeAnnotation>),
+    InvisibleTypeAnnotations(Vec<CodeTypeAnnotation>),*/
     LocalVariables(Vec<LocalVariable>),
     Raw(RawAttribute),
 }

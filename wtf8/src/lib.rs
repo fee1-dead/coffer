@@ -29,7 +29,6 @@ use core::iter::FusedIterator;
 use core::num::NonZeroU8;
 use core::{char, fmt, ops, slice, str};
 
-use alloc::borrow::Cow;
 use std_internal::next_code_point;
 
 const UTF8_REPLACEMENT_CHARACTER: &str = "\u{FFFD}";
@@ -196,7 +195,7 @@ impl Wtf8Str {
     ///
     /// Since WTF-8 is a superset of UTF-8, this always succeeds.
     #[inline]
-    pub fn new(value: &str) -> &Wtf8Str {
+    pub const fn new(value: &str) -> &Wtf8Str {
         unsafe { Wtf8Str::from_bytes_unchecked(value.as_bytes()) }
     }
 
@@ -208,7 +207,7 @@ impl Wtf8Str {
     ///
     /// Bytes supplied must be valid WTF-8.
     #[inline]
-    pub unsafe fn from_bytes_unchecked(value: &[u8]) -> &Wtf8Str {
+    pub const unsafe fn from_bytes_unchecked(value: &[u8]) -> &Wtf8Str {
         // SAFETY: callers must ensure that the bytems are valid WTF-8
         unsafe { &*(value as *const [u8] as *const Wtf8Str) }
     }
@@ -382,11 +381,6 @@ impl Wtf8Str {
 
 #[cfg(feature = "alloc")]
 mod alloc_impl {
-    use core::borrow::Borrow;
-    use core::hash::{Hash, Hasher};
-    use core::{mem, ops, fmt};
-    use core::str;
-
     use alloc::borrow::{Cow, ToOwned};
     use alloc::boxed::Box;
     use alloc::collections::TryReserveError;
@@ -394,9 +388,15 @@ mod alloc_impl {
     use alloc::string::String;
     use alloc::sync::Arc;
     use alloc::vec::Vec;
+    use core::borrow::Borrow;
+    use core::hash::{Hash, Hasher};
+    use core::{fmt, mem, ops, str};
 
     use crate::std_internal::encode_utf8_raw;
-    use crate::{Wtf8Str, Codepoint, UTF8_REPLACEMENT_CHARACTER, validate_wtf8, decode_surrogate_pair, is_code_point_boundary, Wtf8Error};
+    use crate::{
+        decode_surrogate_pair, is_code_point_boundary, validate_wtf8, Codepoint, Wtf8Error,
+        Wtf8Str, UTF8_REPLACEMENT_CHARACTER,
+    };
 
     /// An owned, growable string of well-formed WTF-8 data.
     ///
@@ -748,6 +748,18 @@ mod alloc_impl {
         fn hash<H: Hasher>(&self, state: &mut H) {
             state.write(&self.bytes);
             0xfeu8.hash(state)
+        }
+    }
+
+    impl From<String> for Wtf8String {
+        fn from(x: String) -> Self {
+            Self::from_string(x)
+        }
+    }
+
+    impl<'a> Into<Cow<'a, Wtf8Str>> for Wtf8String {
+        fn into(self) -> Cow<'a, Wtf8Str> {
+            Cow::Owned(self)
         }
     }
 
@@ -1136,10 +1148,19 @@ impl Wtf8Error {
 impl fmt::Display for Wtf8Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Wtf8Error { valid_up_to, error_len: Some(error_len) } => {
-                write!(f, "invalid wtf-8 sequence of {error_len} bytes from index {valid_up_to}")
+            Wtf8Error {
+                valid_up_to,
+                error_len: Some(error_len),
+            } => {
+                write!(
+                    f,
+                    "invalid wtf-8 sequence of {error_len} bytes from index {valid_up_to}"
+                )
             }
-            Wtf8Error { valid_up_to, error_len: None } => {
+            Wtf8Error {
+                valid_up_to,
+                error_len: None,
+            } => {
                 write!(f, "incomplete wtf-8 byte sequence from index {valid_up_to}")
             }
         }

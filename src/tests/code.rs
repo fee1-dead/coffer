@@ -10,9 +10,7 @@ use once_cell::sync::OnceCell;
 use crate::code::Instruction::*;
 use crate::code::Label as Lbl;
 use crate::code::LocalType::Reference;
-use crate::prelude::{
-    BootstrapMethod, Code, Constant, OrDynamic, RawConstantEntry, Result,
-};
+use crate::prelude::{BootstrapMethod, Code, Constant, OrDynamic, RawConstantEntry, Result};
 use crate::{Class, ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite};
 
 struct ArrCp<'a>(Cow<'a, [RawConstantEntry]>);

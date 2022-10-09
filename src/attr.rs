@@ -1,6 +1,6 @@
 use wtf_8::Wtf8Str;
 
-use crate::annotation::{Annotation, ClassTypeAnnotation};
+// use crate::annotation::{Annotation, ClassTypeAnnotation};
 use crate::mod_utf8::{modified_utf8_to_string, string_to_modified_utf8};
 use crate::module::Module;
 use crate::prelude::*;
@@ -22,7 +22,10 @@ impl RawAttribute {
     /// Creates a new raw attribute with name and inner data.
     ///
     /// `String` and `Vec<u8>`, string literal and array literal are all accepted because this uses a Cow.
-    pub fn new<S: Into<Cow<'static, Wtf8Str>>, B: Into<Cow<'static, [u8]>>>(name: S, inner: B) -> Self {
+    pub fn new<S: Into<Cow<'static, Wtf8Str>>, B: Into<Cow<'static, [u8]>>>(
+        name: S,
+        inner: B,
+    ) -> Self {
         Self {
             keep: true,
             name: name.into(),
@@ -58,7 +61,7 @@ impl ConstantPoolReadWrite for Option<(Cow<'static, Wtf8Str>, Type)> {
         writer: &mut W,
     ) -> Result<(), Error> {
         if let Some((n, t)) = self {
-            cp.insert_nameandtype(n.clone(), t.to_string())
+            cp.insert_nameandtype(n.clone(), Cow::Owned(t.to_string().into()))
                 .write_to(writer)
         } else {
             0u16.write_to(writer)
@@ -71,7 +74,7 @@ impl ConstantPoolReadWrite for Option<(Cow<'static, Wtf8Str>, Type)> {
 /// The [`ReadWrite`] implementation for this just comsumes the whole reader.
 /// This works because the macro generates inner readers for attributes which are safe to consume.
 #[derive(Eq, PartialEq, Debug, Clone)]
-pub struct SourceDebugExtension(pub Cow<'static, str>);
+pub struct SourceDebugExtension(pub Cow<'static, Wtf8Str>);
 
 impl ReadWrite for SourceDebugExtension {
     fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
@@ -88,49 +91,38 @@ impl ReadWrite for SourceDebugExtension {
 
 #[derive(Eq, PartialEq, Debug, Clone, ConstantPoolReadWrite)]
 pub struct InnerClass {
-    #[str_type(Class)]
-    pub inner_fqname: Cow<'static, str>,
-    #[str_optional]
-    #[str_type(Class)]
-    pub outer_fqname: Option<Cow<'static, str>>,
+    #[coffer(as = "h::Class")]
+    pub inner_fqname: Cow<'static, Wtf8Str>,
+    #[coffer(as = "h::Class")]
+    pub outer_fqname: Option<Cow<'static, Wtf8Str>>,
     /// None if the inner class is an anonymous class.
-    #[str_optional]
-    pub inner_name: Option<Cow<'static, str>>,
-    #[use_normal_rw]
+    pub inner_name: Option<Cow<'static, Wtf8Str>>,
+    #[coffer(as = "h::Normal")]
     pub inner_access: InnerClassFlags,
 }
 
-#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
-#[attr_enum]
+#[derive(PartialEq, Debug, Clone, AttributeEnum)]
 pub enum ClassAttribute {
     Signature(ClassSignature),
     Synthetic,
     Deprecated,
     SourceFile(Cow<'static, Wtf8Str>),
-    InnerClasses(#[vec_len_type(u16)] Vec<InnerClass>),
+    InnerClasses(#[coffer(as = "h::Vec16")] Vec<InnerClass>),
     EnclosingMethod(
-        #[str_type(Class)] Cow<'static, Wtf8Str>,
+        #[coffer(as = "h::Class")] Cow<'static, Wtf8Str>,
         Option<(Cow<'static, Wtf8Str>, Type)>,
     ),
-    SourceDebugExtension(#[use_normal_rw] SourceDebugExtension),
-    BootstrapMethods(#[vec_len_type(u16)] Vec<BootstrapMethod>),
+    SourceDebugExtension(#[coffer(as = "h::Normal")] SourceDebugExtension),
+    BootstrapMethods(#[coffer(as = "h::Vec16")] Vec<BootstrapMethod>),
     Module(Module),
-    ModulePackages(
-        #[vec_len_type(u16)]
-        #[str_type(Package)]
-        Vec<Cow<'static, Wtf8Str>>,
-    ),
-    ModuleMainClass(#[str_type(Class)] Cow<'static, Wtf8Str>),
-    NestHost(#[str_type(Class)] Cow<'static, Wtf8Str>),
-    NestMembers(
-        #[vec_len_type(u16)]
-        #[str_type(Class)]
-        Vec<Cow<'static, Wtf8Str>>,
-    ),
-    RuntimeVisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),
-    RuntimeInvisibleAnnotations(#[vec_len_type(u16)] Vec<Annotation>),
-    RuntimeVisibleTypeAnnotations(#[vec_len_type(u16)] Vec<ClassTypeAnnotation>),
-    RuntimeInvisibleTypeAnnotations(#[vec_len_type(u16)] Vec<ClassTypeAnnotation>),
-    #[raw_variant]
+    ModulePackages(#[coffer(as = "h::Vec16<h::Package>")] Vec<Cow<'static, Wtf8Str>>),
+    ModuleMainClass(#[coffer(as = "h::Class")] Cow<'static, Wtf8Str>),
+    NestHost(#[coffer(as = "h::Class")] Cow<'static, Wtf8Str>),
+    NestMembers(#[coffer(as = "h::Vec16<h::Class>")] Vec<Cow<'static, Wtf8Str>>),
+    /*RuntimeVisibleAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>),
+    RuntimeInvisibleAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>),
+    RuntimeVisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<ClassTypeAnnotation>),
+    RuntimeInvisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<ClassTypeAnnotation>),*/
+    #[coffer(raw_variant)]
     Raw(RawAttribute),
 }

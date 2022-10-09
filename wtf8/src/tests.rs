@@ -375,10 +375,7 @@ fn wtf8_code_points() {
         Codepoint::from_u32(value).unwrap()
     }
     fn cp(string: &Wtf8String) -> Vec<Option<char>> {
-        string
-            .codepoints()
-            .map(|c| c.to_char())
-            .collect::<Vec<_>>()
+        string.codepoints().map(|c| c.to_char()).collect::<Vec<_>>()
     }
     let mut string = Wtf8String::from_borrowed("é ");
     assert_eq!(cp(&string), [Some('é'), Some(' ')]);
