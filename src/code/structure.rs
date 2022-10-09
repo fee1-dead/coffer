@@ -1,7 +1,7 @@
 use indexmap::map::IndexMap;
 use wtf_8::Wtf8Str;
 
-// use crate::annotation::CodeTypeAnnotation;
+use crate::annotation::CodeTypeAnnotation;
 use crate::prelude::*;
 
 /// Acts as a unique identifier to the code. Labels should be treated carefully because when labels become invalid (i.e. removed from the code array) it will become an error.
@@ -324,6 +324,57 @@ pub enum Instruction {
     Label(Label),
 }
 
+impl Instruction {
+    pub fn getstatic(r: impl Into<OrDynamic<MemberRef>>) -> Self {
+        Self::Field(GetOrPut::Get, MemberType::Static, r.into())
+    }
+    pub fn invokevirtual(r: impl Into<OrDynamic<MemberRef>>) -> Self {
+        Self::InvokeExact(MemberType::Virtual, r.into())
+    }
+    pub fn invokestatic(r: impl Into<OrDynamic<MemberRef>>) -> Self {
+        Self::InvokeExact(MemberType::Static, r.into())
+    }
+    pub const fn store(ty: LocalType, index: u16) -> Self {
+        Self::LocalVariable(LoadOrStore::Store, ty, index)
+    }
+    pub const fn load(ty: LocalType, index: u16) -> Self {
+        Self::LocalVariable(LoadOrStore::Load, ty, index)
+    }
+    pub const fn iop(op: IntOperation) -> Self {
+        Self::IntOperation(IntType::Int, op)
+    }
+    pub const fn iadd() -> Self {
+        Self::iop(IntOperation::Add)
+    }
+    pub const fn isub() -> Self {
+        Self::iop(IntOperation::Subtract)
+    }
+    pub const fn irem() -> Self {
+        Self::iop(IntOperation::Remainder)
+    }
+    pub const fn imul() -> Self {
+        Self::iop(IntOperation::Multiply)
+    }
+    pub const fn ineg() -> Self {
+        Self::iop(IntOperation::Negate)
+    }
+    pub const fn ifeq(l: Label) -> Self {
+        Self::Jump(JumpCondition::IntegerEqualsZero, l)
+    }
+    pub const fn if_icmpeq(l: Label) -> Self {
+        Self::Jump(JumpCondition::IntegerEquals, l)
+    }
+    pub const fn if_icmpne(l: Label) -> Self {
+        Self::Jump(JumpCondition::IntegerNotEquals, l)
+    }
+    pub const fn if_icmple(l: Label) -> Self {
+        Self::Jump(JumpCondition::IntegerLessThanOrEquals, l)
+    }
+    pub const fn if_icmpgt(l: Label) -> Self {
+        Self::Jump(JumpCondition::IntegerGreaterThan, l)
+    }
+}
+
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct LocalVariable {
     pub start: Label,
@@ -367,17 +418,17 @@ pub(super) enum CodeAttr {
     LineNumberTable(#[coffer(as = "h::Vec16<h::Normal>")] Vec<LineNumber>),
     LocalVariableTable(#[coffer(as = "h::Vec16")] Vec<LocalVar>),
     LocalVariableTypeTable(#[coffer(as = "h::Vec16")] Vec<LocalVarType>),
-    /*RuntimeInvisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<CodeTypeAnnotation>),
-    RuntimeVisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<CodeTypeAnnotation>),*/
+    RuntimeInvisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<CodeTypeAnnotation>),
+    RuntimeVisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<CodeTypeAnnotation>),
     StackMapTable(#[coffer(as = "h::Vec16")] Vec<RawFrame>),
     #[coffer(raw_variant)]
     Raw(RawAttribute),
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum CodeAttribute {
-    /*VisibleTypeAnnotations(Vec<CodeTypeAnnotation>),
-    InvisibleTypeAnnotations(Vec<CodeTypeAnnotation>),*/
+    VisibleTypeAnnotations(Vec<CodeTypeAnnotation>),
+    InvisibleTypeAnnotations(Vec<CodeTypeAnnotation>),
     LocalVariables(Vec<LocalVariable>),
     Raw(RawAttribute),
 }

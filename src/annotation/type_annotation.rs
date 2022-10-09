@@ -1,10 +1,13 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
+use wtf_8::Wtf8Str;
+
 use super::super::Type;
 use super::AnnotationValue;
 use crate::code::{Catch, Label};
 use crate::{ConstantPoolReadWrite, ReadWrite};
+use crate::helper as h;
 
 /// Represents where a type annotation is annotated in a class.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ReadWrite)]
@@ -121,22 +124,20 @@ pub enum TypePath {
 pub struct ClassTypeAnnotation {
     #[coffer(as = "h::Normal")]
     pub target: ClassTypeAnnotationTarget,
-    #[coffer(as = "h::Vec8")]
-    #[coffer(as = "h::Normal")]
+    #[coffer(as = "h::Vec8<h::Normal>")]
     pub type_path: Vec<TypePath>,
     pub annotation_type: Type,
-    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>,
+    pub element_values: HashMap<Cow<'static, Wtf8Str>, AnnotationValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, ConstantPoolReadWrite)]
 pub struct MethodTypeAnnotation {
     #[coffer(as = "h::Normal")]
     pub target: MethodTypeAnnotationTarget,
-    #[coffer(as = "h::Vec8")]
-    #[coffer(as = "h::Normal")]
+    #[coffer(as = "h::Vec8<h::Normal>")]
     pub type_path: Vec<TypePath>,
     pub annotation_type: Type,
-    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>,
+    pub element_values: HashMap<Cow<'static, Wtf8Str>, AnnotationValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, ReadWrite, Copy, Eq)]
@@ -150,19 +151,17 @@ pub enum FieldTarget {
 pub struct FieldTypeAnnotation {
     #[coffer(as = "h::Normal")]
     pub target_type: FieldTarget,
-    #[coffer(as = "h::Vec8")]
-    #[coffer(as = "h::Normal")]
+    #[coffer(as = "h::Vec8<h::Normal>")]
     pub type_path: Vec<TypePath>,
     pub annotation_type: Type,
-    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>,
+    pub element_values: HashMap<Cow<'static, Wtf8Str>, AnnotationValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, ConstantPoolReadWrite)]
 pub struct CodeTypeAnnotation {
     pub target: CodeTypeAnnotationTarget,
-    #[coffer(as = "h::Vec8")]
-    #[coffer(as = "h::Normal")]
+    #[coffer(as = "h::Vec8<h::Normal>")]
     pub type_path: Vec<TypePath>,
     pub annotation_type: Type,
-    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>,
+    pub element_values: HashMap<Cow<'static, Wtf8Str>, AnnotationValue>,
 }

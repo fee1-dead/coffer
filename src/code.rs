@@ -206,13 +206,12 @@ impl ConstantPoolReadWrite for Code {
                 }
                 // Stack map information is ignored for now.
                 CodeAttr::StackMapTable(_) => {}
-                // FIXME
-                /*CodeAttr::RuntimeInvisibleTypeAnnotations(an) => {
+                CodeAttr::RuntimeInvisibleTypeAnnotations(an) => {
                     attrs.push(CodeAttribute::InvisibleTypeAnnotations(an))
                 }
                 CodeAttr::RuntimeVisibleTypeAnnotations(an) => {
                     attrs.push(CodeAttribute::VisibleTypeAnnotations(an))
-                }*/
+                }
                 CodeAttr::Raw(r) => attrs.push(CodeAttribute::Raw(r)),
             }
         }
@@ -540,12 +539,12 @@ impl ConstantPoolReadWrite for Code {
 
         for a in &self.attrs {
             match a {
-                /*CodeAttribute::VisibleTypeAnnotations(a) => {
+                CodeAttribute::VisibleTypeAnnotations(a) => {
                     CodeAttr::RuntimeVisibleTypeAnnotations(a.clone())
                 }
                 CodeAttribute::InvisibleTypeAnnotations(a) => {
                     CodeAttr::RuntimeInvisibleTypeAnnotations(a.clone())
-                }*/
+                }
                 CodeAttribute::LocalVariables(l) => {
                     let mut ty: Vec<LocalVarType> = vec![];
                     let mut var: Vec<LocalVar> = vec![];

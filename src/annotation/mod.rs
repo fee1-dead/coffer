@@ -2,10 +2,9 @@ pub(crate) mod type_annotation;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::str::FromStr;
 
 pub use type_annotation::*;
-use wtf_8::Wtf8Str;
+use wtf_8::{w, Wtf8Str};
 
 use super::Type;
 use crate::error::Error;
@@ -14,6 +13,7 @@ use crate::{
     read_from, write_to, ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, Read,
     ReadWrite, Result, Write,
 };
+use crate::helper as h;
 
 #[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
 pub struct ParameterAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>);
@@ -120,7 +120,7 @@ impl ConstantPoolReadWrite for AnnotationValue {
                     Some(parse_type(&str)?)
                 })
             }
-            '@' => AnnotationValue::Annotation(parse_annotation(cp, reader)?),
+            '@' => AnnotationValue::Annotation(Annotation::read_from(cp, reader)?),
             '[' => {
                 let num = u16::read_from(reader)?;
                 let mut values = Vec::with_capacity(num as usize);
@@ -187,7 +187,7 @@ impl ConstantPoolReadWrite for AnnotationValue {
                 b'C'.write_to(writer)?;
                 write_to!(
                     &n.as_ref()
-                        .map_or_else(|| Cow::Borrowed("V"), |t| t.to_string().into()),
+                        .map_or_else(|| Cow::Borrowed(w!("V")), |t| Cow::Owned(t.to_string().into())),
                     cp,
                     writer
                 )
@@ -214,10 +214,10 @@ pub struct Annotation {
     /// A field descriptor representing the type of the annotation.
     pub annotation_type: Type,
     /// Pairs of values that are passed as parameters to this annotation.
-    pub element_values: HashMap<Cow<'static, str>, AnnotationValue>,
+    pub element_values: HashMap<Cow<'static, Wtf8Str>, AnnotationValue>,
 }
 
-impl ConstantPoolReadWrite for HashMap<Cow<'static, str>, AnnotationValue> {
+impl ConstantPoolReadWrite for HashMap<Cow<'static, Wtf8Str>, AnnotationValue> {
     fn read_from<C: ConstantPoolReader, R: Read>(
         cp: &mut C,
         reader: &mut R,

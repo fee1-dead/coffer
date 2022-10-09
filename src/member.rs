@@ -3,10 +3,9 @@
 //! They can be fields or methods.
 use wtf_8::Wtf8Str;
 
-/* 
 use crate::annotation::{
     Annotation, AnnotationValue, FieldTypeAnnotation, MethodTypeAnnotation, ParameterAnnotations,
-};*/
+};
 use crate::code::Code;
 use crate::prelude::*;
 
@@ -47,21 +46,21 @@ impl ConstantPoolReadWrite for MemberRef {
 }
 
 /// Completed
-#[derive(PartialEq, Eq, Debug, Clone, AttributeEnum)]
+#[derive(PartialEq, Debug, Clone, AttributeEnum)]
 pub enum FieldAttribute {
     Deprecated,
     Synthetic,
     Signature(FieldSignature),
     ConstantValue(Constant),
-    /*RuntimeVisibleAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>),
+    RuntimeVisibleAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>),
     RuntimeInvisibleAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>),
     RuntimeVisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<FieldTypeAnnotation>),
-    RuntimeInvisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<FieldTypeAnnotation>),*/
+    RuntimeInvisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<FieldTypeAnnotation>),
     #[coffer(raw_variant)]
     Raw(RawAttribute),
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, ConstantPoolReadWrite)]
+#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
 pub struct Field {
     #[coffer(as = "h::Normal")]
     pub access: FieldFlags,
@@ -78,26 +77,26 @@ pub struct MethodParameter {
     access: MethodParameterFlags,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, AttributeEnum)]
+#[derive(PartialEq, Debug, Clone, AttributeEnum)]
 pub enum MethodAttribute {
     Code(Code),
     Deprecated,
     Synthetic,
     Signature(MethodSignature),
-    /*RuntimeVisibleAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>),
+    RuntimeVisibleAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>),
     RuntimeInvisibleAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>),
     RuntimeVisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<MethodTypeAnnotation>),
     RuntimeInvisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<MethodTypeAnnotation>),
     RuntimeVisibleParameterAnnotations(#[coffer(as = "h::Vec8")] Vec<ParameterAnnotations>),
-    RuntimeInvisibleParameterAnnotations(#[coffer(as = "h::Vec8")] Vec<ParameterAnnotations>),*/
+    RuntimeInvisibleParameterAnnotations(#[coffer(as = "h::Vec8")] Vec<ParameterAnnotations>),
     Exceptions(#[coffer(as = "h::Vec16<h::Class>")] Vec<Cow<'static, Wtf8Str>>),
-    // AnnotationDefault(AnnotationValue),
+    AnnotationDefault(AnnotationValue),
     MethodParameters(#[coffer(as = "h::Vec8")] Vec<MethodParameter>),
     #[coffer(raw_variant)]
     Raw(RawAttribute),
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, ConstantPoolReadWrite)]
+#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
 pub struct Method {
     #[coffer(as = "h::Normal")]
     pub access: MethodFlags,

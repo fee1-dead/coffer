@@ -1,6 +1,6 @@
 use wtf_8::Wtf8Str;
 
-// use crate::annotation::{Annotation, ClassTypeAnnotation};
+use crate::annotation::{Annotation, ClassTypeAnnotation};
 use crate::mod_utf8::{modified_utf8_to_string, string_to_modified_utf8};
 use crate::module::Module;
 use crate::prelude::*;
@@ -119,10 +119,10 @@ pub enum ClassAttribute {
     ModuleMainClass(#[coffer(as = "h::Class")] Cow<'static, Wtf8Str>),
     NestHost(#[coffer(as = "h::Class")] Cow<'static, Wtf8Str>),
     NestMembers(#[coffer(as = "h::Vec16<h::Class>")] Vec<Cow<'static, Wtf8Str>>),
-    /*RuntimeVisibleAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>),
+    RuntimeVisibleAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>),
     RuntimeInvisibleAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>),
     RuntimeVisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<ClassTypeAnnotation>),
-    RuntimeInvisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<ClassTypeAnnotation>),*/
+    RuntimeInvisibleTypeAnnotations(#[coffer(as = "h::Vec16")] Vec<ClassTypeAnnotation>),
     #[coffer(raw_variant)]
     Raw(RawAttribute),
 }

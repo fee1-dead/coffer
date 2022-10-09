@@ -27,7 +27,7 @@ pub use rw::*;
 
 pub use crate::error::{Error, Result};
 
-// pub mod annotation;
+pub mod annotation;
 pub mod attr;
 pub mod clazz;
 pub mod code;
