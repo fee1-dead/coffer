@@ -5,6 +5,7 @@ use std::process::{Command, Stdio};
 use tempfile::{tempdir, TempDir};
 use wtf_8::w;
 
+use crate::clazz::Class;
 use crate::code::GetOrPut::Get;
 use crate::code::Instruction::*;
 use crate::code::MemberType::Static;
@@ -13,7 +14,6 @@ use crate::flags::{ClassFlags, MethodFlags};
 use crate::loadable::Constant;
 use crate::member::{MemberRef, Method, MethodAttribute};
 use crate::prelude::{JavaVersion, Type, *};
-use crate::clazz::Class;
 
 /// skip if java is not installed.
 pub fn should_skip() -> bool {
@@ -65,7 +65,10 @@ fn bake(code: Code) -> crate::Result<Execution> {
         methods: vec![Method {
             access: MethodFlags::ACC_STATIC | MethodFlags::ACC_FINAL | MethodFlags::ACC_PUBLIC,
             name: w!("main").into(),
-            descriptor: Type::method([Type::array(1, Type::reference(w!("java/lang/String")))], None),
+            descriptor: Type::method(
+                [Type::array(1, Type::reference(w!("java/lang/String")))],
+                None,
+            ),
             attributes: vec![MethodAttribute::Code(code)],
         }],
         attributes: vec![],

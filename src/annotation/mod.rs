@@ -10,10 +10,9 @@ use super::Type;
 use crate::error::Error;
 use crate::prelude::parse_type;
 use crate::{
-    read_from, write_to, ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, Read,
-    ReadWrite, Result, Write,
+    helper as h, read_from, write_to, ConstantPoolReadWrite, ConstantPoolReader,
+    ConstantPoolWriter, Read, ReadWrite, Result, Write,
 };
-use crate::helper as h;
 
 #[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
 pub struct ParameterAnnotations(#[coffer(as = "h::Vec16")] Vec<Annotation>);
@@ -186,8 +185,10 @@ impl ConstantPoolReadWrite for AnnotationValue {
             AnnotationValue::Class(n) => {
                 b'C'.write_to(writer)?;
                 write_to!(
-                    &n.as_ref()
-                        .map_or_else(|| Cow::Borrowed(w!("V")), |t| Cow::Owned(t.to_string().into())),
+                    &n.as_ref().map_or_else(
+                        || Cow::Borrowed(w!("V")),
+                        |t| Cow::Owned(t.to_string().into())
+                    ),
                     cp,
                     writer
                 )

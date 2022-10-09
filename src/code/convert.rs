@@ -394,16 +394,18 @@ impl Conv {
                     labeler.read_or_dynamic(r, ConstantPoolReader::read_class)
                 )
                 .and_then(|t| match t {
-                    OrDynamic::Static(c) => Ok(OrDynamic::Static(if c.codepoints().next().map_or(false, |x| x == '[') {
-                        if let Type::ArrayRef(dim, ty) = parse_type(&c)? {
-                            ClassType::Array(dim, *ty)
+                    OrDynamic::Static(c) => Ok(OrDynamic::Static(
+                        if c.codepoints().next().map_or(false, |x| x == '[') {
+                            if let Type::ArrayRef(dim, ty) = parse_type(&c)? {
+                                ClassType::Array(dim, *ty)
+                            } else {
+                                // SAFETY: Must be array because string starts with '['.
+                                unsafe { std::hint::unreachable_unchecked() }
+                            }
                         } else {
-                            // SAFETY: Must be array because string starts with '['.
-                            unsafe { std::hint::unreachable_unchecked() }
-                        }
-                    } else {
-                        ClassType::Object(c)
-                    })),
+                            ClassType::Object(c)
+                        },
+                    )),
                     OrDynamic::Dynamic(d) => Ok(OrDynamic::Dynamic(d)),
                 })?,
             ),

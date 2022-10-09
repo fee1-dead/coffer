@@ -6,8 +6,7 @@ use wtf_8::Wtf8Str;
 use super::super::Type;
 use super::AnnotationValue;
 use crate::code::{Catch, Label};
-use crate::{ConstantPoolReadWrite, ReadWrite};
-use crate::helper as h;
+use crate::{helper as h, ConstantPoolReadWrite, ReadWrite};
 
 /// Represents where a type annotation is annotated in a class.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ReadWrite)]

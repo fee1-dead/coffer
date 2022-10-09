@@ -21,10 +21,7 @@ pub trait ConstantPoolReadWriteAs<T> {
 
 pub trait ReadWriteAs<T> {
     fn read_from<R: Read>(reader: &mut R) -> crate::Result<T>;
-    fn write_to<W: Write>(
-        x: &T,
-        writer: &mut W,
-    ) -> crate::Result<()>;
+    fn write_to<W: Write>(x: &T, writer: &mut W) -> crate::Result<()>;
 }
 
 pub struct Normal;
@@ -115,10 +112,7 @@ impl<T: ReadWrite> ReadWriteAs<T> for Identity {
     fn read_from<R: Read>(reader: &mut R) -> crate::Result<T> {
         T::read_from(reader)
     }
-    fn write_to<W: Write>(
-        x: &T,
-        writer: &mut W,
-    ) -> crate::Result<()> {
+    fn write_to<W: Write>(x: &T, writer: &mut W) -> crate::Result<()> {
         x.write_to(writer)
     }
 }
@@ -139,10 +133,7 @@ where
         })?;
         (0..n).map(|_| Helper::read_from(reader)).collect()
     }
-    fn write_to<W: Write>(
-        x: &Vec<T>,
-        writer: &mut W,
-    ) -> crate::Result<()> {
+    fn write_to<W: Write>(x: &Vec<T>, writer: &mut W) -> crate::Result<()> {
         let len = x.len();
         let l = L::try_from(len).map_err(|_| {
             Error::Invalid(

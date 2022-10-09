@@ -365,6 +365,7 @@ fn simple_type_sig(i: &str) -> IResult<'_, SimpleClassTypeSignature> {
 }
 
 fn type_parameter(i: &str) -> IResult<'_, TypeParameter> {
+    // i = "A::Ljava/lang/String;"
     let mut chars = i.chars();
     let name = chars
         .by_ref()
@@ -375,11 +376,11 @@ fn type_parameter(i: &str) -> IResult<'_, TypeParameter> {
         let (newi, ref_ty_sig) = ref_type_sig(chars.as_str())?;
         (newi, Some(ref_ty_sig))
     } else {
-        (i, None)
+        (chars.as_str(), None)
     };
     let mut interface_bounds = vec![];
     while let Some(':') = chars.next() {
-        let (new_i, bound) = ref_type_sig(i)?;
+        let (new_i, bound) = ref_type_sig(chars.as_str())?;
         interface_bounds.push(bound);
         i = new_i;
     }
@@ -419,6 +420,7 @@ fn ret(i: &str) -> IResult<'_, Option<TypeSignature>> {
 }
 
 fn method_sig(i: &str) -> IResult<'_, MethodSignature> {
+    eprintln!("{i}");
     let (i, type_parameters) = type_parameters(i)?;
     let (mut i, ()) = char::<'('>(i)?;
     let mut parameters = vec![];
@@ -433,7 +435,7 @@ fn method_sig(i: &str) -> IResult<'_, MethodSignature> {
     let (mut i, return_type) = ret(i)?;
     let mut t = vec![];
     while let Some('^') = i.chars().next() {
-        let (new_i, throw) = throws(&i[1..])?;
+        let (new_i, throw) = throws(i)?;
         i = new_i;
         t.push(throw);
     }

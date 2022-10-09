@@ -86,7 +86,8 @@ pub trait ConstantPoolWriter {
         } else {
             RawConstantEntry::Dynamic
         };
-        let name_and_type = self.insert_nameandtype(d.name, Cow::Owned(d.descriptor.to_string().into()));
+        let name_and_type =
+            self.insert_nameandtype(d.name, Cow::Owned(d.descriptor.to_string().into()));
         self.insert_raw(e(bsm, name_and_type))
     }
     /// insert an indirect string such as String / Module / Package entry, used by the procedural macro.

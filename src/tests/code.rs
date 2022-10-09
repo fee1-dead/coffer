@@ -6,11 +6,12 @@ use std::sync::Arc;
 
 use once_cell::sync::OnceCell;
 
+use crate::clazz::Class;
 use crate::code::Instruction::*;
 use crate::code::Label as Lbl;
 use crate::code::LocalType::Reference;
 use crate::prelude::{BootstrapMethod, Code, Constant, OrDynamic, RawConstantEntry, Result};
-use crate::{clazz::Class, ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite};
+use crate::{ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite};
 
 struct ArrCp<'a>(Cow<'a, [RawConstantEntry]>);
 
@@ -66,7 +67,11 @@ pub static SAMPLE: &[JarInfo] = &[
 
 #[test]
 fn sample_read_write_read() -> Result<(), Box<dyn Error>> {
-    for JarInfo { _file_name: _, bytes } in SAMPLE.iter() {
+    for JarInfo {
+        _file_name: _,
+        bytes,
+    } in SAMPLE.iter()
+    {
         let mut arc = zip::ZipArchive::new(Cursor::new(*bytes))?;
         fn handle_error<E: std::fmt::Display + std::fmt::Debug, P: std::fmt::UpperHex>(
             error: E,

@@ -1,11 +1,16 @@
 use wtf_8::w;
+
 use crate::prelude::Type;
 
 #[test]
 fn type_method_to_str() {
     assert_eq!(
         Type::method(
-            [Type::Int, Type::Double, Type::reference(w!("java/lang/Thread"))],
+            [
+                Type::Int,
+                Type::Double,
+                Type::reference(w!("java/lang/Thread"))
+            ],
             Type::reference(w!("java/lang/Object")).into()
         )
         .to_string(),

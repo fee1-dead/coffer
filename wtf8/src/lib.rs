@@ -948,7 +948,9 @@ pub use alloc_impl::Wtf8String;
 
 #[macro_export]
 macro_rules! w {
-    ($e:expr) => ($crate::Wtf8Str::new($e));
+    ($e:expr) => {
+        $crate::Wtf8Str::new($e)
+    };
 }
 
 /// Returns a slice of the given string for the byte range \[`begin`..`end`).
@@ -1263,6 +1265,7 @@ pub fn validate_wtf8(bytes: &[u8]) -> Result<(), Wtf8Error> {
                     0x80..=0x9f => {}
                     0xA0..=0xAF => {
                         is_high_surrogate = true;
+                        next!();
                         continue;
                     }
                     0xB0..=0xBF => {
@@ -1278,6 +1281,33 @@ pub fn validate_wtf8(bytes: &[u8]) -> Result<(), Wtf8Error> {
                 }
                 if !tail.contains(&next!()) {
                     err!(3);
+                }
+            }
+            0xF0 => {
+                let n = next!();
+                let n1 = next!();
+                let n2 = next!();
+                match (n, n1, n2) {
+                    (0x90..=0xBF, 0x80..=0xBF, 0x80..=0xBF) => {}
+                    _ => err!(4),
+                }
+            }
+            0xF1..=0xF3 => {
+                let n = next!();
+                let n1 = next!();
+                let n2 = next!();
+                match (n, n1, n2) {
+                    (0x80..=0xBF, 0x80..=0xBF, 0x80..=0xBF) => {}
+                    _ => err!(4),
+                }
+            }
+            0xF4 => {
+                let n = next!();
+                let n1 = next!();
+                let n2 = next!();
+                match (n, n1, n2) {
+                    (0x80..=0x8F, 0x80..=0xBF, 0x80..=0xBF) => {}
+                    _ => err!(4),
                 }
             }
             _ => err!(1),

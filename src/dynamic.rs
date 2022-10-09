@@ -19,7 +19,7 @@ impl ConstantPoolReadWrite for BootstrapMethod {
     ) -> Result<Self, Error> {
         let handle = try_cp_read!(cp, reader, read_method_handle)?;
         let num_arguments = u16::read_from(reader)?;
-        let mut arguments = Vec::with_capacity(num_arguments as usize);
+        let mut arguments = Vec::with_capacity(num_arguments.into());
         for _ in 0..num_arguments {
             let idx = u16::read_from(reader)?;
             arguments.push(try_cp_read!(

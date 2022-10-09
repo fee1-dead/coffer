@@ -47,10 +47,16 @@ fn test_from_modified_utf8_3bytes() {
 #[test]
 fn test_to_modified_utf8_2bytes() {
     let null = "\u{0000}";
-    assert_eq!(string_to_modified_utf8(w!(null)), vec![0b11000000, 0b10000000]);
+    assert_eq!(
+        string_to_modified_utf8(w!(null)),
+        vec![0b11000000, 0b10000000]
+    );
     // 00000011_10101001
     let omega = "Ω";
-    assert_eq!(string_to_modified_utf8(w!(omega)), vec![0b11001110, 0b10101001]);
+    assert_eq!(
+        string_to_modified_utf8(w!(omega)),
+        vec![0b11001110, 0b10101001]
+    );
 }
 
 #[test]

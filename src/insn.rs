@@ -2,8 +2,7 @@
 //!
 //! Used for translating raw code to useful code.
 
-use crate::{ReadWrite, Result};
-use crate::helper as h;
+use crate::{helper as h, ReadWrite, Result};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ReadWrite)]
 pub(crate) struct SwitchEntry(pub i32, pub i32);

@@ -7,7 +7,7 @@
 //!
 //! Refer to the [JVM Spec](https://docs.oracle.com/javase/specs/jvms/se16/html/jvms-4.html#jvms-4.4.7) for more info.
 
-use std::convert::TryFrom;
+// FIXME please fix this stinky code
 
 use thiserror::Error;
 use wtf_8::{Wtf8Error, Wtf8Str, Wtf8String};
@@ -32,86 +32,102 @@ pub enum MutfError {
 
 /// Converts a modified utf-8 sequence to an owned wtf-8 string.
 pub fn modified_utf8_to_string(buf: &[u8]) -> Result<Wtf8String, MutfError> {
-    let len = buf.len();
-    let mut out = Vec::with_capacity(len);
-
-    let mut bytes = buf.iter().copied();
-    macro_rules! error {
-        () => {
-            MutfError::AroundByte(len - bytes.len())
-        };
-    }
-    loop {
+    // based on https://datatracker.ietf.org/doc/html/rfc3629#page-4 with wtf-8 modifications
+    let mut iter = buf.iter().copied().enumerate();
+    let mut is_high_surrogate = false;
+    let mut modification = false;
+    while let Some((index, b)) = iter.next() {
+        macro_rules! err {
+            () => {
+                return Err(MutfError::AroundByte(index))
+            };
+            ($e: expr) => {
+                return Err(MutfError::WTF8Error(Wtf8Error {
+                    valid_up_to: index,
+                    error_len: NonZeroU8::new($e),
+                }))
+            };
+        }
         macro_rules! next {
-            () => {{
-                bytes.next().ok_or(MutfError::PartialCharacterAtEnd)?
-            }};
-        }
-        let c = match bytes.next() {
-            Some(c) => c,
-            None => break,
-        };
-        match c {
-            0b0000_0000..=0b0111_1111 => out.push(c),
-            // c1: 110x xxxx
-            // c2: 10xx xxxx
-            0xC0 if next!() == 0x80 => {
-                out.push(0);
-            }
-            // c1: 1110 xxxx
-            // c2: 10xx xxxx
-            // c3: 10xx xxxx
-            0b1110_0000..=0b1110_1111 => {
-                let c2 = next!();
-                let c3 = next!();
-
-                // c1: 1110 1101
-                // c2: 1010 xxxx (plus one when decoding)
-                // c3: 10xx xxxx
-                // c4: 1110 1101
-                // c5: 1011 xxxx
-                // c6: 10xx xxxx
-                if c == 0b1110_1101 && (c2 & 0b1111_0000) == 0b1010_0000 {
-                    if bytes.len() >= 3 {
-                        let c4 = next!();
-                        let c5 = next!();
-                        let c6 = next!();
-                        let valid = c4 == 0b1110_1101
-                            && (c5 & 0b1111_0000) == 0b1011_0000
-                            && (c6 & 0b1100_0000) == 0b1000_0000;
-                        if valid {
-                            let c2 = c2 as u32;
-                            let c3 = c3 as u32;
-                            let c5 = c5 as u32;
-                            let c6 = c6 as u32;
-
-                            let mut buf = [0; 4];
-                            let c = char::try_from(
-                                0x10000
-                                    | ((c2 & 0b1111) << 16)
-                                    | ((c3 & 0b111111) << 10)
-                                    | ((c5 & 0b1111) << 6)
-                                    | (c6 & 0b111111),
-                            )
-                            .map_err(|_| error!())?;
-                            c.encode_utf8(&mut buf);
-                            out.extend_from_slice(&buf);
-                        } else {
-                            out.extend_from_slice(&[c, c2, c3, c4, c5, c6]);
-                            continue;
-                        }
-                    }
-
-                    continue;
+            () => {
+                if let Some((_, b)) = iter.next() {
+                    b
+                } else {
+                    err!();
                 }
-
-                out.extend_from_slice(&[c, c2, c3]);
-            }
-            _ => return Err(error!()),
+            };
         }
+        match b {
+            0xC0 if next!() == 0x80 => {
+                modification = true;
+                break;
+            }
+            0xED => {
+                let n = next!();
+                match n {
+                    0xA0..=0xAF => {
+                        is_high_surrogate = true;
+                        next!();
+                    }
+                    0xB0..=0xBF => {
+                        // Encoded surrogate pairs need to be modified to WTF-8.
+                        if is_high_surrogate {
+                            modification = true;
+                            break;
+                        }
+                        is_high_surrogate = false;
+                    }
+                    _ => is_high_surrogate = false,
+                }
+            }
+            _ => is_high_surrogate = false,
+        }
+        
     }
-
-    Wtf8String::from_bytes(out).map_err(Into::into)
+    if modification {
+        let mut out = Vec::with_capacity(buf.len());
+        let mut iter = buf.iter().copied().enumerate();
+        while let Some((index, b)) = iter.next() {
+            match b {
+                0xC0 if buf.get(index + 1) == Some(&0x80) => {
+                    out.push(0x0);
+                    iter.next();
+                }
+                0xED => {
+                    if let (
+                        Some(n @ 0xA0..=0xAF),
+                        Some(n1),
+                        Some(0xED),
+                        Some(n3 @ 0xB0..=0xBF),
+                        Some(n4),
+                    ) = (
+                        buf.get(index + 1),
+                        buf.get(index + 2),
+                        buf.get(index + 3),
+                        buf.get(index + 4),
+                        buf.get(index + 5),
+                    ) {
+                        let char = 0x10000
+                            + (((*n & 0xf) as u32) << 16)
+                            + (((*n1 & 0x3f) as u32) << 10)
+                            + (((*n3 & 0xf) as u32) << 6)
+                            + (*n4 & 0x3f) as u32;
+                        let ch = char::from_u32(char).unwrap();
+                        let mut bytes = [0; 4];
+                        ch.encode_utf8(&mut bytes);
+                        out.extend_from_slice(&bytes);
+                        iter.nth(5 - 1);
+                    } else {
+                        out.push(b);
+                    }
+                }
+                _ => out.push(b),
+            }
+        }
+        Ok(Wtf8String::from_bytes(out)?)
+    } else {
+        Ok(Wtf8String::from_bytes(buf.to_owned())?)
+    }
 }
 
 /// Converts a string to modified UTF-8.
