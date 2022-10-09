@@ -186,7 +186,7 @@ impl ConstantPoolReadWrite for Option<Cow<'static, Wtf8Str>> {
 
 impl ConstantPoolReadWrite for Type {
     fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self> {
-        parse_type(&*crate::try_cp_read!(cp, reader, read_wtf8)?)
+        parse_type(&crate::try_cp_read!(cp, reader, read_wtf8)?)
     }
 
     fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()> {

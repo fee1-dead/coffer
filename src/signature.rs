@@ -236,7 +236,7 @@ fn class_type_sig(i: &str) -> IResult<'_, ClassTypeSignature> {
     let (i, package) = packages(i)?;
     let (mut i, name) = simple_type_sig(i)?;
     let mut suffix = vec![];
-    while i.as_bytes().get(0) == Some(&b'.') {
+    while i.as_bytes().first() == Some(&b'.') {
         // Safe way to do this because the nom macros looks confusing
         let res = simple_type_sig(&i[1..])?; // Skip the dot here
         i = res.0;
@@ -326,9 +326,9 @@ fn type_arg(i: &str) -> IResult<'_, TypeArgument> {
 
 fn type_args(mut i: &str) -> IResult<'_, Vec<TypeArgument>> {
     let mut args = vec![];
-    if i.as_bytes().get(0) == Some(&b'<') {
+    if i.as_bytes().first() == Some(&b'<') {
         i = &i[1..];
-        while !i.is_empty() && i.as_bytes().get(0) != Some(&b'>') {
+        while !i.is_empty() && i.as_bytes().first() != Some(&b'>') {
             let res = type_arg(i)?;
             i = res.0;
             args.push(res.1);
@@ -396,9 +396,9 @@ fn type_parameter(i: &str) -> IResult<'_, TypeParameter> {
 
 fn type_parameters(mut i: &str) -> IResult<'_, Vec<TypeParameter>> {
     let mut params = vec![];
-    if i.as_bytes().get(0) == Some(&b'<') {
+    if i.as_bytes().first() == Some(&b'<') {
         i = &i[1..];
-        while !i.is_empty() && i.as_bytes().get(0) != Some(&b'>') {
+        while !i.is_empty() && i.as_bytes().first() != Some(&b'>') {
             let res = type_parameter(i)?;
             i = res.0;
             params.push(res.1);
@@ -411,7 +411,7 @@ fn type_parameters(mut i: &str) -> IResult<'_, Vec<TypeParameter>> {
 }
 
 fn ret(i: &str) -> IResult<'_, Option<TypeSignature>> {
-    Ok(if i.as_bytes().get(0) == Some(&b'V') {
+    Ok(if i.as_bytes().first() == Some(&b'V') {
         (&i[1..], None)
     } else {
         type_sig(i).map(|(i, r)| (i, Some(r)))?

@@ -893,7 +893,7 @@ mod alloc_impl {
     }
     impl Borrow<Wtf8Str> for Wtf8String {
         fn borrow(&self) -> &Wtf8Str {
-            &*self
+            self
         }
     }
 

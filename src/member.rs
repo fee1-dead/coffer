@@ -47,7 +47,7 @@ impl ConstantPoolReadWrite for MemberRef {
 }
 
 /// Completed
-#[derive(PartialEq, Debug, Clone, AttributeEnum)]
+#[derive(PartialEq, Eq, Debug, Clone, AttributeEnum)]
 pub enum FieldAttribute {
     Deprecated,
     Synthetic,
@@ -61,7 +61,7 @@ pub enum FieldAttribute {
     Raw(RawAttribute),
 }
 
-#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
+#[derive(PartialEq, Eq, Debug, Clone, ConstantPoolReadWrite)]
 pub struct Field {
     #[coffer(as = "h::Normal")]
     pub access: FieldFlags,
@@ -71,14 +71,14 @@ pub struct Field {
     pub attrs: Vec<FieldAttribute>,
 }
 
-#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
+#[derive(PartialEq, Eq, Debug, Clone, ConstantPoolReadWrite)]
 pub struct MethodParameter {
     name: Option<Cow<'static, Wtf8Str>>,
     #[coffer(as = "h::Normal")]
     access: MethodParameterFlags,
 }
 
-#[derive(PartialEq, Debug, Clone, AttributeEnum)]
+#[derive(PartialEq, Eq, Debug, Clone, AttributeEnum)]
 pub enum MethodAttribute {
     Code(Code),
     Deprecated,
@@ -97,7 +97,7 @@ pub enum MethodAttribute {
     Raw(RawAttribute),
 }
 
-#[derive(PartialEq, Debug, Clone, ConstantPoolReadWrite)]
+#[derive(PartialEq, Eq, Debug, Clone, ConstantPoolReadWrite)]
 pub struct Method {
     #[coffer(as = "h::Normal")]
     pub access: MethodFlags,

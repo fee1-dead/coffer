@@ -101,7 +101,7 @@ pub struct InnerClass {
     pub inner_access: InnerClassFlags,
 }
 
-#[derive(PartialEq, Debug, Clone, AttributeEnum)]
+#[derive(PartialEq, Eq, Debug, Clone, AttributeEnum)]
 pub enum ClassAttribute {
     Signature(ClassSignature),
     Synthetic,

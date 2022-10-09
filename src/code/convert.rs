@@ -356,7 +356,7 @@ impl Conv {
                     r,
                     labeler.read_or_dynamic(r, ConstantPoolReader::read_class)
                 )?
-                .map_static(|c| parse_type(&*c).unwrap_or(Type::Ref(c))),
+                .map_static(|c| parse_type(&c).unwrap_or(Type::Ref(c))),
                 1,
             ),
             I::MultiANewArray(r, dim) => NewArray(
@@ -364,7 +364,7 @@ impl Conv {
                     r,
                     labeler.read_or_dynamic(r, ConstantPoolReader::read_class)
                 )?
-                .map_static(|c| parse_type(&*c).unwrap_or(Type::Ref(c))),
+                .map_static(|c| parse_type(&c).unwrap_or(Type::Ref(c))),
                 dim,
             ),
             I::CheckCast(r) => CheckCast(
@@ -375,7 +375,7 @@ impl Conv {
                 .and_then(|t| match t {
                     OrDynamic::Static(c) => Ok(OrDynamic::Static(
                         if c.codepoints().next().map_or(false, |x| x == '[') {
-                            if let Type::ArrayRef(dim, ty) = parse_type(&*c)? {
+                            if let Type::ArrayRef(dim, ty) = parse_type(&c)? {
                                 ClassType::Array(dim, *ty)
                             } else {
                                 // SAFETY: Must be array because string starts with '['.
@@ -395,7 +395,7 @@ impl Conv {
                 )
                 .and_then(|t| match t {
                     OrDynamic::Static(c) => Ok(OrDynamic::Static(if c.codepoints().next().map_or(false, |x| x == '[') {
-                        if let Type::ArrayRef(dim, ty) = parse_type(&*c)? {
+                        if let Type::ArrayRef(dim, ty) = parse_type(&c)? {
                             ClassType::Array(dim, *ty)
                         } else {
                             // SAFETY: Must be array because string starts with '['.
@@ -693,7 +693,7 @@ impl Conv {
             }
             Instruction::New(ref ty) => {
                 NEW.write_to(&mut cursor)?;
-                cp.insert_ordynamic(ty.clone(), |w, x| w.insert_class(x.into()))
+                cp.insert_ordynamic(ty.clone(), |w, x| w.insert_class(x))
                     .write_to(&mut cursor)?;
             }
             Instruction::NewArray(_, _) => {}

@@ -268,7 +268,7 @@ impl From<ClassType> for Cow<'static, Wtf8Str> {
 /// This gives benefits such that when modifying the class it doesn't need to modify the indices of the attributes to remain valid.
 ///
 /// However, StackMap frames will not be a variant because they become quite invalid after modifications made to code, thus, frames should be regenerated every time.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Instruction {
     NoOp,
     /// Push a null object reference.
@@ -374,7 +374,7 @@ pub(super) enum CodeAttr {
     Raw(RawAttribute),
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum CodeAttribute {
     /*VisibleTypeAnnotations(Vec<CodeTypeAnnotation>),
     InvisibleTypeAnnotations(Vec<CodeTypeAnnotation>),*/

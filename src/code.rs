@@ -22,7 +22,7 @@ use once_cell::sync::OnceCell;
 pub use structure::*;
 use wtf_8::Wtf8Str;
 
-#[derive(Clone, PartialEq, Debug, Default)]
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Code {
     pub max_stack: u16,
     pub max_locals: u16,

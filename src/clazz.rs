@@ -49,7 +49,7 @@ impl ReadWrite for Class {
                 let c = ClassWrapper::read_from(&mut cp, reader)?;
                 for attr in &c.attributes {
                     if let ClassAttribute::BootstrapMethods(b) = attr {
-                        cp.bootstrap_methods(&b)?;
+                        cp.bootstrap_methods(b)?;
                         break;
                     }
                 }
