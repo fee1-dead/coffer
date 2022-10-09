@@ -4,14 +4,13 @@ use std::fs::File;
 use std::io::{Cursor, Read, Write};
 use std::sync::Arc;
 
-use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
 
 use crate::code::Instruction::*;
 use crate::code::Label as Lbl;
 use crate::code::LocalType::Reference;
 use crate::prelude::{BootstrapMethod, Code, Constant, OrDynamic, RawConstantEntry, Result};
-use crate::{Class, ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite};
+use crate::{clazz::Class, ConstantPoolReadWrite, ConstantPoolReader, ConstantPoolWriter, ReadWrite};
 
 struct ArrCp<'a>(Cow<'a, [RawConstantEntry]>);
 
@@ -45,14 +44,14 @@ fn arr_cp<'a, T: Into<Cow<'a, [RawConstantEntry]>>>(inner: T) -> ArrCp<'a> {
 }
 
 pub struct JarInfo {
-    file_name: &'static str,
+    _file_name: &'static str,
     bytes: &'static [u8],
 }
 
 macro_rules! sample {
     ($name:literal) => {
         JarInfo {
-            file_name: $name,
+            _file_name: $name,
             bytes: include_bytes!(concat!("jars/", $name)),
         }
     };
@@ -67,7 +66,7 @@ pub static SAMPLE: &[JarInfo] = &[
 
 #[test]
 fn sample_read_write_read() -> Result<(), Box<dyn Error>> {
-    for JarInfo { file_name, bytes } in SAMPLE.iter() {
+    for JarInfo { _file_name: _, bytes } in SAMPLE.iter() {
         let mut arc = zip::ZipArchive::new(Cursor::new(*bytes))?;
         fn handle_error<E: std::fmt::Display + std::fmt::Debug, P: std::fmt::UpperHex>(
             error: E,

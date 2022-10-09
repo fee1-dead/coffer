@@ -134,7 +134,7 @@ pub fn parse_type(s: &Wtf8Str) -> Result<Type> {
             Some(ch) => {
                 return Err(crate::error::Error::Invalid(
                     "type character",
-                    format!("{:?}", next_codepoint.unwrap()).into(),
+                    format!("{ch:?}").into(),
                 ))
             }
             None => return Err(unexpected_end()),

@@ -3,6 +3,7 @@ use std::io::BufWriter;
 use std::process::{Command, Stdio};
 
 use tempfile::{tempdir, TempDir};
+use wtf_8::w;
 
 use crate::code::GetOrPut::Get;
 use crate::code::Instruction::*;
@@ -12,7 +13,7 @@ use crate::flags::{ClassFlags, MethodFlags};
 use crate::loadable::Constant;
 use crate::member::{MemberRef, Method, MethodAttribute};
 use crate::prelude::{JavaVersion, Type, *};
-use crate::Class;
+use crate::clazz::Class;
 
 /// skip if java is not installed.
 pub fn should_skip() -> bool {
@@ -57,14 +58,14 @@ fn bake(code: Code) -> crate::Result<Execution> {
     let cls = Class {
         version: JavaVersion::J8,
         access: ClassFlags::ACC_FINAL,
-        name: "Test".into(),
-        super_name: Some("java/lang/Object".into()),
+        name: w!("Test").into(),
+        super_name: Some(w!("java/lang/Object").into()),
         interfaces: vec![],
         fields: vec![],
         methods: vec![Method {
             access: MethodFlags::ACC_STATIC | MethodFlags::ACC_FINAL | MethodFlags::ACC_PUBLIC,
-            name: "main".into(),
-            descriptor: Type::method([Type::array(1, Type::reference("java/lang/String"))], None),
+            name: w!("main").into(),
+            descriptor: Type::method([Type::array(1, Type::reference(w!("java/lang/String")))], None),
             attributes: vec![MethodAttribute::Code(code)],
         }],
         attributes: vec![],
@@ -96,20 +97,20 @@ fn execute_helloworld() -> crate::Result<()> {
                 Get,
                 Static,
                 MemberRef {
-                    owner: "java/lang/System".into(),
-                    name: "out".into(),
-                    descriptor: Type::reference("java/io/PrintStream"),
+                    owner: w!("java/lang/System").into(),
+                    name: w!("out").into(),
+                    descriptor: Type::reference(w!("java/io/PrintStream")),
                     itfs: false,
                 }
                 .into(),
             ),
-            Push(Constant::string("Hello, World!").into()),
+            Push(Constant::string(w!("Hello, World!")).into()),
             InvokeExact(
                 MemberType::Virtual,
                 MemberRef {
-                    owner: "java/io/PrintStream".into(),
-                    name: "print".into(),
-                    descriptor: Type::method([Type::reference("java/lang/String")], None),
+                    owner: w!("java/io/PrintStream").into(),
+                    name: w!("print").into(),
+                    descriptor: Type::method([Type::reference(w!("java/lang/String"))], None),
                     itfs: false,
                 }
                 .into(),

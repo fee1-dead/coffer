@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::io::Cursor;
-use std::str::FromStr;
 
 use super::Instruction;
 use super::Instruction::*;

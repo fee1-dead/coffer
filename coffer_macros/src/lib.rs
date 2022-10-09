@@ -1,8 +1,7 @@
 mod derive;
 use derive::*;
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
-use syn::{DeriveInput, Error};
+use syn::Error;
 use synstructure::Structure;
 
 synstructure::decl_derive!(

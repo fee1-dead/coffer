@@ -28,7 +28,6 @@ once_cell = "1.13.0"
 wtf-8 = { path = "./wtf8", features = ["std"] }
 
 [dev-dependencies]
-lazy_static = "1.4.0"
 tempfile = "3.2.0"
 zip = "0.6.2"
 

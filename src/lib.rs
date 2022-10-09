@@ -11,7 +11,6 @@
 //! [`ConstantPoolReadWrite`]: crate::ConstantPoolReadWrite
 //! [`ConstantPoolWriter`]: crate::ConstantPoolWriter
 //! [`ConstantPoolReader`]: crate::ConstantPoolReader
-#![cfg_attr(any(feature = "backtrace", test), feature(backtrace))]
 // #![warn(missing_docs)]
 #![allow(missing_doc_code_examples)] // TODO Change these later to higher levels
 
@@ -22,8 +21,6 @@ extern crate bitflags;
 extern crate coffer_macros;
 
 extern crate self as coffer;
-
-use std::io::{Read, Write};
 
 use prelude::*;
 pub use rw::*;

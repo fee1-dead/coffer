@@ -757,9 +757,15 @@ mod alloc_impl {
         }
     }
 
-    impl<'a> Into<Cow<'a, Wtf8Str>> for Wtf8String {
-        fn into(self) -> Cow<'a, Wtf8Str> {
-            Cow::Owned(self)
+    impl<'a> From<Wtf8String> for Cow<'a, Wtf8Str> {
+        fn from(x: Wtf8String) -> Self {
+            Self::Owned(x)
+        }
+    }
+
+    impl<'a> From<&'a Wtf8Str> for Cow<'a, Wtf8Str> {
+        fn from(x: &'a Wtf8Str) -> Self {
+            Self::Borrowed(x)
         }
     }
 
@@ -905,10 +911,45 @@ mod alloc_impl {
             }
         }
     }
+    impl PartialEq<Wtf8Str> for Wtf8String {
+        fn eq(&self, other: &Wtf8Str) -> bool {
+            &**self == other
+        }
+    }
+    impl PartialEq<Wtf8String> for Wtf8Str {
+        fn eq(&self, other: &Wtf8String) -> bool {
+            &*self == &**other
+        }
+    }
+    impl<'a> PartialEq<&'a Wtf8Str> for Wtf8String {
+        fn eq(&self, other: &&'a Wtf8Str) -> bool {
+            &**self == *other
+        }
+    }
+    impl<'a> PartialEq<Wtf8String> for &'a Wtf8Str {
+        fn eq(&self, other: &Wtf8String) -> bool {
+            &**self == &**other
+        }
+    }
+    impl PartialEq<str> for Wtf8String {
+        fn eq(&self, other: &str) -> bool {
+            &**self == other
+        }
+    }
+    impl<'a> PartialEq<&'a str> for Wtf8String {
+        fn eq(&self, other: &&'a str) -> bool {
+            &**self == *other
+        }
+    }
 }
 
 #[cfg(feature = "alloc")]
 pub use alloc_impl::Wtf8String;
+
+#[macro_export]
+macro_rules! w {
+    ($e:expr) => ($crate::Wtf8Str::new($e));
+}
 
 /// Returns a slice of the given string for the byte range \[`begin`..`end`).
 ///
