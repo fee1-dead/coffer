@@ -80,6 +80,7 @@ fn sample_read_write_read() -> Result<(), Box<dyn Error>> {
             cursor_position: P,
             discr: &str,
         ) -> ! {
+            eprintln!("original filename: {path}");
             let filename = path.split('/').last().unwrap();
             let res = File::create(filename).and_then(|mut f| f.write_all(buf));
             let message = match res {

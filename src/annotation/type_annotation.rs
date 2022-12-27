@@ -58,7 +58,7 @@ impl ConstantPoolReadWrite for LocalVarTarget {
     ) -> crate::Result<Self> {
         let start_idx = u16::read_from(reader)?;
         let start = cp.get_label(start_idx as _);
-        let end = cp.get_label(start_idx as u32 + (u16::read_from(reader)? - 1) as u32);
+        let end = cp.get_label(start_idx as u32 + u16::read_from(reader)? as u32);
         Ok(LocalVarTarget {
             start,
             end,
@@ -74,7 +74,7 @@ impl ConstantPoolReadWrite for LocalVarTarget {
         let start = cp.label(&self.start);
         let end = cp.label(&self.end);
         start.write_to(writer)?;
-        (end - start + 1).write_to(writer)?;
+        (end - start).write_to(writer)?;
         self.idx.write_to(writer)?;
         Ok(())
     }

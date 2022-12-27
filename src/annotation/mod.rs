@@ -9,7 +9,7 @@ use wtf_8::{w, Wtf8Str};
 use super::Type;
 use crate::error::Error;
 use crate::prelude::parse_type;
-use crate::total_floats::{TotalF64, TotalF32};
+use crate::total_floats::{TotalF32, TotalF64};
 use crate::{
     helper as h, read_from, write_to, ConstantPoolReadWrite, ConstantPoolReader,
     ConstantPoolWriter, Read, ReadWrite, Result, Write,
@@ -108,7 +108,7 @@ impl ConstantPoolReadWrite for AnnotationValue {
             'e' => AnnotationValue::Enum(Type::read_from(cp, reader)?, read_from!(cp, reader)?),
             'c' => {
                 let idx = u16::read_from(reader)?;
-                let str = cp.read_indirect_str(7, idx).ok_or_else(|| {
+                let str = cp.read_wtf8(idx).ok_or_else(|| {
                     crate::error::Error::Invalid(
                         "constant pool entry index",
                         idx.to_string().into(),

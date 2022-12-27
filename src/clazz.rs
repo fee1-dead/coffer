@@ -123,7 +123,7 @@ impl ReadWrite for Class {
                 &mut cp,
                 &mut buf
             )?;
-            (buf2.len() as u32).write_to(&mut buf)?;
+            (buf2.len() as u32 + 2).write_to(&mut buf)?;
             i.write_to(&mut buf)?;
             buf.write_all(&buf2)?;
         }

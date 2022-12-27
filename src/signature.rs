@@ -420,7 +420,6 @@ fn ret(i: &str) -> IResult<'_, Option<TypeSignature>> {
 }
 
 fn method_sig(i: &str) -> IResult<'_, MethodSignature> {
-    eprintln!("{i}");
     let (i, type_parameters) = type_parameters(i)?;
     let (mut i, ()) = char::<'('>(i)?;
     let mut parameters = vec![];

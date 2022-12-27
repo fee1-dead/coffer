@@ -1,6 +1,7 @@
 //! Structures that represent instructions that will be
 //! executed when a method is called.
 
+use std::backtrace::Backtrace;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
@@ -223,7 +224,14 @@ impl ConstantPoolReadWrite for Code {
         instructions.reserve(to_insert.len());
         instructions.reserve(labeler.labels.len());
         for (k, v) in labeler.labels {
-            to_insert.entry(pos2idx[&k]).or_default().push(Label(v));
+            to_insert
+                .entry(
+                    *pos2idx
+                        .get(&k)
+                        .ok_or_else(|| Error::Invalid("index", format!("{k}").into()))?,
+                )
+                .or_default()
+                .push(Label(v));
         }
         for (k, v) in to_insert.into_iter().rev() {
             for i in v {

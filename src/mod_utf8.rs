@@ -82,7 +82,6 @@ pub fn modified_utf8_to_string(buf: &[u8]) -> Result<Wtf8String, MutfError> {
             }
             _ => is_high_surrogate = false,
         }
-        
     }
     if modification {
         let mut out = Vec::with_capacity(buf.len());
