@@ -9,6 +9,7 @@ use wtf_8::{w, Wtf8Str};
 use super::Type;
 use crate::error::Error;
 use crate::prelude::parse_type;
+use crate::total_floats::{TotalF64, TotalF32};
 use crate::{
     helper as h, read_from, write_to, ConstantPoolReadWrite, ConstantPoolReader,
     ConstantPoolWriter, Read, ReadWrite, Result, Write,
@@ -32,7 +33,7 @@ impl std::ops::DerefMut for ParameterAnnotations {
 }
 
 /// This is an exhaustive enum representing values of an annotation.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum AnnotationValue {
     /// A signed byte. This will get sign-extended into an integer in the constant pool.
     Byte(i8),
@@ -41,9 +42,9 @@ pub enum AnnotationValue {
     /// in utf-16 can be 2 or more.
     Char(u16),
     /// A double-precision floating decimal.
-    Double(f64),
+    Double(TotalF64),
     /// A single-precision floating decimal.
-    Float(f32),
+    Float(TotalF32),
     /// A signed 4-byte integer.
     Int(i32),
     /// A signed 8-byte integer.
@@ -210,7 +211,7 @@ impl ConstantPoolReadWrite for AnnotationValue {
 }
 
 /// An Annotation that has a name and named values.
-#[derive(Clone, PartialEq, Debug, ConstantPoolReadWrite)]
+#[derive(Clone, PartialEq, Eq, Debug, ConstantPoolReadWrite)]
 pub struct Annotation {
     /// A field descriptor representing the type of the annotation.
     pub annotation_type: Type,

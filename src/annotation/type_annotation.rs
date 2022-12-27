@@ -119,7 +119,7 @@ pub enum TypePath {
     TypeArgument(u8),
 }
 
-#[derive(Debug, Clone, PartialEq, ConstantPoolReadWrite)]
+#[derive(Debug, Clone, PartialEq, Eq, ConstantPoolReadWrite)]
 pub struct ClassTypeAnnotation {
     #[coffer(as = "h::Normal")]
     pub target: ClassTypeAnnotationTarget,
@@ -156,7 +156,7 @@ pub struct FieldTypeAnnotation {
     pub element_values: HashMap<Cow<'static, Wtf8Str>, AnnotationValue>,
 }
 
-#[derive(Debug, Clone, PartialEq, ConstantPoolReadWrite)]
+#[derive(Debug, Clone, PartialEq, Eq, ConstantPoolReadWrite)]
 pub struct CodeTypeAnnotation {
     pub target: CodeTypeAnnotationTarget,
     #[coffer(as = "h::Vec8<h::Normal>")]

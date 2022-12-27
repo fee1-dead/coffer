@@ -425,7 +425,7 @@ pub(super) enum CodeAttr {
     Raw(RawAttribute),
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum CodeAttribute {
     VisibleTypeAnnotations(Vec<CodeTypeAnnotation>),
     InvisibleTypeAnnotations(Vec<CodeTypeAnnotation>),

@@ -5,6 +5,7 @@ use once_cell::sync::OnceCell;
 use wtf_8::{Wtf8Str, Wtf8String};
 
 use crate::prelude::*;
+use crate::total_floats::{TotalF32, TotalF64};
 
 /// The generic read and write trait. This indicates a structure can be read without additional contextual information.
 ///
@@ -494,3 +495,18 @@ cprw_impls!(
     (f32, read_float, insert_float),
     (f64, read_double, insert_double)
 );
+
+macro_rules! total_floats {
+    ($($name:ident),*) => {$(
+        impl ConstantPoolReadWrite for $name {
+            fn read_from<C: ConstantPoolReader, R: Read>(cp: &mut C, reader: &mut R) -> Result<Self> {
+                ConstantPoolReadWrite::read_from(cp, reader).map($name)
+            }
+            fn write_to<C: ConstantPoolWriter, W: Write>(&self, cp: &mut C, writer: &mut W) -> Result<()> {
+                ConstantPoolReadWrite::write_to(&self.0, cp, writer)
+            }
+        }
+    )*};
+}
+
+total_floats!(TotalF32, TotalF64);
