@@ -10,7 +10,7 @@ use once_cell::sync::OnceCell;
 use wtf_8::Wtf8Str;
 
 use crate::prelude::{BootstrapMethod, Read, Result, Write};
-use crate::total_floats::{TotalF64, TotalF32};
+use crate::total_floats::{TotalF32, TotalF64};
 use crate::{mod_utf8, ConstantPoolReader, ConstantPoolWriter, Error, ReadWrite};
 
 #[derive(Clone, Debug, Copy)]
