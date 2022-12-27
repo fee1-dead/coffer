@@ -168,9 +168,6 @@ pub(crate) fn attr_enum(s: synstructure::Structure) -> Result<TokenStream2> {
             let ret = if variant_index == raw_variant {
                 let raw_attr = &variant.bindings()[0];
                 quote! {
-                    if !#raw_attr.keep {
-                        return Ok(());
-                    }
                     u16::write_to(&#cp.insert_wtf8(#raw_attr.name.clone()), #writer)?;
                     crate::write_to!(&(#raw_attr.inner.len() as u32), #writer)?;
                     #writer.write_all(&#raw_attr.inner)?;

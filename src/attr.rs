@@ -8,10 +8,6 @@ use crate::prelude::*;
 /// An unrecognized, unknown raw attribute.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RawAttribute {
-    /// Whether to keep this attribute upon writing.
-    ///
-    /// Attributes that are related to local variables will default to `false`, whereas newly created attributes will be `true`.
-    pub(crate) keep: bool,
     /// The name of this attribute.
     pub name: Cow<'static, Wtf8Str>,
     /// The inner data of this attribute.
@@ -27,7 +23,6 @@ impl RawAttribute {
         inner: B,
     ) -> Self {
         Self {
-            keep: true,
             name: name.into(),
             inner: inner.into(),
         }
@@ -35,7 +30,6 @@ impl RawAttribute {
     /// Used by the procedural macro.
     pub(crate) fn __new(name: Cow<'static, Wtf8Str>, inner: Vec<u8>) -> Self {
         Self {
-            keep: false,
             name,
             inner: Cow::Owned(inner),
         }
