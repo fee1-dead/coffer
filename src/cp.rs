@@ -3,13 +3,14 @@
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::sync::Arc;
 
 use once_cell::sync::OnceCell;
 use wtf_8::Wtf8Str;
 
 use crate::prelude::{BootstrapMethod, Read, Result, Write};
+use crate::total_floats::{TotalF64, TotalF32};
 use crate::{mod_utf8, ConstantPoolReader, ConstantPoolWriter, Error, ReadWrite};
 
 #[derive(Clone, Debug, Copy)]
@@ -54,16 +55,16 @@ pub enum ConstEntryRef<'a> {
 }
 
 /// A raw constant entry that has unresolved indices to other entries.
-#[derive(ReadWrite, Debug, Clone)]
+#[derive(ReadWrite, Debug, Clone, PartialEq, Eq, Hash)]
 #[coffer(tag_type(u8))]
 pub enum RawConstantEntry {
     #[coffer(tag = 1)]
     WTF8(Cow<'static, Wtf8Str>),
     #[coffer(tag = 3)]
     Int(i32),
-    Float(f32),
+    Float(TotalF32),
     Long(i64),
-    Double(f64),
+    Double(TotalF64),
     Class(u16),
     String(u16),
     Field(u16, u16),
@@ -77,36 +78,6 @@ pub enum RawConstantEntry {
     InvokeDynamic(u16, u16),
     Module(u16),
     Package(u16),
-}
-impl Hash for RawConstantEntry {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        std::mem::discriminant(self).hash(state);
-        match self {
-            RawConstantEntry::WTF8(ref s) => s.hash(state),
-            RawConstantEntry::Int(ref i) => i.hash(state),
-            RawConstantEntry::Float(ref f) => f.to_bits().hash(state),
-            RawConstantEntry::Long(ref l) => l.hash(state),
-            RawConstantEntry::Double(ref d) => d.to_bits().hash(state),
-            RawConstantEntry::Class(ref u)
-            | RawConstantEntry::String(ref u)
-            | RawConstantEntry::MethodType(ref u)
-            | RawConstantEntry::Module(ref u)
-            | RawConstantEntry::Package(ref u) => u.hash(state),
-            RawConstantEntry::Field(ref u1, ref u2)
-            | RawConstantEntry::Method(ref u1, ref u2)
-            | RawConstantEntry::InterfaceMethod(ref u1, ref u2)
-            | RawConstantEntry::NameAndType(ref u1, ref u2)
-            | RawConstantEntry::Dynamic(ref u1, ref u2)
-            | RawConstantEntry::InvokeDynamic(ref u1, ref u2) => {
-                u1.hash(state);
-                u2.hash(state);
-            }
-            RawConstantEntry::MethodHandle(b, u) => {
-                b.hash(state);
-                u.hash(state);
-            }
-        }
-    }
 }
 
 impl RawConstantEntry {
@@ -140,6 +111,7 @@ pub struct MapCp {
 /// A constant pool writer implementation using a vector and a number for tracking entries.
 pub struct VecCp {
     entries: Vec<RawConstantEntry>,
+    cache: HashMap<RawConstantEntry, u16>,
     /// Not actual len. (if e.wide 2 else 1 for e in entries) + 1 in pseudocode
     len: u16,
     pub(crate) bsm: Vec<BootstrapMethod>,
@@ -147,9 +119,10 @@ pub struct VecCp {
 impl VecCp {
     /// Creates an empty constant pool.
     #[inline]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             entries: vec![],
+            cache: HashMap::new(),
             len: 1,
             bsm: vec![],
         }
@@ -243,10 +216,16 @@ impl ReadWrite for VecCp {
 
 impl ConstantPoolWriter for VecCp {
     fn insert_raw(&mut self, value: RawConstantEntry) -> u16 {
-        let idx = self.len;
-        self.len = idx + value.size();
-        self.entries.push(value);
-        idx
+        match self.cache.entry(value.clone()) {
+            Entry::Occupied(e) => *e.get(),
+            Entry::Vacant(e) => {
+                let idx = self.len;
+                self.len += value.size();
+                e.insert(idx);
+                self.entries.push(value);
+                idx
+            }
+        }
     }
 
     fn insert_bsm(&mut self, bsm: BootstrapMethod) -> u16 {

@@ -184,7 +184,7 @@ impl ConstantPoolReadWrite for AnnotationValue {
                 write_to!(var, cp, writer)
             }
             AnnotationValue::Class(n) => {
-                b'C'.write_to(writer)?;
+                b'c'.write_to(writer)?;
                 write_to!(
                     &n.as_ref().map_or_else(
                         || Cow::Borrowed(w!("V")),

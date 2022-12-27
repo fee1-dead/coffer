@@ -1,7 +1,6 @@
 //! Structures that represent instructions that will be
 //! executed when a method is called.
 
-use std::backtrace::Backtrace;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;

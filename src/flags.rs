@@ -162,7 +162,12 @@ macro_rules! rw_impls {
     ($($ty:ty),*) => {
         $(
             impl ReadWrite for $ty {
-                    fn read_from<T: Read>(reader: &mut T) -> Result<$ty> { Ok(<$ty>::from_bits(u16::read_from(reader)?).unwrap()) }
+                    fn read_from<T: Read>(reader: &mut T) -> Result<$ty> {
+                        // TODO warn if flags are dropped
+                        let flags = u16::read_from(reader)?;
+
+                        Ok(<$ty>::from_bits_truncate(flags))
+                    }
                     fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> { self.bits().write_to(writer) }
             }
         )*

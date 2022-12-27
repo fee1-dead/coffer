@@ -131,10 +131,10 @@ pub trait ConstantPoolWriter {
         self.insert_raw(RawConstantEntry::Long(l))
     }
     fn insert_float(&mut self, f: f32) -> u16 {
-        self.insert_raw(RawConstantEntry::Float(f))
+        self.insert_raw(RawConstantEntry::Float(TotalF32(f)))
     }
     fn insert_double(&mut self, d: f64) -> u16 {
-        self.insert_raw(RawConstantEntry::Double(d))
+        self.insert_raw(RawConstantEntry::Double(TotalF64(d)))
     }
     fn insert_member(&mut self, mem: MemberRef) -> u16 {
         let entry = match (&mem.descriptor, mem.itfs) {
@@ -227,13 +227,13 @@ pub trait ConstantPoolReader {
     }
     fn read_float(&mut self, idx: u16) -> Option<f32> {
         match self.read_raw(idx) {
-            Some(RawConstantEntry::Float(f)) => Some(f),
+            Some(RawConstantEntry::Float(f)) => Some(f.0),
             _ => None,
         }
     }
     fn read_double(&mut self, idx: u16) -> Option<f64> {
         match self.read_raw(idx) {
-            Some(RawConstantEntry::Double(d)) => Some(d),
+            Some(RawConstantEntry::Double(d)) => Some(d.0),
             _ => None,
         }
     }
@@ -445,6 +445,23 @@ macro_rules! impl_readwrite_nums {
 }
 
 impl_readwrite_nums! { (u8, 1),  (i8, 1),  (u16, 2),  (i16, 2),  (u32, 4),  (i32, 4),  (f32, 4),  (u64, 8),  (i64, 8),  (f64, 8),  (u128, 16),  (i128, 16) }
+
+macro_rules! impl_readwrite_total_floats {
+    ($($name:ident),*) => {
+        $(
+            impl ReadWrite for $name {
+                fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
+                    ReadWrite::read_from(reader).map($name)
+                }
+                fn write_to<T: Write>(&self, writer: &mut T) -> Result<()> {
+                    ReadWrite::write_to(&self.0, writer)
+                }
+            }
+        )*
+    };
+}
+
+impl_readwrite_total_floats!(TotalF32, TotalF64);
 
 impl ReadWrite for Wtf8String {
     fn read_from<T: Read>(reader: &mut T) -> Result<Self> {
