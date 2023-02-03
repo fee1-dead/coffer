@@ -16,6 +16,7 @@ use crate::{
 
 mod convert;
 mod structure;
+mod gen_stack_map;
 
 use convert::*;
 use once_cell::sync::OnceCell;

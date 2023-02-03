@@ -47,6 +47,13 @@ impl Type {
         matches!(self, Type::Long | Type::Double)
     }
 
+    pub fn as_method(&self) -> Option<(&Vec<Type>, &Option<Box<Type>>)> {
+        match self {
+            Type::Method { parameters, ret } => Some((parameters, ret)),
+            _ => None,
+        }
+    }
+
     /// returns `true` if this type is a method descriptor.
     #[inline]
     pub fn is_method(&self) -> bool {

@@ -1,8 +1,25 @@
 //! Stack map generation tools.
+//! 
+//! To generate a stack map, we first divide instructions into basic blocks.
+//!
+//! A basic block is a sequence of instructions that are guaranteed to be executed in order,
+//! therefore, if we know the starting frame of a basic block, we can calculate the ending frame
+//! by analyzing the instructions in the block.
+//! 
+//! Basic blocks are separated by labels or jump instructions. Labels are at the beginning of a basic block,
+//! and jump instructions are at the end of a basic block. A control flow graph represents the execution flow
+//! of the basic blocks with edges representing potential branching from one block to other blocks.
+//! 
+//! The algorithm follows a depth first search on the control flow graph, and calculates the starting frame
+//! using the method signature. If we ever encounter a block that has been visited before, we check if the
+//! starting frame is the same as the one we calculated. If not, we have a problem. After visiting all blocks,
+//! we have ensured that frames are consistent with jumps and we can generate the stack map.
 
 use std::collections::HashMap;
 
 use super::{Code, Instruction, Label};
+use crate::dynamic::OrDynamic;
+use crate::prelude::Constant;
 use crate::{member::{Method, MethodAttribute}, flags::MethodFlags, prelude::Type};
 
 /// In the bytecode, we divide code units by labels as they are potential jump targets.
@@ -44,7 +61,19 @@ pub struct Frame {
     locals: Vec<VerificationType>,
 }
 
-impl BlockInfo {}
+pub fn cut_method(m: &Method) -> Vec<BasicBlock> {
+    
+}
+
+
+pub struct BasicBlock {
+    label: Option<Label>,
+    start_frame: Option<Frame>,
+    end_frame: Option<Frame>,
+    instructions: Vec<Instruction>,
+    /// if this block does not end with a jump instruction, then this is `None`.
+    terminator: Option<Instruction>,
+}
 
 pub struct Analyzer {
     /// the method
@@ -100,6 +129,22 @@ impl Analyzer {
             | Type::Method { .. } => unreachable!(),
         }
     }
+
+    pub fn constant_to_verification(c: &Constant) -> VerificationType {
+        match c {
+            | Constant::I32(_) => VerificationType::Integer,
+            | Constant::I64(_) => VerificationType::Long,
+            | Constant::F32(_) => VerificationType::Float,
+            | Constant::F64(_) => VerificationType::Double,
+            | Constant::String(_)
+            | Constant::Class(_)
+            | Constant::Member(_)
+            | Constant::MethodType(_)
+            | Constant::MethodHandle(_) => VerificationType::Object,
+        }
+    }
+
+
     pub fn analyze_code(&mut self) {
         use VerificationType::*;
         // Let us first construct the stack frame.
@@ -107,7 +152,7 @@ impl Analyzer {
         let mut frame = Frame::default();
         // if our method is not static..
         let is_static = self.method.access.contains(MethodFlags::ACC_STATIC);
-        let is_constructor = self.method.name == "<init>";
+        let is_constructor = &*self.method.name == "<init>";
         match (is_static, is_constructor) {
             (false, false) => frame.locals.push(Object),
             (false, true) => frame.locals.push(UninitializedThis), // `this` is uninitialized
@@ -121,9 +166,15 @@ impl Analyzer {
         // emulate code behavior until we run into a jump or a label..
         for instruction in &self.code.code {
             match instruction {
-                Instruction::NoOp => {}
+                Instruction::NoOp | Instruction::LineNumber(_) => {}
+                Instruction::Ret(_) | Instruction::Jsr(_) => unimplemented!("ret and jsr are not supported"),
                 Instruction::PushNull => frame.stack.push(Null),
-                Instruction::Push(_) => todo!(),
+                Instruction::Push(OrDynamic::Dynamic(d)) => {
+                    frame.stack.push(Self::ty_to_verificaton(&d.descriptor));
+                }
+                Instruction::Push(OrDynamic::Static(c)) => {
+                    frame.stack.push(Self::constant_to_verification(c));
+                }
                 Instruction::Dup => {
                     if frame.stack.is_empty() {
                         panic!("`dup` on empty stack");
@@ -162,15 +213,14 @@ impl Analyzer {
                 Instruction::InvokeSpecial(_) => todo!(),
                 Instruction::InvokeDynamic(_) => todo!(),
                 Instruction::InvokeInterface(_, _) => todo!(),
-                Instruction::Jsr(_) => todo!(),
-                Instruction::Ret(_) => todo!(),
                 Instruction::Swap => todo!(),
                 Instruction::IntIncrement(_, _) => todo!(),
-                Instruction::LineNumber(_) => todo!(),
                 Instruction::TableSwitch { default, low, offsets } => todo!(),
                 Instruction::LookupSwitch { default, table } => todo!(),
                 Instruction::Label(_) => todo!(),
             }
+            self.code.max_stack = self.code.max_stack.max(frame.stack.len() as u16);
+            self.code.max_locals = self.code.max_locals.max(frame.locals.len() as u16);
         }
         todo!()
     }
