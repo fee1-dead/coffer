@@ -180,7 +180,7 @@ fn ref_type_sig(i: &str) -> IResult<'_, RefTypeSignature> {
                 dim += 1;
             }
             let (i, t) = type_sig(c.as_str())?;
-            Ok((i, RefTypeSignature::ArrayRef(dim as u8, Box::new(t))))
+            Ok((i, RefTypeSignature::ArrayRef(dim, Box::new(t))))
         }
         Some('T') => {
             let semi = i.find(';').ok_or_else(unexpected_end)?;

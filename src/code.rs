@@ -714,7 +714,7 @@ impl ConstantPoolReadWrite for RawFrame {
                 veri.write_to(cp, writer)?;
             }
             RawFrame::Chop(off, chop @ 1..=3) => {
-                (251 - *chop as u8).write_to(writer)?;
+                (251 - *chop).write_to(writer)?;
                 off.write_to(writer)?;
             }
             RawFrame::Chop(_, c) => return Err(Error::Invalid("Chop value", c.to_string().into())),

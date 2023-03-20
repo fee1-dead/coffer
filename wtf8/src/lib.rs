@@ -742,7 +742,6 @@ mod alloc_impl {
         }
     }
 
-    #[allow(clippy::derive_hash_xor_eq)]
     impl Hash for Wtf8String {
         #[inline]
         fn hash<H: Hasher>(&self, state: &mut H) {
@@ -1317,7 +1316,6 @@ pub fn validate_wtf8(bytes: &[u8]) -> Result<(), Wtf8Error> {
     Ok(())
 }
 
-#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for Codepoint {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -1325,7 +1323,6 @@ impl Hash for Codepoint {
     }
 }
 
-#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for Wtf8Str {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {

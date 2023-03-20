@@ -195,8 +195,8 @@ pub trait ConstantPoolReader {
         match self.read_raw(idx) {
             Some(RawConstantEntry::Int(i)) => Some(Constant::I32(i)),
             Some(RawConstantEntry::Long(l)) => Some(Constant::I64(l)),
-            Some(RawConstantEntry::Float(f)) => Some(Constant::F32(f.into())),
-            Some(RawConstantEntry::Double(d)) => Some(Constant::F64(d.into())),
+            Some(RawConstantEntry::Float(f)) => Some(Constant::F32(f)),
+            Some(RawConstantEntry::Double(d)) => Some(Constant::F64(d)),
             Some(RawConstantEntry::String(s)) => self.read_wtf8(s).map(Constant::String),
             Some(RawConstantEntry::Class(c)) => self.read_wtf8(c).map(Constant::Class),
             Some(RawConstantEntry::MethodType(m)) => self
