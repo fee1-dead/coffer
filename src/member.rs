@@ -1,6 +1,8 @@
 //! Members of a java class
 //!
 //! They can be fields or methods.
+use std::mem::take;
+
 use wtf_8::Wtf8Str;
 
 use crate::annotation::{
@@ -8,6 +10,7 @@ use crate::annotation::{
 };
 use crate::code::Code;
 use crate::prelude::*;
+use crate::prelude::gen_stack_map::cut_code;
 
 /// A reference to a member.
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
@@ -104,4 +107,20 @@ pub struct Method {
     pub descriptor: Type,
     #[coffer(as = "h::Vec16")]
     pub attributes: Vec<MethodAttribute>,
+}
+
+impl Method {
+    pub fn gen_frames(&mut self) -> Result<()> {
+        for attr in &mut self.attributes {
+            if let MethodAttribute::Code(c) = attr {
+                let code = take(c);
+
+                let blocks = cut_code(code);
+
+
+                break;
+            }
+        }
+        Ok(())
+    }
 }
