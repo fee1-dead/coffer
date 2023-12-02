@@ -7,7 +7,7 @@ licensed under the Apache License, Version 2.0 <LICENSE-APACHE> or
 
 NOTE: This library is not actively maintained, but there are still many features missing.
 If you'd like to help implement this feature feel free to reach out to me on discord
-`fee1-dead#7913` or on matrix `@deadbf:matrix.org`. One feature that needs more work is
+`dbeef` or on matrix `@deadbf:matrix.org`. One feature that needs more work is
 performing static analysis so that we can automatically generate the maximum stack and 
 local variables as well as the StackMapTable.
 
